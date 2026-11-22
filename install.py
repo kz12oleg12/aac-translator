@@ -105,7 +105,7 @@ def main():
     except Exception:
         has_torch = False
     if has_torch:
-        r = run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "numpy", "silero-stress"])
+        r = run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "numpy", "scipy", "silero-stress"])
         if r.returncode != 0:
             print("   ! Доп. голоса Silero (silero-stress) не установились — останутся основные голоса.")
 

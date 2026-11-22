@@ -34,7 +34,7 @@ def main():
             print(f"   (Python {sys.version.split()[0]})")
             return 1
 
-    pip("numpy", "silero-stress")   # numpy нужен модели v5; silero-stress — ударения для доп. голосов
+    pip("numpy", "scipy", "silero-stress")   # numpy и scipy нужны модели v5; silero-stress — ударения для доп. голосов
     print("\n=== 2/3 Модель голосов (~100 МБ, один раз)")
     from aac import tts_silero
     t0 = time.time()
