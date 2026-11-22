@@ -486,7 +486,10 @@ def test_gui_smoke(monkey):
                 # предельная высота: старые сообщения уходят, окно не выше предела
                 cfg.CHAT_COVER, cfg.CHAT_HEIGHT = False, 70
                 app.show_chat([(f"P{i}: ", f"сообщение номер {i}") for i in range(8)])
-                ok_style = app.chat._pos()[1] <= 70 and len(app.chat_lines) < 9
+                ok_style = app.chat._pos()[1] == 70 and len(app.chat_lines) < 9
+                if hasattr(app, "_chat_height_drag"):      # потянули нижний край — высота 160
+                    app._chat_height_drag(160)
+                    ok_style = ok_style and cfg.CHAT_HEIGHT == 160 and app.chat._pos()[1] == 160
                 # поверх чата: ровно на месте области чата
                 cfg.CHAT_COVER = True
                 app.show_chat([("Z: ", "ещё одно")])

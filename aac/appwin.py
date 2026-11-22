@@ -53,6 +53,8 @@ class App:
         self.chat.style_alpha = lambda: config.CHAT_ALPHA
         self.chat.style_fg = lambda: config.CHAT_FG
         self.chat.label.config(anchor="sw")    # как в игровом чате: свежие сообщения внизу
+        self.chat.enable_height_grip(self._chat_height_drag,
+                                     lambda: core.save_settings(chat_height=config.CHAT_HEIGHT))
         self.chat.apply_style()
         self.chat.hide()
         self.chat.win.after(400, self._remember_chat_hwnd)
@@ -273,12 +275,26 @@ class App:
         self.chat_lines = self.chat_lines[-config.CHAT_LINES:]
         self.chat_last = time.time()
         self.chat.show("\n".join(self.chat_lines))
-        # ограничение высоты: старые сообщения уходят сверху, пока свежие не поместятся
+        self._trim_chat()    # ограничение высоты: старые сообщения уходят сверху, свежие видны
+
+    def _chat_height_drag(self, h):
+        """Тянут нижний край окна чата — это и есть предельная высота (в режиме «поверх чата» — высота области)."""
+        if config.CHAT_COVER and core.chat_region:
+            x, y, w, _ = core.chat_region
+            core.chat_region = (x, y, w, int(h))
+            core.save_settings(chat_region=core.chat_region)
+        else:
+            config.CHAT_HEIGHT = int(h)
+        self._trim_chat()
+
+    def _trim_chat(self):
+        self.chat.label.config(text="\n".join(self.chat_lines))
         limit = self.chat.max_height() if self.chat.max_height else None
         while limit and len(self.chat_lines) > 1 and self.chat.natural_height() > limit:
             self.chat_lines.pop(0)
             self.chat.label.config(text="\n".join(self.chat_lines))
-        self.chat.fit()
+        if self.chat.visible:
+            self.chat.fit()
 
     def _remember_chat_hwnd(self):
         """Окно чата «поверх области»: на время снимка чата делаем его прозрачным (иначе прочитаем себя)."""

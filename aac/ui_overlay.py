@@ -203,6 +203,8 @@ class Overlay:
 
     def highlight_grip(self, on):
         self.grip.config(bg=config.GRIP_ACTIVE_COLOR if on else config.GRIP_COLOR)
+        if getattr(self, "vgrip", None) is not None:
+            self.vgrip.config(bg=config.GRIP_ACTIVE_COLOR if on else config.GRIP_COLOR)
 
     def _wheel(self, e):
         if self.leader is not None:
@@ -224,6 +226,21 @@ class Overlay:
         core.save_settings(**{f"{self.name}_pos": (x, y),
                          f"{self.name}_manual": self.manual,
                          f"{self.name}_width": self.width})
+
+    def enable_height_grip(self, on_drag, on_release):
+        """Нижний край окна можно тянуть мышкой — меняется высота (для окна чата)."""
+        self.vgrip = tk.Frame(self.win, height=6, bg=config.GRIP_COLOR, cursor="sb_v_double_arrow")
+        self.vgrip.pack(side="bottom", fill="x", before=self.status)
+
+        def start(e):
+            self._vy, self._vh = e.y_root, self._pos()[1]
+
+        def move(e):
+            on_drag(max(40, self._vh + (e.y_root - self._vy)))
+
+        self.vgrip.bind("<ButtonPress-1>", start)
+        self.vgrip.bind("<B1-Motion>", move)
+        self.vgrip.bind("<ButtonRelease-1>", lambda e: on_release())
 
     def _set_wrap(self, w):
         for lab in (self.label, self.hist_label, self.orig_label):
@@ -296,7 +313,7 @@ class Overlay:
     def _content_height(self):
         h = sum(w.winfo_reqheight() for w in self.win.pack_slaves() if w is not self.grip)
         limit = self.max_height() if self.max_height else None
-        return min(h, limit) if limit else h
+        return int(limit) if limit else h      # задана высота — окно ровно такой высоты
 
     def natural_height(self):
         """Сколько окну нужно по содержимому (без ограничения высоты)."""
