@@ -432,7 +432,7 @@ class CharactersWindow:
             old.win.lift()
             return
         app.chars_win = self
-        self.win = w = _normal_window(app, "AAC Translator — голоса персонажей", "820x520")
+        self.win = w = _normal_window(app, "AAC Translator — голоса персонажей", "900x540")
         engine = config.TTS_ENGINE
         if engine == "silero":
             self.voices = [(v, tts.tts_silero.label(v)) for v in voices.SILERO_POOL["f"] + voices.SILERO_POOL["m"]]
@@ -444,7 +444,20 @@ class CharactersWindow:
         if engine == "windows":
             note = "Сейчас выбраны голоса Windows — разные голоса персонажей работают только с Microsoft или Silero. " + note
         tk.Label(w, text=note, fg="#9aa4b2", bg="#1a1d23", font=("Segoe UI", 9), justify="left",
-                 wraplength=790, anchor="w").pack(fill="x", padx=12, pady=(10, 6))
+                 wraplength=870, anchor="w").pack(fill="x", padx=12, pady=(10, 6))
+        # голоса по умолчанию для мужчин и женщин
+        drow = tk.Frame(w, bg="#1a1d23")
+        drow.pack(fill="x", padx=12, pady=(0, 8))
+        pool = voices.SILERO_POOL if self.engine == "silero" else voices.NEURAL_POOL
+        names = dict(self.voices)
+        self.AUTO = "разные (подбираются сами)"
+        for g, title in (("m", "Мужчины по умолчанию:"), ("f", "Женщины по умолчанию:")):
+            tk.Label(drow, text=title, fg="#ddd", bg="#1a1d23", font=("Segoe UI", 10)).pack(side="left", padx=(0, 4))
+            cur = voices.default_voice(self.engine, g)
+            var = tk.StringVar(value=names.get(cur, self.AUTO) if cur else self.AUTO)
+            vals = [self.AUTO] + [names[v] for v in pool[g]]
+            self._menu(drow, var, vals, lambda g=g, v=var: self._set_default(g, v.get()), 24).pack(side="left",
+                                                                                                    padx=(0, 16))
         outer = tk.Frame(w, bg="#1a1d23")
         outer.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         canvas = tk.Canvas(outer, bg="#1a1d23", highlightthickness=0)
@@ -505,6 +518,11 @@ class CharactersWindow:
                       cursor="hand2").pack(side="left", padx=4)
             tk.Button(row, text="✕", command=lambda k=key: (voices.forget(k), self.render()), bg="#1a1d23",
                       fg="#a66", relief="flat", bd=0, padx=6, activebackground="#3a4258", cursor="hand2").pack(side="left")
+
+    def _set_default(self, g, label):
+        vid = next((v for v, lab in self.voices if lab == label), "")
+        voices.set_default_voice(self.engine, g, vid)
+        self.render()          # «авто (…)» у персонажей теперь показывает новый голос
 
     def _set_gender(self, key, label):
         g = "m" if label == "мужской" else "f" if label == "женский" else ""

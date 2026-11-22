@@ -916,6 +916,15 @@ def test_character_voices(monkey):
     assert voices.voice_for(k2, "neural")[0] in voices.NEURAL_POOL["m"]
     voices.set_manual(k2, voice="ru-RU-DmitryNeural", engine="neural")
     assert voices.voice_for(k2, "neural") == ("ru-RU-DmitryNeural", 0)
+    # голос по умолчанию для женщин: все женщины без ручного голоса — им
+    if hasattr(voices, "set_default_voice"):
+        monkey(cfg, "TTS_DEFAULT_VOICES", {"neural": {"m": "", "f": ""}, "silero": {"m": "", "f": ""}})
+        voices.set_default_voice("neural", "f", "en-US-EmmaMultilingualNeural")
+        assert voices.voice_for(k1, "neural")[0] == "en-US-EmmaMultilingualNeural"
+        assert voices.voice_for(k1, "silero")[0] in voices.SILERO_POOL["f"]       # у Silero — по-прежнему авто
+        assert voices.voice_for(k2, "neural") == ("ru-RU-DmitryNeural", 0)       # ручной выбор важнее
+        assert T.load_settings()["tts_default_voices"]["neural"]["f"] == "en-US-EmmaMultilingualNeural"
+        voices.set_default_voice("neural", "f", "")
     monkey(cfg, "TTS_RUSSIAN_ONLY", True)
     assert voices.voice_for(k1, "neural")[0].startswith("ru-")
     assert voices.voice_for(k1, "windows") is None

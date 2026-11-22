@@ -29,6 +29,9 @@ def apply_view_settings():
     config.TTS_FINISH_LINE = bool(core.SETTINGS.get("tts_finish_line", config.TTS_FINISH_LINE))
     config.TTS_SILERO_VOICE = str(core.SETTINGS.get("tts_silero_voice", config.TTS_SILERO_VOICE))
     config.TTS_PER_CHARACTER = bool(core.SETTINGS.get("tts_per_character", config.TTS_PER_CHARACTER))
+    saved = core.SETTINGS.get("tts_default_voices") or {}
+    for eng in config.TTS_DEFAULT_VOICES:
+        config.TTS_DEFAULT_VOICES[eng].update({g: v for g, v in (saved.get(eng) or {}).items() if g in ("m", "f")})
     config.TTS_RUSSIAN_ONLY = bool(core.SETTINGS.get("tts_russian_only", config.TTS_RUSSIAN_ONLY))
     config.TTS_ENGINE = str(core.SETTINGS.get("tts_engine", config.TTS_ENGINE))
     config.TTS_NEURAL_VOICE = str(core.SETTINGS.get("tts_neural_voice", config.TTS_NEURAL_VOICE))

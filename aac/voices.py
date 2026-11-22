@@ -163,6 +163,11 @@ def voice_for(key, engine=None, auto_only=False):
         pool, pitches, main = SILERO_POOL[g], SILERO_PITCH, config.TTS_SILERO_VOICE
     if manual and not auto_only:
         return manual, 0
+    pitch = pitches[(h // 7) % len(pitches)]
+    default = default_voice(engine, g)
+    if default:
+        # голос по умолчанию для мужчин/женщин; высота чуть разная, чтобы персонажи всё же отличались
+        return default, pitch
     # основной голос (которым читается рассказчик) персонажам — пореже: ставим его в конец очереди
     pool = [v for v in pool if v != main] + [v for v in pool if v == main]
     if config.TTS_RUSSIAN_ONLY and engine == "neural":
@@ -170,6 +175,16 @@ def voice_for(key, engine=None, auto_only=False):
     voice = pool[h % len(pool)]
     pitch = pitches[(h // 7) % len(pitches)]
     return voice, pitch
+
+
+def default_voice(engine, g):
+    """Голос по умолчанию для пола g ("m"/"f") на движке engine; "" — подбирать разные автоматически."""
+    return (config.TTS_DEFAULT_VOICES.get(engine) or {}).get(g, "")
+
+
+def set_default_voice(engine, g, voice):
+    config.TTS_DEFAULT_VOICES.setdefault(engine, {})[g] = voice or ""
+    core.save_settings(tts_default_voices=config.TTS_DEFAULT_VOICES)
 
 
 def all_chars():
