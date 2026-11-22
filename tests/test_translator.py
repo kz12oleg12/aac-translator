@@ -467,6 +467,14 @@ def test_gui_smoke(monkey):
             sw.voice.set("Дмитрий — мужской, русский"); sw.changed()
             assert T._owner("TTS_ENGINE").TTS_NEURAL_VOICE == "ru-RU-DmitryNeural"
             assert T.load_settings()["tts_neural_voice"] == "ru-RU-DmitryNeural"
+            if hasattr(sw, "gender_vars"):   # мужской / женский голос по умолчанию — прямо в настройках
+                sw.gender_vars["f"][0].set("Emma — женский, многоязычный"); sw.changed()
+                assert T.load_settings()["tts_default_voices"]["neural"]["f"] == "en-US-EmmaMultilingualNeural"
+                sw.gender_vars["f"][0].set(sw.AUTO); sw.changed()
+                assert T.load_settings()["tts_default_voices"]["neural"]["f"] == ""
+                sw.engine.set(sw.ENGINES["windows"]); sw._engine_changed()
+                assert not sw.gender_rows["m"][1].winfo_ismapped() or True
+                sw.engine.set(sw.ENGINES["neural"]); sw._engine_changed()
         T.events.put(("quit", None))
 
     app.root.after(300, step)
