@@ -363,6 +363,29 @@ class App:
                        "Обведите ЗАДАНИЕ / текст для разового перевода.", done)
 
     def _poll(self):
+        """Главный цикл программы (каждые 50 мс). Ошибка в одном событии не должна его останавливать —
+        иначе программа перестаёт реагировать на всё (так и было после закрытия перевода подсказки)."""
+        try:
+            self._poll_body()
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            print(tb)
+            key = f"{type(e).__name__}:{e}"
+            if key not in getattr(self, "_poll_errors", set()):
+                self._poll_errors = getattr(self, "_poll_errors", set()) | {key}
+                last = tb.strip().splitlines()
+                where = next((ln.strip() for ln in reversed(last) if ln.strip().startswith("File")), "")
+                core.log(f"Ошибка в программе (работа продолжается): {type(e).__name__}: {str(e)[:120]} "
+                         f"[{where[-90:]}]", "error")
+        finally:
+            if not getattr(self, "_closing", False):
+                try:
+                    self.root.after(50, self._poll)
+                except tk.TclError:
+                    pass
+
+    def _poll_body(self):
         core.heartbeat = time.time()
         try:
             self.indicator.update(core.auto_on.is_set() or getattr(self, "_paused_auto", False),
@@ -490,6 +513,7 @@ class App:
                     if sw and sw.alive():
                         sw.fill_voices(payload)
                 elif kind == "quit":
+                    self._closing = True
                     tts.shutdown()
                     tray.stop_tray()
                     self.root.destroy()
@@ -503,4 +527,3 @@ class App:
             self.panel.refresh()
         self.subs.set_status("⏳" if "Субтитры" in self.busy else "")
         self.answers.set_status("💬 Варианты ответа" + ("  ⏳" if "Ответы" in self.busy else ""))
-        self.root.after(50, self._poll)

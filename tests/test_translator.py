@@ -544,11 +544,17 @@ def test_second_subs_region(monkey):
 
     def step4():
         res["hidden"] = not app.subs.visible
+        # сломанное событие не должно останавливать главный цикл (иначе программа «зависает»)
+        T.events.put(("tooltip_show", {"broken": True}))
+        app.root.after(300, step5)
+
+    def step5():
+        res["alive"] = time.time() - T._owner("heartbeat").heartbeat < 0.5
         T.events.put(("quit", None))
 
     app.root.after(300, step)
     app.root.mainloop()
-    assert res == {"anchor2": True, "kept": True, "hidden": True}, res
+    assert res == {"anchor2": True, "kept": True, "hidden": True, "alive": True}, res
 
 
 def test_unstable_warning(monkey):
