@@ -30,6 +30,7 @@ HOTKEY_DEFS = [  # (id, что делает, клавиша по умолчан�
     ("select_chat", "область чата", config.HOTKEY_SELECT_CHAT, "select_chat"),
     ("chat_once", "перевести чат", config.HOTKEY_CHAT_ONCE, "chat_once"),
     ("chat_compose", "написать в чат (рус→англ)", config.HOTKEY_CHAT_COMPOSE, "chat_compose"),
+    ("menu_learn", "запомнить меню игры", config.HOTKEY_MENU_LEARN, "menu_learn"),
     ("quit", "выход", config.HOTKEY_QUIT, "quit"),
 ]
 hotkeys = {hid: default for hid, _, default, _ in HOTKEY_DEFS}  # текущие назначения

@@ -21,6 +21,8 @@ answers_region = None  # область вариантов ответа
 own_rects = []   # где на экране сейчас окна самой программы (их закрашиваем на снимках — чтобы не переводить себя)
 heartbeat = 0.0  # когда главный цикл окон последний раз «отметился» (для поиска зависшей копии)
 chat_region = None  # область игрового чата
+menu_region = None  # кусочек экрана, по которому узнаём открытое меню игры
+in_menu = False     # меню игры сейчас открыто — автоперевод на паузе
 chat_auto = True    # переводить чат автоматически (галочка в панели)
 region2 = None  # вторая область реплик (НПС говорят мимоходом в другом месте экрана)
 answers_auto = False   # следить за ответами автоматически (вкл/выкл в системной панели)
@@ -30,7 +32,7 @@ SETTINGS = {}
 
 # ---------- настройки (запоминаем область) ----------
 def load_settings():
-    global region, answers_region, region2, chat_region
+    global region, answers_region, region2, chat_region, menu_region
     try:
         with open(config.SETTINGS_FILE, encoding="utf-8") as f:
             data = json.load(f)
@@ -42,6 +44,8 @@ def load_settings():
             region2 = tuple(data["region2"])
         if data.get("chat_region"):
             chat_region = tuple(data["chat_region"])
+        if data.get("menu_region"):
+            menu_region = tuple(data["menu_region"])
         return data
     except Exception:
         return {}

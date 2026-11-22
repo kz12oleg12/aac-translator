@@ -257,7 +257,7 @@ def run():
     while True:
         try:
             core.auto_on.wait()
-            if not (core.chat_auto and core.chat_region) or not game.game_active.is_set():
+            if not (core.chat_auto and core.chat_region) or not game.game_active.is_set() or core.in_menu:
                 _state.update(prev=None, started=False, cover_mode=None)
                 time.sleep(1)
                 continue

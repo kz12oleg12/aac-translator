@@ -6,3 +6,4 @@ history/
 models/
 *.log
 __pycache__/
+menu_ref.png

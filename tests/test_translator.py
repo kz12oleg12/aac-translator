@@ -516,6 +516,12 @@ def test_gui_smoke(monkey):
                 drain()
                 app.chat_btn.invoke()
                 ok_style = ok_style and any(k == "chat_once" for k, _ in drain())
+            if hasattr(app, "menu_state"):       # меню игры открыли — окна прячутся, закрыли — возвращаются
+                app.subs.show("Привет")
+                app.menu_state(True)
+                hidden = not app.subs.visible
+                app.menu_state(False)
+                ok_style = ok_style and hidden and app.subs.visible
             if hasattr(app, "show_chat_window"):     # закрыли правым кликом — вернуть
                 app.chat.hide()
                 app.show_chat_window()
@@ -895,6 +901,37 @@ def test_skip_system_messages(monkey):
     monkey(cfg, "SKIP_SYSTEM", False)
     T.speak_subtitle("Вы получили железную руду x3.", None, "You acquired Iron Ore x3.")
     assert said
+
+
+def test_game_menu_pause(monkey):
+    """Меню игры: запомнили вид — когда он на экране, автоперевод на паузе; закрыли — продолжается."""
+    try:
+        from aac import menu
+    except ImportError:
+        print("   (в этой версии нет — пропуск)")
+        return
+    from PIL import Image, ImageDraw
+    monkey(menu, "REF_FILE", os.path.join(TMP, "menu_ref.png"))
+    monkey(menu, "_ref", {"img": None, "loaded": False})
+    core_m = T._owner("menu_region")
+    monkey(core_m, "menu_region", None)
+    monkey(core_m, "in_menu", False)
+    menu_img = Image.new("RGB", (200, 100), (30, 30, 40))
+    ImageDraw.Draw(menu_img).rectangle([20, 20, 180, 40], fill=(220, 200, 120))   # «кнопки меню»
+    game_img = Image.new("RGB", (200, 100), (90, 140, 60))
+    shots = {"img": menu_img}
+    monkey(menu.capture, "grab", lambda reg: shots["img"])
+    drain()
+    menu.learn((10, 10, 200, 100))
+    assert core_m.menu_region == (10, 10, 200, 100) and os.path.exists(menu.REF_FILE)
+    assert menu.is_menu(menu_img) and not menu.is_menu(game_img)
+    noisy = menu_img.copy()
+    ImageDraw.Draw(noisy).point([(5, 5), (190, 90)], fill=(255, 255, 255))           # мелкие отличия — всё равно меню
+    assert menu.is_menu(noisy)
+    menu._ref.update(img=None, loaded=False)                                         # после перезапуска — из файла
+    assert menu.is_menu(menu_img)
+    menu.forget()
+    assert core_m.menu_region is None and not os.path.exists(menu.REF_FILE)
 
 
 def test_chat(monkey):

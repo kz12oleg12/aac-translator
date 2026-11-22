@@ -9,7 +9,7 @@ import time
 import subprocess
 
 
-from . import chat, limits, updater, tts, appwin, config, core, game, hotkeys, translate, tray, watcher
+from . import chat, limits, menu, updater, tts, appwin, config, core, game, hotkeys, translate, tray, watcher
 
 
 def apply_view_settings():
@@ -315,7 +315,8 @@ def main():
     tts.warm()   # озвучка: прогрев соединения и звука в фоне
     updater.start_periodic()   # есть ли новая версия на GitHub
     limits.start_deepl_checks()
-    chat.start()               # перевод игрового чата (если обведена его область)   # сколько символов DeepL осталось (если есть ключ)
+    chat.start()               # перевод игрового чата (если обведена его область)
+    menu.start()               # пауза, пока открыто меню игры (если меню запомнено)   # сколько символов DeepL осталось (если есть ключ)
     for w in watcher.WATCHERS:
         threading.Thread(target=w.run, daemon=True).start()
 

@@ -235,7 +235,10 @@ class Panel:
             return "пауза вне игры выключена"
         if not game.game_exe:
             return f"не запомнена — включите автоперевод ({hotkeys.K('auto')}), находясь в игре"
-        return f"{game.game_exe} · " + ("на экране" if game.game_active.is_set() else "⏸ свёрнута — пауза")
+        state = ("⏸ меню игры — пауза" if core.in_menu else "на экране") if game.game_active.is_set() \
+            else "⏸ свёрнута — пауза"
+        menu_txt = " · меню запомнено" if core.menu_region else f" · меню: {hotkeys.K('menu_learn')} — запомнить"
+        return f"{game.game_exe} · {state}{menu_txt}"
 
     def update_keys(self):
         for hid, kl in self.key_labels.items():

@@ -11,7 +11,7 @@ import threading
 import tkinter as tk
 
 
-from . import chat, config, core, game, history, hotkeys, tooltip, tray, tts, ui_overlay, ui_panel, ui_windows, updater, watcher
+from . import chat, config, menu, core, game, history, hotkeys, tooltip, tray, tts, ui_overlay, ui_panel, ui_windows, updater, watcher
 
 
 class App:
@@ -347,6 +347,33 @@ class App:
                 return False
         chat.hide_for_capture = hide_for_capture
 
+    # --- меню игры ---
+    def menu_learn(self):
+        def done(reg):
+            if reg:
+                self.root.after(200, lambda: threading.Thread(target=menu.learn, args=(reg,), daemon=True).start())
+
+        self.pick_area("Меню игры должно быть ОТКРЫТО. Обведите кусочек меню, который всегда одинаковый "
+                       "(заголовок или кнопки). Правый клик — забыть меню.", done, menu.forget)
+
+    def menu_state(self, opened):
+        """Меню игры открыли/закрыли: прячем/возвращаем окна перевода."""
+        if opened:
+            tts.stop()
+            self._menu_hidden = [ov for ov in (self.subs, self.answers, self.chat) if ov.visible]
+            for ov in self._menu_hidden:
+                ov.hide()
+            core.log("Меню игры — автоперевод на паузе")
+        else:
+            for ov in getattr(self, "_menu_hidden", []):
+                if ov is self.chat:
+                    self.show_chat_window()
+                else:
+                    ov.show(ov.label.cget("text"))
+            self._menu_hidden = []
+            core.log("Меню закрыто — продолжаю переводить")
+        self.panel.refresh()
+
     def show_chat_window(self):
         """Вернуть окно чата (после правого клика): последние переводы или подсказку."""
         self.chat_last = time.time()
@@ -594,7 +621,7 @@ class App:
         core.heartbeat = time.time()
         try:
             self.indicator.update(core.auto_on.is_set() or getattr(self, "_paused_auto", False),
-                                  paused=not game.game_active.is_set(), busy=bool(self.busy),
+                                  paused=not game.game_active.is_set() or core.in_menu, busy=bool(self.busy),
                                   tts_on=config.TTS_ENABLED)
         except Exception:
             pass
@@ -687,6 +714,10 @@ class App:
                     self.show_chat(payload)
                 elif kind == "select_chat":
                     self.select_chat_region()
+                elif kind == "menu_state":
+                    self.menu_state(payload)
+                elif kind == "menu_learn":
+                    self.menu_learn()
                 elif kind == "chat_once":
                     threading.Thread(target=chat.translate_chat_once, daemon=True).start()
                 elif kind == "chat_show":

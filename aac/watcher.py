@@ -211,7 +211,7 @@ class Watcher:
         gone_since = None    # когда текст пропал из области
         while True:
             core.auto_on.wait()
-            if not game.game_active.is_set():
+            if not game.game_active.is_set() or core.in_menu:
                 time.sleep(0.5)   # вы не в игре — ничего не переводим
                 continue
             reg = self.get_region()
