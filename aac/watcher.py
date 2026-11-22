@@ -2,6 +2,7 @@
 
 
 import difflib
+import os
 import re
 import threading
 import time
@@ -155,6 +156,50 @@ class Watcher:
                      f"не обращайте внимания. Если нет — сузьте область ({hotkeys.K('layout')}).", "warn")
 
     def run(self):
+        """Цикл наблюдения. Если внутри случится ошибка — пишем её в журнал и запускаем цикл заново,
+        а не «умираем» молча (иначе автоперевод этой области просто перестаёт работать)."""
+        errors = 0
+        while True:
+            try:
+                self._loop()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                errors += 1
+                if errors <= 3:
+                    tb = traceback.extract_tb(e.__traceback__)
+                    where = f"{os.path.basename(tb[-1].filename)}:{tb[-1].lineno}" if tb else ""
+                    core.log(f"{self.name}: ошибка ({type(e).__name__}: {str(e)[:100]} [{where}]) — "
+                             "перезапускаю слежение", "error")
+                self.working.clear()
+                core.events.put(("busy", (self.name, False)))
+                time.sleep(1)
+
+    def _check_overlap(self, reg, others):
+        """Чужая область закрывает заметную часть нашей — её текст закрашивается и не переводится. Скажем об этом."""
+        if not others:
+            return
+        if not isinstance(others, list):
+            others = [others]
+        key = (tuple(reg), tuple(tuple(o) for o in others if o))
+        if key == getattr(self, "_overlap_checked", None):
+            return
+        self._overlap_checked = key
+        area = reg[2] * reg[3] or 1
+        covered = 0
+        for o in others:
+            if not o:
+                continue
+            w = min(reg[0] + reg[2], o[0] + o[2]) - max(reg[0], o[0])
+            h = min(reg[1] + reg[3], o[1] + o[3]) - max(reg[1], o[1])
+            if w > 0 and h > 0:
+                covered += w * h
+        if covered > area * 0.25:
+            core.log(f"{self.name}: другая область закрывает {min(100, covered * 100 // area)}% этой — там текст "
+                     f"не переводится. Разведите рамки ({hotkeys.K('layout')}): пересечение подсвечено красным.",
+                     "warn")
+
+    def _loop(self):
         prev = None          # маска на прошлой проверке
         sent = None          # маска, которую последний раз отправили на перевод
         last_req = 0.0
@@ -173,7 +218,9 @@ class Watcher:
                 continue
             try:
                 img = capture.grab(reg)
-                img = capture.mask_out(img, reg, self.exclude() if self.exclude else None)
+                others = self.exclude() if self.exclude else None
+                img = capture.mask_out(img, reg, others)
+                self._check_overlap(reg, others)
             except Exception as e:
                 core.log(f"{self.name}: скриншот не удался: {e}", "error")
                 time.sleep(1)

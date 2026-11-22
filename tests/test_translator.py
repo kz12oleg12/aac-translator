@@ -748,6 +748,34 @@ def test_limits_and_glossary_learning(monkey):
     assert not g.learn("Dawn Blade", "Клинок рассвета")
 
 
+def test_watcher_survives_errors(monkey):
+    """Ошибка внутри слежения не убивает его: в журнал — сообщение, слежение запускается заново."""
+    W = T._owner("Watcher")
+    if not hasattr(W.Watcher, "_loop"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    w = T.Watcher("Ответы", lambda: None, "answers", "answers_hide", None, lambda: "")
+    calls = []
+
+    def boom():
+        calls.append(1)
+        if len(calls) == 1:
+            raise ValueError("сломалось")
+        raise SystemExit   # второй заход — выходим из теста
+    monkey(w, "_loop", boom)
+    monkey(W.time, "sleep", lambda s: None)
+    drain()
+    try:
+        w.run()
+    except SystemExit:
+        pass
+    assert len(calls) == 2
+    assert any(k == "log" and "перезапускаю слежение" in p[1] for k, p in drain())
+    # перекрытие областей — предупреждение
+    w._check_overlap((0, 0, 100, 100), [(0, 0, 100, 50), None])
+    assert any(k == "log" and "закрывает 50%" in p[1] for k, p in drain())
+
+
 def test_subs_once(monkey):
     """«Перевести субтитры» (Shift+F8): один раз по сохранённой области, с озвучкой и историей."""
     w = T._owner("translate_once")
