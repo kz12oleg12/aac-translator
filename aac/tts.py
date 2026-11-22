@@ -332,6 +332,25 @@ def speak_text(translation):
     _say(text)
 
 
+def repeat_line(translation, orig=None):
+    """«Повторить реплику»: прервать то, что звучит, и прочитать заново голосом этого персонажа.
+    Читает, даже если озвучка субтитров выключена — вы сами попросили."""
+    stop()
+    text = speech_text(translation, orig)
+    if sum(ch.isalpha() for ch in text) < 2:
+        return
+    vp = None
+    if config.TTS_PER_CHARACTER:
+        try:
+            sp = voices.speaker(translation, orig)
+            if sp:
+                vp = voices.voice_for(sp[0])
+        except Exception as e:
+            print("repeat voice:", e)
+    _last.update(text=translation, t=time.time())
+    _say(text, None, vp)
+
+
 def speak_subtitle_once(translation, seen=None, orig=None):
     if translation == _last["text"] and time.time() - _last["t"] < 30:
         return

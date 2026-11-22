@@ -15,6 +15,7 @@ HOTKEY_DEFS = [  # (id, что делает, клавиша по умолчан�
     ("once", "перевести задание", config.HOTKEY_ONCE, "once"),
     ("subs_once", "перевести субтитры", config.HOTKEY_SUBS_ONCE, "subs_once"),
     ("answers_once", "перевести ответы", config.HOTKEY_ANSWERS_ONCE, "answers_once"),
+    ("repeat", "повторить реплику", config.HOTKEY_REPEAT, "repeat_line"),
     ("once_tts", "обвести и озвучить", config.HOTKEY_ONCE_TTS, "once_tts"),
     ("tooltip", "перевод под мышкой", config.HOTKEY_TOOLTIP, "tooltip_key"),
     ("auto", "автоперевод вкл/выкл", config.HOTKEY_AUTO, "auto"),

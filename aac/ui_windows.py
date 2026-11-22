@@ -198,7 +198,7 @@ class SettingsWindow:
 
     def __init__(self, app):
         self.app = app
-        self.win = w = _normal_window(app, "AAC Translator — настройки", "1000x840")
+        self.win = w = _normal_window(app, "AAC Translator — настройки", "1000x880")
         left = tk.Frame(w, bg="#1a1d23")
         left.pack(side="left", fill="both", expand=True, pady=6)
         right = tk.Frame(w, bg="#1d2129")
@@ -252,9 +252,6 @@ class SettingsWindow:
         check(left, "Пополнять словарь сам (имена, предметы, места)", self.gl_auto)
         self.cache_on = tk.BooleanVar(value=config.CACHE_ENABLED)
         check(left, "Кэш переводов: повторы фраз — мгновенно и без запросов", self.cache_on)
-        tk.Button(left, text="🗑 Очистить кэш переводов", command=self._clear_cache,
-                  relief="flat", bg="#3a3f4b", fg="white", activebackground="#4a5060",
-                  cursor="hand2").pack(anchor="w", padx=24, pady=(0, 6))
         self.indicator = tk.BooleanVar(value=config.SHOW_INDICATOR)
         check(left, "Значок «● AAC» поверх игры, пока включён автоперевод", self.indicator)
 
@@ -349,6 +346,19 @@ class SettingsWindow:
         self.voice_note = tk.Label(right, text="", fg="#7d8590", bg=right["bg"],
                                    font=("Segoe UI", 8), anchor="w", justify="left", wraplength=440)
         self.voice_note.pack(fill="x", padx=16)
+
+        # ----- резервная копия -----
+        tk.Label(right, text="Резервная копия", fg="#8cf", bg=right["bg"], font=("Segoe UI", 11, "bold"),
+                 anchor="w").pack(fill="x", padx=16, pady=(10, 2))
+        brow = tk.Frame(right, bg=right["bg"])
+        brow.pack(fill="x", padx=16, pady=(0, 4))
+        for text, cmd in (("💾 Сохранить в файл…", self._backup_export), ("📂 Загрузить…", self._backup_import),
+                          ("🗑 Очистить кэш", self._clear_cache)):
+            tk.Button(brow, text=text, command=cmd, relief="flat", bg="#3a3f4b", fg="white",
+                      activebackground="#4a5060", cursor="hand2", padx=8).pack(side="left", padx=(0, 8))
+        tk.Label(right, text="Настройки, области, голоса персонажей, словарь и кэш — одним файлом. "
+                             "Ключи переводчиков не сохраняются (они в Windows).", fg="#7d8590", bg=right["bg"],
+                 font=("Segoe UI", 8), anchor="w", justify="left", wraplength=440).pack(fill="x", padx=16)
         label(right, "Скорость речи")
         self.rate = tk.IntVar(value=config.TTS_RATE)
         scale(right, self.rate, -5, 6)
@@ -502,6 +512,49 @@ class SettingsWindow:
             return bool(self.win.winfo_exists())
         except Exception:
             return False
+
+    def _backup_export(self):
+        from tkinter import filedialog, messagebox
+        from . import backup
+        path = filedialog.asksaveasfilename(parent=self.win, title="Сохранить резервную копию",
+                                            initialfile=backup.default_name(), defaultextension=".zip",
+                                            filetypes=[("Резервная копия AAC", "*.zip")])
+        if not path:
+            return
+        try:
+            saved = backup.export(path)
+        except Exception as e:
+            messagebox.showerror("AAC Translator", f"Не удалось сохранить: {e}", parent=self.win)
+            return
+        core.log(f"Резервная копия сохранена: {path} ({backup.describe(saved)})", "ok")
+        messagebox.showinfo("AAC Translator", f"Сохранено: {backup.describe(saved)}.\n\n{path}", parent=self.win)
+
+    def _backup_import(self):
+        from tkinter import filedialog, messagebox
+        from . import backup
+        path = filedialog.askopenfilename(parent=self.win, title="Загрузить резервную копию",
+                                          filetypes=[("Резервная копия AAC", "*.zip"), ("Все файлы", "*.*")])
+        if not path:
+            return
+        try:
+            info = backup.read_manifest(path)
+        except Exception as e:
+            messagebox.showerror("AAC Translator", f"Не получилось открыть файл: {e}", parent=self.win)
+            return
+        if not messagebox.askyesno(
+                "AAC Translator",
+                f"Копия от {info.get('created', '?')} (версия {info.get('version', '?')}).\n"
+                f"В ней: {backup.describe(info.get('files', []))}.\n\n"
+                "Заменить текущие настройки? Нынешние сохранятся в папку backups. Программа перезапустится.",
+                parent=self.win):
+            return
+        try:
+            restored, before = backup.restore(path)
+        except Exception as e:
+            messagebox.showerror("AAC Translator", f"Не удалось восстановить: {e}", parent=self.win)
+            return
+        core.log(f"Восстановлено: {backup.describe(restored)}. Прежние настройки — в {before}", "ok")
+        self.app.restart()
 
     def _clear_cache(self):
         from . import tcache

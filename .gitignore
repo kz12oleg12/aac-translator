@@ -9,3 +9,4 @@ __pycache__/
 menu_ref.png
 translation_cache.json
 translation_cache.json.tmp
+backups/

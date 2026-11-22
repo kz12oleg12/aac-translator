@@ -64,6 +64,7 @@ def translate_subs_once():
             core.events.put(("subs_from", "subs_hide"))
             orig = history.last_source()
             core.events.put(("text", (text, orig)))
+            core.last_line = (text, orig)
             history.history_add("Субтитры", orig, text)
             _remember_subtitle(text)
             tts.speak_subtitle_once(text, None, orig)
@@ -323,6 +324,8 @@ class Watcher:
                         if self.show_event == "text":
                             core.events.put(("subs_from", self.hide_event))   # из какой области реплика
                         core.events.put((self.show_event, (text, orig)))
+                        if self.show_event == "text":
+                            core.last_line = (text, orig)       # для клавиши «повторить реплику»
                         history.history_add(self.name, orig, text)
                         if self.show_event == "text":
                             tts.speak_subtitle_once(text, getattr(self, "_seen_at", None), orig)   # только субтитры

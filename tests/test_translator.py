@@ -1712,6 +1712,85 @@ def test_quest_key_closes_window(monkey):
         app.root.destroy()
 
 
+def test_backup_roundtrip(monkey):
+    """Резервная копия: всё в один zip; восстановление возвращает файлы, а текущие сохраняет в backups."""
+    try:
+        from aac import backup, voices, glossary, tcache, menu
+    except ImportError:
+        print("   (в этой версии нет — пропуск)")
+        return
+    import zipfile
+    d = tempfile.mkdtemp(dir=TMP)
+    paths = {n: os.path.join(d, n) for n in ("s.json", "c.json", "g.txt", "t.json", "m.png")}
+    monkey(T._owner("SETTINGS_FILE"), "SETTINGS_FILE", paths["s.json"])
+    monkey(voices, "FILE", paths["c.json"])
+    monkey(glossary, "GLOSSARY_FILE", paths["g.txt"])
+    monkey(tcache, "CACHE_FILE", paths["t.json"])
+    monkey(menu, "REF_FILE", paths["m.png"])
+    monkey(backup, "BACKUP_DIR", os.path.join(d, "backups"))
+    for n, text in (("s.json", '{"region": [1, 2, 3, 4]}'), ("c.json", '{"renald": {"en": "Renald"}}'),
+                    ("g.txt", "Renald = Ренальд\n"), ("t.json", "{}")):
+        open(paths[n], "w", encoding="utf-8").write(text)
+    zpath = os.path.join(d, "backup.zip")
+    saved = backup.export(zpath)
+    assert set(saved) == {"settings.json", "characters.json", "glossary.txt", "translation_cache.json"}, saved
+    assert backup.read_manifest(zpath)["files"] == saved
+    # всё поменяли / удалили…
+    open(paths["s.json"], "w").write('{"region": [9, 9, 9, 9]}')
+    os.remove(paths["g.txt"])
+    restored, before = backup.restore(zpath)
+    assert set(restored) == set(saved)
+    assert json.load(open(paths["s.json"]))["region"] == [1, 2, 3, 4]
+    assert open(paths["g.txt"], encoding="utf-8").read() == "Renald = Ренальд\n"
+    assert os.path.exists(before) and json.loads(zipfile.ZipFile(before).read("settings.json"))["region"] == [9, 9, 9, 9]
+    assert T.SETTINGS.get("region") == [1, 2, 3, 4], "в памяти программы — восстановленные настройки"
+    # чужой zip и попытка подсунуть файл мимо папки — отклоняются
+    bad = os.path.join(d, "bad.zip")
+    with zipfile.ZipFile(bad, "w") as z:
+        z.writestr("hello.txt", "x")
+    try:
+        backup.read_manifest(bad)
+        assert False, "чужой архив не должен приниматься"
+    except ValueError:
+        pass
+    evil = os.path.join(d, "evil.zip")
+    with zipfile.ZipFile(evil, "w") as z:
+        z.writestr("aac_backup.json", json.dumps({"files": ["../../evil.txt", "glossary.txt"]}))
+        z.writestr("../../evil.txt", "x")
+        z.writestr("glossary.txt", "Kevin = Кевин\n")
+    restored, _ = backup.restore(evil)
+    assert restored == ["glossary.txt"] and not os.path.exists(os.path.join(d, "..", "..", "evil.txt"))
+
+
+def test_repeat_line(monkey):
+    """Повторить реплику: последняя реплика снова звучит (даже при выключенной озвучке) голосом персонажа."""
+    tts = T._owner("speak_subtitle")
+    if not hasattr(tts, "repeat_line"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    said, stopped = [], []
+    monkey(tts, "_say", lambda text, seen=None, vp=None: said.append(text))
+    monkey(tts, "stop", lambda: stopped.append(1))
+    monkey(T._owner("TTS_ENABLED"), "TTS_ENABLED", False)
+    tts.repeat_line("Ренальд\nДержись рядом.", "Renald\nStay close.")
+    assert stopped and said and "Держись рядом" in said[0], said
+    if GUI:
+        T.set("SETTINGS", {})
+        app = T.App()
+        try:
+            monkey(T._owner("last_line"), "last_line", ("Ренальд\nДержись рядом.", "Renald\nStay close."))
+            got = []
+            monkey(tts, "repeat_line", lambda t, o=None: got.append(t))
+            app.subs.hide()
+            app.repeat_line()
+            app.root.update()
+            time.sleep(0.1)
+            assert app.subs.visible and app.subs.label.cget("text") == "Ренальд\nДержись рядом."
+            assert got == ["Ренальд\nДержись рядом."], got
+        finally:
+            app.root.destroy()
+
+
 # ---------- запуск ----------
 def main():
     print(f"Проверяю: {ROOT}  ({T.kind}, версия {T.VERSION})\n")

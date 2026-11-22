@@ -613,6 +613,20 @@ class App:
                     self.answers.fit()
         self.pick_area("Обведите область ВАРИАНТОВ ОТВЕТА (для автоперевода).", done)
 
+    def repeat_line(self):
+        """Клавиша «повторить реплику»: последняя реплика снова на экране и звучит заново."""
+        if not core.last_line:
+            core.log("Повторять пока нечего — ещё не было ни одной реплики.", "warn")
+            return
+        text, orig = core.last_line
+        was_visible = self.subs.visible
+        self.subs.push((text, orig))
+        threading.Thread(target=tts.repeat_line, args=(text, orig), daemon=True).start()
+        if not was_visible and not config.KEEP_UNTIL_NEXT:
+            # реплика в игре уже пропала — повтор сам уберётся, когда его успеют прочитать/дослушать
+            ms = int(max(config.HIDE_DELAY, 6) * 1000 + len(text) * 80)
+            self.root.after(ms, lambda: self.subs.label.cget("text") == text and self.subs.hide())
+
     def select_quest_once(self, speak=False):
         if self.quest.visible:
             # окно задания открыто — та же клавиша его закрывает (мышкой не дотянуться, когда управляете персонажем)
@@ -662,6 +676,8 @@ class App:
                 kind, payload = core.events.get_nowait()
                 if kind == "text":
                     self.subs.push(payload)
+                elif kind == "repeat_line":
+                    self.repeat_line()
                 elif kind == "quest":
                     self.quest.show(payload)
                 elif kind == "busy":
