@@ -34,6 +34,7 @@ def main():
             print(f"   (Python {sys.version.split()[0]})")
             return 1
 
+    pip("silero-stress")   # ударения для доп. голосов (их ещё ~20)
     print("\n=== 2/3 Модель голосов (~100 МБ, один раз)")
     from aac import tts_silero
     t0 = time.time()

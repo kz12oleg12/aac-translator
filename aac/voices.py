@@ -28,7 +28,26 @@ NEURAL_POOL = {
     "f": ["ru-RU-SvetlanaNeural", "en-US-AvaMultilingualNeural", "en-US-EmmaMultilingualNeural",
           "fr-FR-VivienneMultilingualNeural", "de-DE-SeraphinaMultilingualNeural"],
 }
-SILERO_POOL = {"m": ["aidar", "eugene"], "f": ["xenia", "baya", "kseniya"]}
+SILERO_BASE = {"m": ["aidar", "eugene"], "f": ["xenia", "baya", "kseniya"]}
+
+
+class _SileroPool:
+    """Голоса Silero по полу: основные + доп. голоса (если установлен silero-stress)."""
+
+    def __getitem__(self, g):
+        from . import tts_silero
+        extra = [v for v, _ in tts_silero.CIS_VOICES[g]] if tts_silero.cis_available() else []
+        return SILERO_BASE[g] + extra
+
+    def auto(self, g):
+        """Для автоподбора: с доп. голосами Евгений не нужен (его просили заменить)."""
+        pool = self[g]
+        if len(pool) > len(SILERO_BASE[g]):
+            pool = [v for v in pool if v != "eugene"]
+        return pool
+
+
+SILERO_POOL = _SileroPool()
 NEURAL_PITCH = [-6, -3, 0, 3, 6]        # сдвиг высоты, Гц
 SILERO_PITCH = [-1, 0, 1]               # low / medium / high
 
@@ -241,7 +260,7 @@ def voice_for(key, engine=None, auto_only=False):
     if engine == "neural":
         pool, pitches, main = NEURAL_POOL[g], NEURAL_PITCH, config.TTS_NEURAL_VOICE
     else:
-        pool, pitches, main = SILERO_POOL[g], SILERO_PITCH, config.TTS_SILERO_VOICE
+        pool, pitches, main = SILERO_POOL.auto(g), SILERO_PITCH, config.TTS_SILERO_VOICE
     if manual and not auto_only:
         return manual, 0
     if not config.TTS_VARY_IN_GENDER:

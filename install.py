@@ -98,6 +98,16 @@ def main():
     r = run([sys.executable, "-m", "pip", "install", *([] if UPDATE else ["--upgrade"]), "--disable-pip-version-check", "edge-tts"])
     if r.returncode != 0:
         print("   ! Нейроголоса (edge-tts) не установились — озвучка будет голосом Windows.")
+    # если стоят офлайн-голоса Silero (PyTorch) — ставим и расстановку ударений для доп. голосов
+    try:
+        import importlib.util
+        has_torch = importlib.util.find_spec("torch") is not None
+    except Exception:
+        has_torch = False
+    if has_torch:
+        r = run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "silero-stress"])
+        if r.returncode != 0:
+            print("   ! Доп. голоса Silero (silero-stress) не установились — останутся основные голоса.")
 
     step("4/4 Создаю ярлыки")
     pythonw = Path(sys.executable).with_name("pythonw.exe")

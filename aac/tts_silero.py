@@ -30,6 +30,71 @@ VOICES = [
     ("eugene", "Евгений — мужской"),
 ]
 
+# Дополнительные голоса — другая модель Silero (v5_cis_base): много русских голосов, но ударения ей нужно
+# расставлять отдельно (пакет silero-stress). Экспериментально: если не заработает — читает основной голос.
+CIS_URL = "https://models.silero.ai/models/tts/ru/v5_cis_base.pt"
+CIS_FILE = os.path.join(MODEL_DIR, "silero_v5_cis_base.pt")
+CIS_VOICES = {
+    "m": [("ru_eduard", "Эдуард"), ("ru_alexandr", "Александр"), ("ru_bogdan", "Богдан"),
+          ("ru_dmitriy", "Дмитрий"), ("ru_igor", "Игорь"), ("ru_marat", "Марат")],
+    "f": [("ru_aigul", "Айгуль"), ("ru_ekaterina", "Екатерина"), ("ru_albina", "Альбина"),
+          ("ru_ramilia", "Рамиля"), ("ru_vika", "Вика"), ("ru_karina", "Карина"), ("ru_zinaida", "Зинаида"),
+          ("ru_zhazira", "Жазира"), ("ru_zhadyra", "Жадыра"), ("ru_zara", "Зара")],
+}
+for _g, _items in CIS_VOICES.items():
+    VOICES += [(v, f"{n} — {'мужской' if _g == 'm' else 'женский'} (доп.)") for v, n in _items]
+BASE_FOR = {"m": "aidar", "f": "xenia"}      # чем читать, если доп. голос не заработал
+_cis = {"m": None, "acc": None, "error": None, "speakers_logged": False}
+
+
+def cis_available():
+    """Доп. голоса возможны: стоит пакет расстановки ударений silero-stress."""
+    import importlib.util
+    try:
+        return importlib.util.find_spec("silero_stress") is not None and _cis["error"] is None
+    except Exception:
+        return False
+
+
+def is_cis(voice):
+    return str(voice).startswith("ru_")
+
+
+def cis_gender(voice):
+    return "m" if any(v == voice for v, _ in CIS_VOICES["m"]) else "f"
+
+
+def _load_cis():
+    """Модель доп. голосов + расстановщик ударений. Вызывается в потоке executor."""
+    if _cis["m"] is not None:
+        return _cis["m"], _cis["acc"]
+    if _cis["error"]:
+        raise RuntimeError(_cis["error"])
+    import time
+    t0 = time.time()
+    try:
+        load()                                   # torch уже загружен основной моделью
+        torch = _model["torch"]
+        if not os.path.exists(CIS_FILE) or os.path.getsize(CIS_FILE) < 10_000_000:
+            core.log("Silero: скачиваю доп. голоса (~90 МБ, один раз)…", "warn")
+            tmp = CIS_FILE + ".part"
+            torch.hub.download_url_to_file(CIS_URL, tmp, progress=False)
+            os.replace(tmp, CIS_FILE)
+        m = torch.package.PackageImporter(CIS_FILE).load_pickle("tts_models", "model")
+        m.to(torch.device("cpu"))
+        from silero_stress import load_accentor
+        acc = load_accentor()
+    except Exception as e:
+        _cis["error"] = f"{type(e).__name__}: {str(e)[:150]}"
+        core.log(f"Silero: доп. голоса не заработали ({_cis['error']}) — персонажи будут читаться "
+                 "основными голосами Silero.", "error")
+        raise
+    _cis.update(m=m, acc=acc)
+    speakers = [s for s in (getattr(m, "speakers", None) or []) if str(s).startswith("ru_")]
+    core.log(f"Silero: доп. голоса загружены за {time.time() - t0:.1f} с"
+             + (f" ({len(speakers)} русских)" if speakers else ""), "ok")
+    return m, acc
+
 # один поток: модель не любит, когда её вызывают одновременно
 executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="silero")
 _model = {"m": None, "torch": None, "error": None}
@@ -174,6 +239,13 @@ _PITCHES = {-2: "x-low", -1: "low", 0: "medium", 1: "high", 2: "x-high"}
 
 def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
     """Синтез фразы в wav-файл. Вызывается в потоке executor."""
+    if is_cis(voice):
+        try:
+            return _synth_cis(text, path, voice, rate_level, pitch_level)
+        except ValueError:
+            raise
+        except Exception:
+            voice = BASE_FOR[cis_gender(voice)]      # доп. голос не вышел — основной того же пола
     model = load()
     torch = _model["torch"]
     text = clean(text)
@@ -192,10 +264,46 @@ def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
                 audio = None     # модель не поняла разметку скорости/высоты — читаем обычным голосом
         if audio is None:
             audio = _apply(model, kw, text=text)
+    _write_wav(path, audio, torch)
+    return path
+
+
+def _write_wav(path, audio, torch):
     pcm = (audio.clamp(-1, 1) * 32767).to(torch.int16).tolist()
     with wave.open(path, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(SAMPLE_RATE)
         w.writeframes(array.array("h", pcm).tobytes())
+
+
+def _synth_cis(text, path, voice, rate_level=0, pitch_level=0):
+    """Доп. голос: расставляем ударения («мен+я») и синтезируем моделью v5_cis_base."""
+    model, acc = _load_cis()
+    torch = _model["torch"]
+    text = clean(text)
+    if sum(ch.isalpha() for ch in text) < 2:
+        raise ValueError("нечего читать")
+    speakers = getattr(model, "speakers", None)
+    if speakers and voice not in speakers:
+        if not _cis["speakers_logged"]:
+            _cis["speakers_logged"] = True
+            core.log("Silero: такого доп. голоса нет в модели. Есть: "
+                     + ", ".join(s for s in speakers if str(s).startswith("ru_"))[:300], "warn")
+        raise RuntimeError(f"нет голоса {voice}")
+    stressed = acc(text)
+    rate = _prosody_rate(rate_level)
+    pitch = _PITCHES.get(max(-2, min(2, int(pitch_level))), "medium")
+    kw = dict(speaker=voice, sample_rate=SAMPLE_RATE)
+    with torch.no_grad():
+        audio = None
+        if rate != "medium" or pitch != "medium":
+            attrs = (f' rate="{rate}"' if rate != "medium" else "") + (f' pitch="{pitch}"' if pitch != "medium" else "")
+            try:
+                audio = model.apply_tts(ssml_text=f'<speak><prosody{attrs}>{escape(stressed)}</prosody></speak>', **kw)
+            except Exception:
+                audio = None
+        if audio is None:
+            audio = model.apply_tts(text=stressed, **kw)
+    _write_wav(path, audio, torch)
     return path

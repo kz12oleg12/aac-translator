@@ -631,6 +631,13 @@ def warm():
     """Подготовить озвучку заранее (вызывается при запуске и при включении)."""
     if config.TTS_ENABLED and engine_ready():
         _neural.warm()
+        if config.TTS_ENGINE == "silero" and tts_silero.cis_available():
+            def preload():
+                try:
+                    tts_silero._load_cis()       # доп. голоса: скачать/загрузить заранее, а не на первой реплике
+                except Exception:
+                    pass
+            tts_silero.executor.submit(preload)
 
 
 def voice_title():

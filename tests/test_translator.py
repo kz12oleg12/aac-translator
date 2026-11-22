@@ -915,6 +915,30 @@ def test_silero(monkey):
         assert False, "без букв — нечего читать"
     except ValueError:
         pass
+    # доп. голоса (модель v5_cis_base): ударения расставляются, синтез — своей моделью;
+    # если не вышло — основной голос того же пола
+    if hasattr(sil, "_synth_cis"):
+        cis_calls = []
+
+        class CisModel:
+            speakers = ["ru_eduard", "ru_aigul"]
+            def apply_tts(self, **kw):
+                cis_calls.append(kw)
+                return Ten([0.1] * 50)
+        monkey(sil, "_cis", {"m": CisModel(), "acc": lambda t: t.replace("Привет", "Прив+ет"), "error": None,
+                             "speakers_logged": False})
+        sil.synth_to_wav("Привет, мир", path, "ru_eduard")
+        assert cis_calls[-1] == {"text": "Прив+ет, мир", "speaker": "ru_eduard", "sample_rate": sil.SAMPLE_RATE}
+        calls.clear()
+        sil.synth_to_wav("Привет, мир", path, "ru_igor")            # такого голоса нет в модели → Айдар
+        assert calls and calls[-1]["speaker"] == "aidar", calls
+        voices_mod = __import__("aac.voices", fromlist=["x"])
+        monkey(sil, "cis_available", lambda: True)
+        assert "ru_eduard" in voices_mod.SILERO_POOL["m"] and "eugene" in voices_mod.SILERO_POOL["m"]
+        assert "eugene" not in voices_mod.SILERO_POOL.auto("m")      # Евгения в автоподборе заменили
+        monkey(sil, "cis_available", lambda: False)
+        assert voices_mod.SILERO_POOL.auto("m") == ["aidar", "eugene"]
+        assert sil.label("ru_aigul") == "Айгуль — женский (доп.)"
     # через очередь: движок silero → wav, голос и уровень скорости из настроек
     cfg = T._owner("TTS_READ_NAME")
     monkey(cfg, "TTS_ENABLED", True)
