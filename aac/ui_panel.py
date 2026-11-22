@@ -58,11 +58,16 @@ class Panel:
                 self._logo = tk.PhotoImage(file=logo_path)
         except Exception:
             self._logo = None
-        hdr = tk.Label(win, text=f"  AAC Translator v{config.VERSION} — система   (тащите мышкой)" if self._logo
+        top = tk.Frame(win, bg="#1a1d23")
+        top.pack(fill="x", padx=10, pady=(8, 2))
+        tk.Button(top, text="⟳ Перезапустить", font=("Segoe UI", 8), relief="flat", bd=0, highlightthickness=0,
+                  padx=8, bg="#2b3040", fg="#8cf", activebackground="#3a4258", activeforeground="#fff",
+                  cursor="hand2", command=lambda: core.events.put(("restart", None))).pack(side="right")
+        hdr = tk.Label(top, text=f"  AAC Translator v{config.VERSION} — система   (тащите мышкой)" if self._logo
                        else f"⚙ AAC Translator v{config.VERSION} — система   (тащите мышкой)",
                        image=self._logo, compound="left",
                        fg="#8cf", bg="#1a1d23", font=("Segoe UI", 10, "bold"), anchor="w")
-        hdr.pack(fill="x", padx=10, pady=(8, 2))
+        hdr.pack(side="left", fill="x", expand=True)
         self.state = tk.Label(win, text="", fg="#eee", bg="#1a1d23", font=("Consolas", 10),
                               justify="left", anchor="w")
         self.state.pack(fill="x", padx=10)

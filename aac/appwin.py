@@ -218,6 +218,21 @@ class App:
             return
         self.root.after(300, self._tip_watch)
 
+    def restart(self):
+        """Перезапуск: новая копия ждёт, пока эта закроется, и запускается."""
+        import subprocess
+        import sys
+        script = os.path.join(config.APP_DIR, "aac_translator.py")
+        flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0   # отдельно от этой копии
+        try:
+            subprocess.Popen([sys.executable, script, "--after-pid", str(os.getpid())], cwd=config.APP_DIR,
+                             creationflags=flags, close_fds=True)
+        except Exception as e:
+            core.log(f"Не удалось перезапустить: {e}", "error")
+            return
+        core.log("Перезапускаю программу…", "ok")
+        core.events.put(("quit", None))
+
     def set_docked(self, on):
         """Ответы и субтитры — одним окном (ответы вплотную под субтитрами) или отдельными окнами."""
         config.ANSWERS_DOCKED = on
@@ -426,6 +441,8 @@ class App:
                         updater.install_async(info)
                     else:
                         updater.check_async(quiet=False)
+                elif kind == "restart":
+                    self.restart()
                 elif kind == "update_check":
                     updater.check_async(quiet=False)
                 elif kind == "tooltip_key":

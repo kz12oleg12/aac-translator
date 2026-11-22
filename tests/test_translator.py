@@ -439,6 +439,16 @@ def test_gui_smoke(monkey):
             app.tip.hide()
             from aac import ui_windows
             ui_windows.CharactersWindow(app)
+        if hasattr(app, "restart"):     # «Перезапустить»: новая копия с --after-pid, эта — закрывается
+            started = []
+            real = subprocess.Popen
+            subprocess.Popen = lambda cmd, **k: started.append(cmd)
+            try:
+                app.restart()
+            finally:
+                subprocess.Popen = real
+            done["restart"] = bool(started) and started[0][-2] == "--after-pid" and \
+                any(k == "quit" for k, _ in drain())
         app.root.after(300, step2)
 
     def step2():
@@ -462,6 +472,7 @@ def test_gui_smoke(monkey):
     app.root.after(300, step)
     app.root.mainloop()
     done.pop("tip", True) or (_ for _ in ()).throw(AssertionError("окно подсказки встало не туда"))
+    done.pop("restart", True) or (_ for _ in ()).throw(AssertionError("перезапуск не сработал"))
     assert done == {"frames": 2, "font": 15}, done
 
 

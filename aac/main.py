@@ -162,7 +162,35 @@ def single_instance(takeover_wait=8.0):
     return True
 
 
+def wait_pid(pid, timeout=30):
+    """Подождать, пока процесс закроется (перезапуск: старая копия освобождает место новой)."""
+    try:
+        k = ctypes.windll.kernel32
+        h = k.OpenProcess(0x00100000, False, int(pid))   # SYNCHRONIZE
+        if h:
+            k.WaitForSingleObject(h, int(timeout * 1000))
+            k.CloseHandle(h)
+        return            # Windows: процесса уже нет — ждать нечего
+    except Exception:
+        pass
+    if os.name == "nt":
+        return
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        try:
+            os.kill(int(pid), 0)
+        except OSError:
+            return
+        time.sleep(0.2)
+
+
 def main():
+    import sys
+    if "--after-pid" in sys.argv:   # кнопка «Перезапустить»
+        try:
+            wait_pid(sys.argv[sys.argv.index("--after-pid") + 1])
+        except (IndexError, ValueError):
+            pass
     if not single_instance():
         print("Переводчик уже запущен — показал его панель.")
         return

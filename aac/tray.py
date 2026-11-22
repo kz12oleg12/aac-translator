@@ -52,6 +52,7 @@ def start_tray():
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Проверить обновления", put("update_check")),
         pystray.MenuItem("Открыть папку программы", lambda icon, item: os.startfile(here)),
+        pystray.MenuItem("Перезапустить", put("restart")),
         pystray.MenuItem("Выход", put("quit")),
     )
     _tray = pystray.Icon("AAC Translator", img, f"AAC Translator v{config.VERSION}", menu)
