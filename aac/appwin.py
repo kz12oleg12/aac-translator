@@ -681,6 +681,8 @@ class App:
                     self.show_chat(payload)
                 elif kind == "select_chat":
                     self.select_chat_region()
+                elif kind == "chat_once":
+                    threading.Thread(target=chat.translate_chat_once, daemon=True).start()
                 elif kind == "chat_show":
                     self.show_chat_window()
                 elif kind == "chat_compose":

@@ -53,6 +53,7 @@ def start_tray():
         pystray.MenuItem("Системная панель", put("panel_toggle"), default=True),
         pystray.MenuItem("Скрыть / показать переводы", put("toggle")),
         pystray.MenuItem("Показать окно чата", put("chat_show")),
+        pystray.MenuItem("Перевести чат сейчас", put("chat_once")),
         pystray.MenuItem("Окна и области", put("layout")),
         pystray.MenuItem("Окна на место", put("reset")),
         pystray.MenuItem("История переводов", put("history_open")),

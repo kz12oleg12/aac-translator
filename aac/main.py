@@ -22,6 +22,7 @@ def apply_view_settings():
     config.SAVE_HISTORY = bool(core.SETTINGS.get("save_history", config.SAVE_HISTORY))
     config.GLOSSARY_AUTO = bool(core.SETTINGS.get("glossary_auto", config.GLOSSARY_AUTO))
     config.SKIP_SYSTEM = bool(core.SETTINGS.get("skip_system", config.SKIP_SYSTEM))
+    config.CHAT_HISTORY = int(core.SETTINGS.get("chat_history", config.CHAT_HISTORY))
     config.CHAT_COVER = bool(core.SETTINGS.get("chat_cover", config.CHAT_COVER))
     config.CHAT_HEIGHT = int(core.SETTINGS.get("chat_height", config.CHAT_HEIGHT))
     config.CHAT_ALPHA = float(core.SETTINGS.get("chat_alpha", config.CHAT_ALPHA))

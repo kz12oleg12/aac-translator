@@ -198,7 +198,7 @@ class SettingsWindow:
 
     def __init__(self, app):
         self.app = app
-        self.win = w = _normal_window(app, "AAC Translator — настройки", "1000x780")
+        self.win = w = _normal_window(app, "AAC Translator — настройки", "1000x840")
         left = tk.Frame(w, bg="#1a1d23")
         left.pack(side="left", fill="both", expand=True, pady=6)
         right = tk.Frame(w, bg="#1d2129")
@@ -260,6 +260,9 @@ class SettingsWindow:
         label(left, "Предельная высота окна чата, px (0 — сколько займут сообщения)")
         self.chat_height = tk.IntVar(value=config.CHAT_HEIGHT)
         scale(left, self.chat_height, 0, 600, 20)
+        label(left, "Сколько сообщений чата хранить (для прокрутки)")
+        self.chat_hist = tk.IntVar(value=config.CHAT_HISTORY)
+        scale(left, self.chat_hist, 20, 1000, 10)
         label(left, "Непрозрачность окна чата, %")
         self.chat_alpha = tk.IntVar(value=int(round(config.CHAT_ALPHA * 100)))
         scale(left, self.chat_alpha, 20, 100, 5)
@@ -501,6 +504,11 @@ class SettingsWindow:
             chat._state["cover_mode"] = None     # заново проверить, прячет ли Windows окно от снимков
         config.CHAT_COVER = bool(self.chat_cover.get())
         config.CHAT_HEIGHT = int(self.chat_height.get())
+        config.CHAT_HISTORY = int(self.chat_hist.get())
+        core.save_settings(chat_history=config.CHAT_HISTORY)
+        app_lines = getattr(self.app, "chat_lines", None)
+        if app_lines is not None and len(app_lines) > config.CHAT_HISTORY:
+            del app_lines[:-config.CHAT_HISTORY]
         config.CHAT_ALPHA = int(self.chat_alpha.get()) / 100
         core.save_settings(chat_cover=config.CHAT_COVER, chat_height=config.CHAT_HEIGHT, chat_alpha=config.CHAT_ALPHA)
         core.save_settings(skip_system=config.SKIP_SYSTEM)

@@ -936,6 +936,16 @@ def test_chat(monkey):
     assert got[-1] == ["need healer"], got
     chat._step()
     assert len(got) == 2                                                     # повторно не переводим
+    # клавиша «перевести чат»: сразу, без ожидания и без автоперевода
+    if hasattr(chat, "translate_chat_once"):
+        screen["lines"] = screen["lines"] + ["[World] Kim: wtb wolf hide"]
+        monkey(chat, "_blink_grab", lambda reg: None)
+        drain()
+        chat.translate_chat_once()
+        assert got[-1] == ["wtb wolf hide"], got
+        assert any(k == "chat" for k, _ in drain())
+        chat.translate_chat_once()                                  # новых нет — просто показать окно
+        assert any(k == "chat_show" for k, _ in drain())
     # перевод поверх чата: если Windows прячет окно от снимков — не моргаем; если нет — моргаем, но редко
     if hasattr(chat, "_grab_under_overlay"):
         frames = {"plain": Image.new("L", (10, 10), 20), "under": Image.new("L", (10, 10), 20)}

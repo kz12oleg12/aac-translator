@@ -216,6 +216,41 @@ def _step():
         history.history_add("Чат", p + m, p + (t or ""))
 
 
+_once_lock = threading.Lock()
+
+
+def translate_chat_once():
+    """Клавиша «перевести чат»: прочитать чат сейчас и перевести новые сообщения (без автоперевода)."""
+    if core.chat_region is None:
+        core.log("Сначала обведите окно чата (клавиша «область чата»).", "warn")
+        return
+    if not _once_lock.acquire(blocking=False):
+        return
+    try:
+        reg = core.chat_region
+        shot = _blink_grab(reg) or capture.grab(reg)
+        img = capture.mask_out(shot, reg, list(core.own_rects))
+        lines = read_lines(img)
+        fresh = new_lines(lines)
+        if not fresh:
+            core.log("Чат: новых сообщений нет")
+            core.events.put(("chat_show", None))
+            return
+        pairs = [split_line(ln) for ln in fresh]
+        tr = translate_messages([m for _, m in pairs])
+        if tr is None:
+            core.log("Чат: не удалось перевести (все переводчики недоступны)", "warn")
+            return
+        for ln in fresh:
+            _remember(_key(ln))
+        _state["started"] = True
+        core.events.put(("chat", [(p, t) for (p, _), t in zip(pairs, tr) if t]))
+        for (p, m), t in zip(pairs, tr):
+            history.history_add("Чат", p + m, p + (t or ""))
+    finally:
+        _once_lock.release()
+
+
 def run():
     """Поток слежения за чатом."""
     errors = 0
