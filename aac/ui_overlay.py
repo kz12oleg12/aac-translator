@@ -329,3 +329,69 @@ class Overlay:
     def set_status(self, text):
         if self.status.cget("text") != text:
             self.status.config(text=text)
+
+
+class Indicator:
+    """Маленький значок поверх игры: автоперевод включён (виден, даже когда все окна перевода скрыты).
+    Тащите мышкой — положение запоминается; левый клик — показать/скрыть панель; правый — выключить автоперевод."""
+
+    def __init__(self, win):
+        self.win = win
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-alpha", 0.85)
+        win.configure(bg="#111")
+        self.label = tk.Label(win, text="", fg="#6f6", bg="#111", font=("Segoe UI", 9, "bold"), padx=8, pady=2)
+        self.label.pack()
+        x, y = core.SETTINGS.get("indicator_pos", (12, 12))
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        if not (0 <= x <= sw - 40 and 0 <= y <= sh - 20):
+            x, y = 12, 12
+        win.geometry(f"+{x}+{y}")
+        self.label.bind("<ButtonPress-1>", self._start)
+        self.label.bind("<B1-Motion>", self._move)
+        self.label.bind("<ButtonRelease-1>", self._end)
+        self.label.bind("<Button-3>", lambda e: core.events.put(("auto", None)))
+        self.state = None
+        self.visible = True
+        win.after(200, lambda: exclude_from_capture(win))
+
+    def _start(self, e):
+        self._dx, self._dy = e.x_root - self.win.winfo_x(), e.y_root - self.win.winfo_y()
+        self._moved = False
+
+    def _move(self, e):
+        self._moved = True
+        self.win.geometry(f"+{e.x_root - self._dx}+{e.y_root - self._dy}")
+
+    def _end(self, e):
+        if getattr(self, "_moved", False):
+            core.save_settings(indicator_pos=(self.win.winfo_x(), self.win.winfo_y()))
+        else:
+            core.events.put(("panel_toggle", None))
+
+    def update(self, auto_on, paused=False, busy=False, tts_on=False):
+        """Показать текущее состояние (перерисовывается, только если что-то изменилось)."""
+        show = config.SHOW_INDICATOR and auto_on
+        state = (show, paused, busy, tts_on)
+        if state == self.state:
+            return
+        self.state = state
+        if not show:
+            if self.visible:
+                self.win.withdraw()
+                self.visible = False
+            return
+        if paused:
+            text, color = "⏸ AAC: пауза", "#fc6"
+        elif busy:
+            text, color = "⏳ AAC: перевожу", "#8cf"
+        else:
+            text, color = "● AAC: перевод вкл", "#6f6"
+        if tts_on:
+            text += "  🔊"
+        self.label.config(text=text, fg=color)
+        if not self.visible:
+            self.win.deiconify()
+            self.visible = True
+        self.win.lift()

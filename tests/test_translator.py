@@ -439,6 +439,20 @@ def test_gui_smoke(monkey):
             app.tip.hide()
             from aac import ui_windows
             ui_windows.CharactersWindow(app)
+        if hasattr(app, "indicator"):   # значок «перевод вкл»: виден при автопереводе, прячется без него
+            ind = app.indicator
+            cfg = T._owner("SHOW_INDICATOR")
+            ind.update(True, busy=True, tts_on=True)
+            ok1 = ind.visible and "перевожу" in ind.label.cget("text") and "🔊" in ind.label.cget("text")
+            ind.update(True)
+            ok2 = "перевод вкл" in ind.label.cget("text")
+            ind.update(False)
+            ok3 = not ind.visible
+            cfg.SHOW_INDICATOR = False
+            ind.update(True)
+            ok4 = not ind.visible
+            cfg.SHOW_INDICATOR = True
+            done["indicator"] = ok1 and ok2 and ok3 and ok4
         if hasattr(app, "restart"):     # «Перезапустить»: новая копия с --after-pid, эта — закрывается
             started = []
             real = subprocess.Popen
@@ -480,6 +494,7 @@ def test_gui_smoke(monkey):
     app.root.after(300, step)
     app.root.mainloop()
     done.pop("tip", True) or (_ for _ in ()).throw(AssertionError("окно подсказки встало не туда"))
+    done.pop("indicator", True) or (_ for _ in ()).throw(AssertionError("значок автоперевода"))
     done.pop("restart", True) or (_ for _ in ()).throw(AssertionError("перезапуск не сработал"))
     assert done == {"frames": 2, "font": 15}, done
 

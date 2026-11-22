@@ -20,6 +20,7 @@ def apply_view_settings():
     config.OVERLAY_ALPHA = float(core.SETTINGS.get("overlay_alpha", config.OVERLAY_ALPHA))
     config.SHOW_ORIGINAL = bool(core.SETTINGS.get("show_original", config.SHOW_ORIGINAL))
     config.SAVE_HISTORY = bool(core.SETTINGS.get("save_history", config.SAVE_HISTORY))
+    config.SHOW_INDICATOR = bool(core.SETTINGS.get("show_indicator", config.SHOW_INDICATOR))
     config.SHOW_OCR_IN_LOG = bool(core.SETTINGS.get("show_ocr_in_log", config.SHOW_OCR_IN_LOG))
     config.HIDE_DELAY = float(core.SETTINGS.get("hide_delay", config.HIDE_DELAY))
     config.KEEP_UNTIL_NEXT = bool(core.SETTINGS.get("keep_until_next", config.KEEP_UNTIL_NEXT))

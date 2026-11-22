@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "5.5"
+VERSION = "5.6"
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # папка программы (настройки, словарь, история, иконки)
 
 # ===================== НАСТРОЙКИ =====================
@@ -179,6 +179,7 @@ SHOW_ORIGINAL = False      # показывать оригинал мелким 
 SAVE_HISTORY = True        # сохранять все переводы в папку history (по файлу на день)
 
 # --- озвучка перевода субтитров (голос Windows) — меняется в окне «Настройки» ---
+SHOW_INDICATOR = True      # маленький значок «● AAC: перевод вкл» поверх игры, пока включён автоперевод
 ANSWERS_DOCKED = False     # ответы одним окном с субтитрами (вплотную под ними)
 TTS_ENABLED = False        # озвучивать перевод субтитров
 TTS_ENGINE = "neural"     # "neural" — нейроголоса Microsoft (онлайн), "silero" — Silero (офлайн), "windows"

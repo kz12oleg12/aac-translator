@@ -43,6 +43,8 @@ class App:
         self.tip.manual = True     # ставится рядом с подсказкой, а не в сохранённое место
         self.tip.hide()
         self.tip_state = None
+        self.indicator = ui_overlay.Indicator(tk.Toplevel(self.root))   # «● AAC: перевод вкл»
+        self.indicator.update(False)
         if config.ANSWERS_DOCKED:
             self.answers.dock(self.subs)
         self.quest.on_hide = tts.stop   # закрыли окно задания (правый клик) — чтение тоже останавливается
@@ -362,6 +364,12 @@ class App:
 
     def _poll(self):
         core.heartbeat = time.time()
+        try:
+            self.indicator.update(core.auto_on.is_set() or getattr(self, "_paused_auto", False),
+                                  paused=not game.game_active.is_set(), busy=bool(self.busy),
+                                  tts_on=config.TTS_ENABLED)
+        except Exception:
+            pass
         try:
             while True:
                 kind, payload = core.events.get_nowait()

@@ -246,6 +246,8 @@ class SettingsWindow:
         check(left, "Сохранять историю переводов в файл (папка history)", self.save)
         self.ocrlog = tk.BooleanVar(value=config.SHOW_OCR_IN_LOG)
         check(left, "Показывать распознанный текст в журнале панели", self.ocrlog)
+        self.indicator = tk.BooleanVar(value=config.SHOW_INDICATOR)
+        check(left, "Значок «● AAC: перевод вкл» поверх игры, пока включён автоперевод", self.indicator)
 
         # ----- озвучка -----
         title(right, "Озвучка субтитров")
@@ -437,6 +439,8 @@ class SettingsWindow:
         config.SHOW_ORIGINAL = bool(self.orig.get())
         config.SAVE_HISTORY = bool(self.save.get())
         config.SHOW_OCR_IN_LOG = bool(self.ocrlog.get())
+        config.SHOW_INDICATOR = bool(self.indicator.get())
+        core.save_settings(show_indicator=config.SHOW_INDICATOR)
         config.HIDE_DELAY = float(self.hide_delay.get())
         config.KEEP_UNTIL_NEXT = bool(self.keep.get())
         # перевод висит дольше обычной «страховки» — страховку отодвигаем
