@@ -8,7 +8,7 @@ import threading
 import time
 
 
-from . import capture, config, core, game, history, hotkeys, ocr, translate, tray, tts
+from . import capture, config, core, game, history, hotkeys, ocr, translate, tray, tts, voices
 
 
 # ---------- разовый перевод (F7) — своя область, автоперевод не трогает ----------
@@ -274,6 +274,14 @@ class Watcher:
                         self._unstable = 0
                         if same_text(cur, self._sent_ocr):
                             sent = m          # тот же текст уже переведён — ничего не делаем
+                            time.sleep(config.POLL_INTERVAL)
+                            continue
+                        if self.show_event == "text" and config.SKIP_SYSTEM and voices.is_system(cur):
+                            # «You acquired…», «Quest completed» — системное, не реплика: не переводим
+                            if config.SHOW_OCR_IN_LOG:
+                                core.log(f"{self.name}: пропускаю системное сообщение: {cur.replace(chr(10), ' / ')[:100]}")
+                            self._sent_ocr = cur
+                            sent = m
                             time.sleep(config.POLL_INTERVAL)
                             continue
                         self._sent_ocr = cur

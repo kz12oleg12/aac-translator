@@ -21,6 +21,7 @@ def apply_view_settings():
     config.SHOW_ORIGINAL = bool(core.SETTINGS.get("show_original", config.SHOW_ORIGINAL))
     config.SAVE_HISTORY = bool(core.SETTINGS.get("save_history", config.SAVE_HISTORY))
     config.GLOSSARY_AUTO = bool(core.SETTINGS.get("glossary_auto", config.GLOSSARY_AUTO))
+    config.SKIP_SYSTEM = bool(core.SETTINGS.get("skip_system", config.SKIP_SYSTEM))
     config.SHOW_INDICATOR = bool(core.SETTINGS.get("show_indicator", config.SHOW_INDICATOR))
     config.SHOW_OCR_IN_LOG = bool(core.SETTINGS.get("show_ocr_in_log", config.SHOW_OCR_IN_LOG))
     config.HIDE_DELAY = float(core.SETTINGS.get("hide_delay", config.HIDE_DELAY))

@@ -819,6 +819,35 @@ def test_subs_once(monkey):
     assert any(k == "log" and "выделите область субтитров" in p[1] for k, p in drain())
 
 
+def test_skip_system_messages(monkey):
+    """Системные сообщения игры в области субтитров: не переводим и не озвучиваем; реплики — как обычно."""
+    try:
+        from aac import voices
+    except ImportError:
+        return
+    if not hasattr(voices, "is_system"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    for t in ("You acquired Iron Ore x3.", "Quest completed: The Missing Volume", "Inventory is full.",
+              "Labor +10", "Your guild has been disbanded"):
+        assert voices.is_system(t), t
+    for t in ("Kesper\nYou acquired my trust, friend.", "Juan\nGreetings. I am Juan.",
+              "Vidrin : Goat, bison, and wolf-hide boots!", "Ah, you have already recovered Volume I.",
+              "The ship has been destroyed by pirates!"):
+        assert not voices.is_system(t), t
+    tts = T._owner("speak_subtitle")
+    cfg = T._owner("TTS_READ_NAME")
+    said = []
+    monkey(cfg, "TTS_ENABLED", True)
+    monkey(cfg, "SKIP_SYSTEM", True)
+    monkey(tts, "_say", lambda text, seen=None, vp=None: said.append(text))
+    T.speak_subtitle("Вы получили железную руду x3.", None, "You acquired Iron Ore x3.")
+    assert not said
+    monkey(cfg, "SKIP_SYSTEM", False)
+    T.speak_subtitle("Вы получили железную руду x3.", None, "You acquired Iron Ore x3.")
+    assert said
+
+
 def test_chat(monkey):
     """Чат: ник и канал не переводятся, только новые строки, перевод пачкой; исходящие рус→англ."""
     try:

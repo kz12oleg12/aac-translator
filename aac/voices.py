@@ -370,3 +370,23 @@ def forget(key):
         _load()
         _data["chars"].pop(key, None)
         _save()
+
+
+# ---------- системные сообщения игры (не реплики персонажей) ----------
+_SYSTEM = re.compile(
+    r"^\s*(?:\[(?:system|notice|info|warning|system message)\]|you\b|your\b)|"
+    r"\b(?:acquired|obtained|received|gained|earned|learned|looted|purchased|sold|equipped|unequipped|"
+    r"experience|exp\b|xp\b|level up|reached level|labor|proficiency|quest (?:accepted|completed|updated|"
+    r"abandoned|failed)|cannot|can't be|not enough|inventory|is full|"
+    r"unlocked|discovered|achievement|has joined|has left|maintenance|cooldown|out of range|invalid target)\b",
+    re.I)
+
+
+def is_system(src):
+    """Похоже на системное сообщение игры («You acquired…», «Quest completed», «Inventory is full»),
+    а не на реплику персонажа: нет имени говорящего и есть типичные системные слова."""
+    if not src or not src.strip():
+        return False
+    if _name_from(src):
+        return False          # «Kesper\nI acquired…» — это реплика персонажа
+    return bool(_SYSTEM.search(src))

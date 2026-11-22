@@ -220,6 +220,8 @@ def speak_subtitle(translation, seen=None, orig=None):
     """Озвучить перевод субтитров (голосом персонажа, если включено «разные голоса»)."""
     if not config.TTS_ENABLED or not translation:
         return
+    if config.SKIP_SYSTEM and orig and voices.is_system(orig):
+        return  # системное сообщение игры — не озвучиваем
     text = speech_text(translation, orig)
     if sum(ch.isalpha() for ch in text) < 4:
         return  # обрывки и одиночные слова интерфейса не читаем
