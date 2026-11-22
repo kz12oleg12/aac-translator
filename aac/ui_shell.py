@@ -49,7 +49,7 @@ class Shell:
         self.busy = False
         self.update_version = None
         self.sections, self.nav_items, self.current = {}, {}, None
-        self.log_lines = []          # (время, текст, уровень) — для журнала на главной
+        self.logwin = LogWindow(tk.Toplevel(win.master))   # журнал — отдельное независимое окно
         self._build_sidebar()
         self.content = tk.Frame(win, bg=K.BG)
         self.content.pack(side="left", fill="both", expand=True)
@@ -281,13 +281,12 @@ class Shell:
         lt = tk.Frame(b, bg=K.BG)
         lt.pack(fill="x")
         K.h2(lt, "Журнал").pack(side="left")
-        self.log = tk.Text(b, height=7, bg=K.SIDEBAR, fg=K.MUTED, font=(K.MONO, 9), relief="flat",
-                           highlightthickness=0, wrap="word", padx=10, pady=6, state="disabled", cursor="arrow")
-        self.log.pack(fill="x", pady=(6, 0))
-        for tag, color in LOG_COLORS.items():
-            self.log.tag_config(tag, foreground=color)
-        for t, msg, level in self.log_lines:
-            self._log_insert(t, msg, level)
+        self.log_link = K.label(lt, "", 9, K.ACCENT_TEXT)
+        self.log_link.config(cursor="hand2")
+        self.log_link.bind("<Button-1>", lambda e: self.logwin.toggle())
+        self.log_link.pack(side="right")
+        K.label(b, "Журнал — отдельное окно: его можно поставить в любое место экрана и менять размер "
+                   "за правый нижний угол. Ошибки показывают его сами.", 9, K.DIM, wraplength=640).pack(anchor="w")
         return sc
 
     def _refresh_home(self):
@@ -353,6 +352,7 @@ class Shell:
                 bar.set(0)
             else:
                 bar.set(frac, K.ACCENT if frac > 0.25 else (K.AMBER if frac > 0.08 else K.RED))
+        self.log_link.config(text="Скрыть окно журнала" if self.logwin.visible else "Показать окно журнала")
         # плитки
         self.tiles["chat"].set_sub("переводится сам" if core.chat_region else "область не задана")
         for t in self.tiles.values():
@@ -712,21 +712,9 @@ class Shell:
         self.refresh()
 
     def add_log(self, t, msg, level):
-        self.log_lines.append((t, msg, level))
-        del self.log_lines[:-100]
-        if hasattr(self, "log"):
-            self._log_insert(t, msg, level)
-        if level == "error" and not self.visible:
-            self.toggle()  # при ошибке панель сама показывается
-
-    def _log_insert(self, t, msg, level):
-        self.log.config(state="normal")
-        self.log.insert("end", f"{t}  {msg}\n", level)
-        lines = int(self.log.index("end-1c").split(".")[0])
-        if lines > 100:
-            self.log.delete("1.0", f"{lines - 100}.0")
-        self.log.see("end")
-        self.log.config(state="disabled")
+        self.logwin.add(t, msg, level)
+        if level == "error" and not self.logwin.visible:
+            self.logwin.toggle()   # при ошибке журнал сам показывается
 
     def show_update(self, version):
         self.update_version = version
@@ -750,6 +738,7 @@ class Shell:
         x, y = self.default_pos
         self.win.geometry(f"+{x}+{y}")
         core.save_settings(panel_pos=(x, y))
+        self.logwin.reset_pos()
 
     def _start_move(self, e):
         self._dx, self._dy = e.x_root - self.win.winfo_x(), e.y_root - self.win.winfo_y()
@@ -759,3 +748,110 @@ class Shell:
 
     def _end_move(self, e):
         core.save_settings(panel_pos=(self.win.winfo_x(), self.win.winfo_y()))
+
+
+class LogWindow:
+    """Журнал — отдельное окно поверх игры: тащится за заголовок, размер — за правый нижний угол,
+    место и размер запоминаются. Не зависит от главного окна (F6 его не прячет)."""
+
+    MIN_W, MIN_H = 300, 140
+
+    def __init__(self, win):
+        self.win = win
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-alpha", 0.93)
+        win.configure(bg=K.LINE)
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        w, h = core.SETTINGS.get("log_size", (460, 260))
+        w, h = max(self.MIN_W, min(w, sw)), max(self.MIN_H, min(h, sh))
+        default = (sw - w - 20, sh - h - 70)          # правый нижний угол экрана
+        x, y = core.SETTINGS.get("log_pos", default)
+        if not (0 <= x <= sw - 60 and 0 <= y <= sh - 40):
+            x, y = default
+        self.default_pos = default
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        frame = tk.Frame(win, bg=K.SIDEBAR)
+        frame.pack(fill="both", expand=True, padx=1, pady=1)
+        head = tk.Frame(frame, bg=K.SIDEBAR)
+        head.pack(fill="x")
+        title = K.label(head, "Журнал", 10, K.TEXT, "bold")
+        title.pack(side="left", padx=12, pady=6)
+        hint = K.label(head, "тащите за заголовок", 8, K.FAINT)
+        hint.pack(side="left")
+        close = tk.Label(head, text="✕", bg=K.SIDEBAR, fg=K.MUTED, font=K.f(10), cursor="hand2", padx=10)
+        close.pack(side="right")
+        close.bind("<Button-1>", lambda e: self.toggle())
+        clear = tk.Label(head, text="Очистить", bg=K.SIDEBAR, fg=K.ACCENT_TEXT, font=K.f(9), cursor="hand2")
+        clear.pack(side="right", padx=(0, 4))
+        clear.bind("<Button-1>", lambda e: self.clear())
+        for w_ in (head, title, hint):
+            w_.bind("<ButtonPress-1>", self._start_move)
+            w_.bind("<B1-Motion>", self._move)
+            w_.bind("<ButtonRelease-1>", self._end)
+        K.separator(frame).pack(fill="x")
+        body = tk.Frame(frame, bg=K.SIDEBAR)
+        body.pack(fill="both", expand=True)
+        self.text = tk.Text(body, bg=K.SIDEBAR, fg=K.MUTED, font=(K.MONO, 9), relief="flat", highlightthickness=0,
+                            wrap="word", padx=10, pady=6, state="disabled", cursor="arrow")
+        self.text.pack(fill="both", expand=True)
+        for tag, color in LOG_COLORS.items():
+            self.text.tag_config(tag, foreground=color)
+        grip = tk.Label(body, text="◢", bg=K.SIDEBAR, fg=K.FAINT, font=K.f(9), cursor="size_nw_se" if os.name == "nt" else "bottom_right_corner")
+        grip.place(relx=1.0, rely=1.0, anchor="se")
+        grip.bind("<ButtonPress-1>", self._start_resize)
+        grip.bind("<B1-Motion>", self._resize)
+        grip.bind("<ButtonRelease-1>", self._end)
+        self.visible = True
+        if not core.SETTINGS.get("log_visible", True):
+            win.withdraw()
+            self.visible = False
+        win.after(200, lambda: ui_overlay.exclude_from_capture(win))
+
+    def add(self, t, msg, level):
+        self.text.config(state="normal")
+        self.text.insert("end", f"{t}  {msg}\n", level)
+        lines = int(self.text.index("end-1c").split(".")[0])
+        if lines > 200:
+            self.text.delete("1.0", f"{lines - 200}.0")
+        self.text.see("end")
+        self.text.config(state="disabled")
+
+    def clear(self):
+        self.text.config(state="normal")
+        self.text.delete("1.0", "end")
+        self.text.config(state="disabled")
+
+    def toggle(self):
+        if self.visible:
+            self.win.withdraw()
+        else:
+            self.win.deiconify()
+            self.win.lift()
+        self.visible = not self.visible
+        core.save_settings(log_visible=self.visible)
+        core.events.put(("panel", None))
+
+    def reset_pos(self):
+        x, y = self.default_pos
+        self.win.geometry(f"+{x}+{y}")
+        core.save_settings(log_pos=(x, y))
+
+    def _start_move(self, e):
+        self._dx, self._dy = e.x_root - self.win.winfo_x(), e.y_root - self.win.winfo_y()
+
+    def _move(self, e):
+        self.win.geometry(f"+{e.x_root - self._dx}+{e.y_root - self._dy}")
+
+    def _start_resize(self, e):
+        self._rx, self._ry = e.x_root, e.y_root
+        self._rw, self._rh = self.win.winfo_width(), self.win.winfo_height()
+
+    def _resize(self, e):
+        w = max(self.MIN_W, self._rw + e.x_root - self._rx)
+        h = max(self.MIN_H, self._rh + e.y_root - self._ry)
+        self.win.geometry(f"{int(w)}x{int(h)}")
+
+    def _end(self, e):
+        core.save_settings(log_pos=(self.win.winfo_x(), self.win.winfo_y()),
+                           log_size=(self.win.winfo_width(), self.win.winfo_height()))

@@ -1835,7 +1835,16 @@ def test_new_shell(monkey):
         for k, p in drain():
             if k == "log":
                 sh.add_log(*p)
-        assert "проверка журнала" in sh.log.get("1.0", "end")
+        assert "проверка журнала" in sh.logwin.text.get("1.0", "end")
+        # журнал — отдельное окно: прячется и показывается сам по себе, главное окно не трогает
+        lw = sh.logwin
+        lw.toggle()
+        assert not lw.visible and sh.visible and T.load_settings()["log_visible"] is False
+        sh.add_log("00:00:00", "ошибка!", "error")      # ошибка показывает журнал
+        assert lw.visible
+        sh.toggle()
+        assert not sh.visible and lw.visible
+        sh.toggle()
     finally:
         app.root.destroy()
 
