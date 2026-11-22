@@ -59,7 +59,9 @@ def split_line(line):
 def read_lines(img):
     """Строки чата с картинки. Фильтр мягче, чем у субтитров: ники с цифрами («Player123») — нормально."""
     lines = []
-    for text, _ in ocr._ocr_raw(img):
+    with ocr._ocr_lock:          # распознаватель Windows читает только одну картинку за раз
+        raw = ocr._ocr_raw(img)
+    for text, _ in raw:
         t = text.strip()
         low = t.lower()
         if sum(ch.isalpha() for ch in t) < 3:
@@ -129,17 +131,55 @@ def translate_outgoing(text):
         return None
 
 
+def _blink_grab(reg):
+    """Снимок области, на миг сделав окно перевода прозрачным. None — окно не поверх чата."""
+    if not hide_for_capture(True):
+        return None
+    try:
+        time.sleep(0.04)                   # дать Windows перерисовать экран без нашего окна
+        return capture.grab(reg)
+    finally:
+        hide_for_capture(False)
+
+
+def _grab_under_overlay(reg):
+    """Снимок чата, когда перевод лежит поверх него.
+    Обычно Windows сама не показывает наши окна на снимках — тогда моргать не нужно. Проверяем это один раз:
+    снимок с окном и без окна должны совпасть. Не совпали — Windows окно не прячет, тогда «моргаем»."""
+    st = _state
+    plain = capture.grab(reg)
+    mode = st.get("cover_mode")          # None — не проверяли, "ok" — Windows прячет окно, "blink" — моргаем
+    if mode == "ok":
+        return plain
+    if mode == "blink":
+        if time.time() - st.get("blink_t", 0) < config.CHAT_BLINK_EVERY:
+            return None                  # моргаем реже, чем читаем: между морганиями снимок не делаем
+        st["blink_t"] = time.time()
+        shot = _blink_grab(reg)
+        return shot if shot is not None else plain
+    under = _blink_grab(reg)
+    if under is None:                    # окно сейчас не поверх чата (режим выключен или окно скрыто)
+        return plain
+    from PIL import ImageChops, ImageStat
+    diff = sum(ImageStat.Stat(ImageChops.difference(plain.convert("L"), under.convert("L"))).mean)
+    if diff < 6:
+        st["cover_mode"] = "ok"
+        core.log("Чат: Windows прячет окно перевода от снимков — читаю чат под ним без моргания", "ok")
+    else:
+        st["cover_mode"] = "blink"
+        st["blink_t"] = time.time()
+        core.log("Чат: Windows не прячет окно перевода от снимков, поэтому оно будет коротко моргать "
+                 f"раз в {config.CHAT_BLINK_EVERY:g} с, когда я читаю чат под ним. Если мешает — выключите "
+                 "«перевод поверх чата» в Настройках.", "warn")
+    return under
+
+
 def _step():
     """Одна проверка области чата (вызывается раз в секунду)."""
     reg = core.chat_region
-    hidden = hide_for_capture(True)        # перевод лежит поверх чата — на миг делаем его прозрачным
-    try:
-        if hidden:
-            time.sleep(0.04)                   # дать Windows перерисовать экран без нашего окна
-        shot = capture.grab(reg)
-    finally:
-        if hidden:
-            hide_for_capture(False)
+    shot = _grab_under_overlay(reg)
+    if shot is None:
+        return                              # в этот раз не снимаем (окно поверх чата моргает реже)
     img = capture.mask_out(shot, reg, list(core.own_rects))   # панель и окна программы — не чат
     try:
         lines = read_lines(img)
@@ -149,7 +189,7 @@ def _step():
         return
     prev = _state["prev"]
     _state["prev"] = lines
-    if lines != prev:
+    if lines != prev and _state.get("cover_mode") != "blink":
         return                      # строки ещё «плывут» (чат прокручивается) — ждём, пока устоятся
     fresh = new_lines(lines)
     if not fresh:
@@ -183,7 +223,7 @@ def run():
         try:
             core.auto_on.wait()
             if not (core.chat_auto and core.chat_region) or not game.game_active.is_set():
-                _state.update(prev=None, started=False)
+                _state.update(prev=None, started=False, cover_mode=None)
                 time.sleep(1)
                 continue
             _step()

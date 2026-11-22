@@ -924,6 +924,24 @@ def test_chat(monkey):
     assert got[-1] == ["need healer"], got
     chat._step()
     assert len(got) == 2                                                     # повторно не переводим
+    # перевод поверх чата: если Windows прячет окно от снимков — не моргаем; если нет — моргаем, но редко
+    if hasattr(chat, "_grab_under_overlay"):
+        frames = {"plain": Image.new("L", (10, 10), 20), "under": Image.new("L", (10, 10), 20)}
+        blinks = []
+        monkey(chat.capture, "grab", lambda reg: frames["plain"])
+        monkey(chat, "_blink_grab", lambda reg: blinks.append(1) or frames["under"])
+        monkey(chat, "_state", {"prev": None, "started": False})
+        chat._grab_under_overlay((0, 0, 10, 10))
+        assert chat._state["cover_mode"] == "ok"
+        chat._grab_under_overlay((0, 0, 10, 10)); chat._grab_under_overlay((0, 0, 10, 10))
+        assert len(blinks) == 1                      # проверили один раз — дальше без моргания
+        frames["plain"] = Image.new("L", (10, 10), 200)   # на снимке видно наше окно
+        monkey(chat, "_state", {"prev": None, "started": False})
+        blinks.clear()
+        assert chat._grab_under_overlay((0, 0, 10, 10)) is frames["under"]
+        assert chat._state["cover_mode"] == "blink"
+        assert chat._grab_under_overlay((0, 0, 10, 10)) is None   # сразу снова — не моргаем
+        assert len(blinks) == 1
 
 
 def test_dock_overlays(monkey):

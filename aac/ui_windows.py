@@ -496,6 +496,9 @@ class SettingsWindow:
         config.SHOW_INDICATOR = bool(self.indicator.get())
         config.GLOSSARY_AUTO = bool(self.gl_auto.get())
         config.SKIP_SYSTEM = bool(self.skip_sys.get())
+        if config.CHAT_COVER != bool(self.chat_cover.get()):
+            from . import chat
+            chat._state["cover_mode"] = None     # заново проверить, прячет ли Windows окно от снимков
         config.CHAT_COVER = bool(self.chat_cover.get())
         config.CHAT_HEIGHT = int(self.chat_height.get())
         config.CHAT_ALPHA = int(self.chat_alpha.get()) / 100
