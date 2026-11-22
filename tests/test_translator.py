@@ -907,6 +907,12 @@ def test_silero(monkey):
     assert sil.clean("Kesper: Привет, «друг»… Seaglass") == "Кеспер: Привет, друг... Сигласс"
     assert sil.clean("Иди в Seaglass Harbor.") == "Иди в Сигласс Харбор."
     assert [sil._prosody_rate(x) for x in (-5, -1, 0, 2, 4)] == ["x-slow", "slow", "medium", "fast", "x-fast"]
+    if hasattr(sil, "say_numbers"):   # Silero сам цифры не читает — переводим в слова
+        assert sil.clean("Атака +120, скидка 15%") == "Атака плюс сто двадцать, скидка пятнадцать процентов"
+        assert sil.clean("Принеси 3 шкуры и 10 000 золота") == "Принеси три шкуры и десять тысяч золота"
+        assert sil.number_words(2024) == "две тысячи двадцать четыре"
+        assert sil.number_words(1001000) == "один миллион одна тысяча"
+        assert sil.number_words(-5) == "минус пять" and sil.number_words(0) == "ноль"
     import contextlib, wave as wv
     calls = []
 

@@ -215,8 +215,89 @@ def translit(word):
     return out[:1].upper() + out[1:] if word[:1].isupper() else out
 
 
+_UNITS = ["ноль", "один", "два", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять", "десять",
+          "одиннадцать", "двенадцать", "тринадцать", "четырнадцать", "пятнадцать", "шестнадцать",
+          "семнадцать", "восемнадцать", "девятнадцать"]
+_TENS = ["", "", "двадцать", "тридцать", "сорок", "пятьдесят", "шестьдесят", "семьдесят", "восемьдесят",
+         "девяносто"]
+_HUNDREDS = ["", "сто", "двести", "триста", "четыреста", "пятьсот", "шестьсот", "семьсот", "восемьсот",
+             "девятьсот"]
+# (одна форма, 2–4, 5+, женский род?)
+_SCALES = [("тысяча", "тысячи", "тысяч", True), ("миллион", "миллиона", "миллионов", False),
+           ("миллиард", "миллиарда", "миллиардов", False)]
+
+
+def _plural(n, one, few, many):
+    n = abs(n) % 100
+    if 11 <= n <= 19:
+        return many
+    n %= 10
+    return one if n == 1 else few if 2 <= n <= 4 else many
+
+
+def _triple(n, female=False):
+    words = []
+    h, rest = divmod(n, 100)
+    if h:
+        words.append(_HUNDREDS[h])
+    if rest < 20:
+        if rest or not words:
+            w = _UNITS[rest]
+            if female and rest in (1, 2):
+                w = "одна" if rest == 1 else "две"
+            if rest or not h:
+                words.append(w)
+    else:
+        t, u = divmod(rest, 10)
+        words.append(_TENS[t])
+        if u:
+            words.append(("одна" if u == 1 else "две") if female and u in (1, 2) else _UNITS[u])
+    return words
+
+
+def number_words(n):
+    """1234 → «одна тысяча двести тридцать четыре» (Silero сам цифры не читает)."""
+    if n == 0:
+        return "ноль"
+    words = []
+    if n < 0:
+        words.append("минус")
+        n = -n
+    groups = []
+    while n:
+        n, r = divmod(n, 1000)
+        groups.append(r)
+    for i in range(len(groups) - 1, -1, -1):
+        g = groups[i]
+        if not g:
+            continue
+        if i == 0:
+            words += _triple(g)
+        else:
+            one, few, many, female = _SCALES[i - 1]
+            words += _triple(g, female) + [_plural(g, one, few, many)]
+    return " ".join(words)
+
+
+def say_numbers(text):
+    """Цифры → слова: «+120» → «плюс сто двадцать», «15%» → «пятнадцать процентов», «2.5» → «два и пять»."""
+    def pct(m):
+        n = int(m.group(1))
+        return f"{number_words(n)} {_plural(n, 'процент', 'процента', 'процентов')}"
+    text = re.sub(r"(?<=\d)[ \u00a0](?=\d{3}\b)", "", text)                  # «10 000» → «10000»
+    text = re.sub(r"(\d+)\s*%", pct, text)
+    text = re.sub(r"(\d+)[.,](\d+)", lambda m: f"{number_words(int(m.group(1)))} и "
+                  f"{number_words(int(m.group(2)))}", text)
+    text = re.sub(r"(\d+)\s*/\s*(\d+)", lambda m: f"{m.group(1)} из {m.group(2)}", text)
+    text = re.sub(r"(?:(?<=\s)|^)\+(?=\d)", "плюс ", text)
+    text = re.sub(r"(?:(?<=\s)|^)[-−](?=\d)", "минус ", text)
+    text = re.sub(r"\d{1,12}", lambda m: number_words(int(m.group(0))), text)
+    return text
+
+
 def clean(text):
     """Silero читает только кириллицу: английские слова переводим в русские буквы, лишние значки убираем."""
+    text = say_numbers(text)
     text = re.sub(r"[A-Za-z]+", lambda m: translit(m.group(0)), text)
     text = re.sub(r"[«»\"“”„*_#~<>\[\]{}|/\\]", " ", text)
     text = text.replace("…", "...")
