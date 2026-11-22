@@ -2,6 +2,7 @@
 
 
 import json
+import os
 
 import queue
 
@@ -41,19 +42,34 @@ def load_settings():
         return {}
 
 
+_settings_lock = threading.Lock()
+
+
 def save_settings(**kw):
-    data = {}
-    try:
-        with open(config.SETTINGS_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        pass
-    data.update(kw)
-    try:
-        with open(config.SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f)
-    except Exception as e:
-        print("Не удалось сохранить настройки:", e)
+    """Дописать настройки в файл. Под замком и через временный файл: если два потока сохраняют одновременно
+    или файл не прочитался, настройки не теряются (раньше так могли «слететь» галочки)."""
+    with _settings_lock:
+        data = None
+        try:
+            with open(config.SETTINGS_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            data = {}
+        except Exception:
+            data = None
+        if not isinstance(data, dict):
+            # файл повреждён/недописан — берём то, что загружено в программу, а не пустоту
+            data = dict(SETTINGS) if isinstance(SETTINGS, dict) else {}
+        data.update(kw)
+        if isinstance(SETTINGS, dict):
+            SETTINGS.update(kw)
+        try:
+            tmp = config.SETTINGS_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            os.replace(tmp, config.SETTINGS_FILE)
+        except Exception as e:
+            print("Не удалось сохранить настройки:", e)
 
 
 # ---------- журнал для системной панели ----------

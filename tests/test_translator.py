@@ -407,6 +407,16 @@ def test_port_owner_parse(monkey):
     assert m._port_owner_pid(47911) == 5520
 
 
+def test_settings_not_lost_on_bad_file():
+    """Файл настроек повреждён/недописан в момент сохранения — галочки не должны слететь."""
+    T.save_settings(answers_auto=True, region=(1, 2, 3, 4))
+    T.set("SETTINGS", T.load_settings())
+    open(T.SETTINGS_FILE, "w", encoding="utf-8").write('{"answers_auto": tr')     # недописанный файл
+    T.save_settings(font_size=15)
+    data = json.load(open(T.SETTINGS_FILE, encoding="utf-8"))
+    assert data.get("answers_auto") is True and data.get("font_size") == 15, data
+
+
 def test_settings_roundtrip():
     T.save_settings(region=(1, 2, 3, 4), font_size=17)
     data = json.load(open(T.SETTINGS_FILE, encoding="utf-8"))
