@@ -130,7 +130,50 @@ def _send(cmd, arg=""):
 _NAME_PREFIX = re.compile(r"^[A-ZА-ЯЁ][^\s:.!?…,]{0,24}(?:\s+[A-ZА-ЯЁ][^\s:.!?…,]{0,24}){0,2}\s*[:：]\s*(\S.*)$")
 
 
-def speech_text(translation):
+def _sounds_like(ru, en):
+    """«Итан» похоже на «Ethan»? Сравниваем с грубой русской записью английского имени."""
+    import difflib
+    a = re.sub(r"[^а-яё]", "", ru.lower()).replace("ё", "е")
+    b = re.sub(r"[^а-яё]", "", tts_silero.translit(en).lower()).replace("ё", "е")
+    if not a or not b:
+        return False
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.6 or (len(a) >= 3 and a[:3] == b[:3])
+
+
+def _strip_speaker(text, orig):
+    """Имя говорящего осталось в начале перевода («Итан Аренда…», «Итан — Аренда…», «Ethan: …»)?
+    Берём имя из оригинала (первая строка «Ethan»), смотрим, как его уже переводили, и отрезаем."""
+    try:
+        sp = voices.speaker("", orig)
+    except Exception:
+        sp = None
+    if not sp:
+        return text
+    key, en, _ = sp
+    names = [en]
+    c = dict(voices.all_chars()).get(key)
+    if c and c.get("ru"):
+        names.append(c["ru"])
+    for name in sorted({n for n in names if n}, key=len, reverse=True):
+        m = re.match(r"\s*" + re.escape(name) + r"\s*(?:[:：—–\-/,.]\s*|\s+(?=[A-ZА-ЯЁ«\"„]))", text, re.I)
+        if m and len(text) - m.end() >= 4:
+            return text[m.end():]
+    # имя ещё не знаем по-русски: в оригинале имя из N слов, а перевод начинается с N слов с заглавной
+    # и дальше снова заглавная буква — значит, это «Имя Реплика…»
+    k = len(en.split())
+    m = re.match(r"\s*((?:[A-ZА-ЯЁ][\w'’-]*\s+){%d})?" % 0 + r"\s*([A-ZА-ЯЁ][\w'’-]*(?:\s+[A-ZА-ЯЁ][\w'’-]*){%d})\s*[:：—–]\s*(\S.*)$" % (k - 1),
+                 text)
+    if m and len(m.group(2)) <= 25 and _sounds_like(m.group(2), en):
+        return m.group(3)                      # «Итан — Аренда…», «Итан: …»
+    words = text.split()
+    if len(words) > k and all(w[:1].isupper() for w in words[:k + 1]) and not re.search(r"[.!?,:]", " ".join(words[:k])):
+        guess = " ".join(words[:k])
+        if len(guess) <= 25 and _sounds_like(guess, en):
+            return " ".join(words[k:])
+    return text
+
+
+def speech_text(translation, orig=None):
     """Что читать вслух: без имени говорящего (если не включено), без служебных значков."""
     lines = [ln.strip() for ln in translation.splitlines() if ln.strip()]
     if not config.TTS_READ_NAME and len(lines) > 1:
@@ -144,6 +187,8 @@ def speech_text(translation):
         if m:
             lines[0] = m.group(1)
     text = " ".join(lines)
+    if not config.TTS_READ_NAME and orig and len(lines) >= 1:
+        text = _strip_speaker(text, orig)
     text = re.sub(r"\s*\([^)]*\)", "", text)          # «Клинок (Dawn Blade)» → «Клинок»
     return re.sub(r"[⏳❌✅📜💬]", "", text).strip()
 
@@ -152,7 +197,7 @@ def speak_subtitle(translation, seen=None, orig=None):
     """Озвучить перевод субтитров (голосом персонажа, если включено «разные голоса»)."""
     if not config.TTS_ENABLED or not translation:
         return
-    text = speech_text(translation)
+    text = speech_text(translation, orig)
     if sum(ch.isalpha() for ch in text) < 4:
         return  # обрывки и одиночные слова интерфейса не читаем
     vp = None

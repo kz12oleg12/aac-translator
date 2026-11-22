@@ -767,6 +767,15 @@ def test_tts_text_and_calls(monkey):
     assert T.speech_text("Полдат: За твое... здоровье!") == "За твое... здоровье!"
     assert T.speech_text("Капитан Морган: Вперёд!") == "Вперёд!"
     assert T.speech_text("Он сказал: иди") == "Он сказал: иди"
+    # имя осталось в начале перевода, а в оригинале оно на своей строке (журнал: «Ethan / A rental…»)
+    tts_mod = T._owner("speak_subtitle")
+    if hasattr(tts_mod, "_strip_speaker"):
+        o = "Ethan\nA rental fee is posted on the Resident Board."
+        assert T.speech_text("Итан Аренда указана на доске.", o) == "Аренда указана на доске."
+        assert T.speech_text("Итан — Аренда указана.", o) == "Аренда указана."
+        assert T.speech_text("Аренда — это важно.", o) == "Аренда — это важно."      # не имя — не трогаем
+        assert T.speech_text("Я Итан, рад знакомству.", o) == "Я Итан, рад знакомству."
+        assert T.speech_text("Капитан Морган — Вперёд!", "Captain Morgan\nForward!") == "Вперёд!"
     monkey(T._owner("TTS_READ_NAME"), "TTS_READ_NAME", True)
     assert T.speech_text("Ренальд\nПривет!") == "Ренальд Привет!"
     assert T.speech_text("Полдат: Привет!") == "Полдат: Привет!"
