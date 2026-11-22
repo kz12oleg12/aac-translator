@@ -1,0 +1,8 @@
+# личные данные — остаются только на вашем компьютере
+*settings*.json
+characters.json
+glossary.txt
+history/
+models/
+*.log
+__pycache__/
