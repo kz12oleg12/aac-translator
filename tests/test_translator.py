@@ -937,7 +937,7 @@ def test_silero(monkey):
     sil.synth_to_wav("Быстрее & лучше", path, "xenia", 3)
     assert calls[-1]["ssml_text"] == '<speak><prosody rate="fast">Быстрее &amp; лучше</prosody></speak>'
     try:
-        sil.synth_to_wav("123 !!!", path, "xenia")
+        sil.synth_to_wav("!!! ... ?", path, "xenia")
         assert False, "без букв — нечего читать"
     except ValueError:
         pass
