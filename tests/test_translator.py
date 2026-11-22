@@ -1469,7 +1469,7 @@ def test_tooltip(monkey):
         return "Клинок рассвета (Dawn Blade)\nДвуручный меч", None
     monkey(tooltip.translate, "safe_translate", fake_tr)
     drain()
-    tooltip.translate_at_cursor((1000, 700))
+    tooltip.translate_smart((1000, 700))          # одна кнопка: рядом блок из 4 строк — это подсказка предмета
     ev = [p for k, p in drain() if k == "tooltip_show"]
     assert shots == [(450, 180, 1100, 900)], shots
     assert crops and crops[0][1].startswith("Screenshot of a tooltip"), crops
@@ -1660,12 +1660,20 @@ def test_word_at_cursor(monkey):
     from PIL import Image
     monkey(tooltip, "screen_size", lambda: (1920, 1080))
     monkey(tooltip.capture, "grab", lambda reg: Image.new("RGB", (reg[2], reg[3])))
-    monkey(tooltip.ocr, "ocr_boxes", lambda img: [("Archivist Rotild", (330, 70, 450, 88))])
+    monkey(tooltip.ocr, "ocr_boxes", lambda img: [("Archivist Rotild", (500, 440, 620, 458)),
+                                                  ("Silent Crossway", (100, 100, 220, 118))])
     drain()
-    tooltip.translate_word((800, 520))
+    tooltip.translate_smart((800, 520))   # снимок с (250, 70): курсор над надписью → маленькая плашка
     ev = [e for e in drain() if e[0] == "word_show"]
     assert ev and ev[0][1]["text"] == "Архивариус Ротильд" and ev[0][1]["orig"] == "Archivist Rotild", ev
     assert tooltip.place_word((500, 300, 120, 18), (560, 310), 200, 40, 1920, 1080) == (460, 254)
+    # выбор: подсказка предмета рядом с курсором → большое окно; над подписью карты → плашка
+    item = [("Dawn Blade", (520, 300, 640, 318)), ("Two-handed sword", (520, 322, 680, 338)),
+            ("Attack +120", (520, 342, 620, 358)), ("Durability 80/80", (520, 362, 660, 378))]
+    assert tooltip.choose(item, 500, 310)[0] == "tooltip"
+    assert tooltip.choose(item + [("Seaglass Harbor", (900, 600, 1040, 620))], 950, 612)[0] == "word"
+    assert tooltip.choose(item, 520 + 40, 300 + 8)[0] == "tooltip"      # курсор прямо на заголовке подсказки
+    assert tooltip.choose([], 10, 10) == (None, None)
 
 
 def test_key_hints_skipped():

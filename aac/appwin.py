@@ -215,13 +215,16 @@ class App:
 
     # --- подсказка под мышкой ---
     def tooltip_key(self):
+        """Одна кнопка: подсказка предмета — большим окном, короткая надпись — маленькой плашкой."""
         pos = tooltip.cursor_pos()
-        st = self.tip_state
-        if st and self.tip.visible and pos and abs(pos[0] - st["pos"][0]) + abs(pos[1] - st["pos"][1]) < 40:
+        near = lambda st: st and pos and abs(pos[0] - st["pos"][0]) + abs(pos[1] - st["pos"][1]) < 40
+        if (self.tip.visible and near(self.tip_state)) or (self.word.visible and near(self.word_state)):
             self.tip.hide()          # повторное нажатие на том же месте — убрать перевод
             self.tip_state = None
+            self.word.hide()
+            self.word_state = None
             return
-        threading.Thread(target=tooltip.translate_at_cursor, args=(pos,), daemon=True).start()
+        threading.Thread(target=tooltip.translate_smart, args=(pos,), daemon=True).start()
 
     def show_tooltip(self, data):
         self.tip.width = config.TOOLTIP_WIDTH
@@ -252,15 +255,6 @@ class App:
         self.root.after(300, self._tip_watch)
 
     # --- лёгкий перевод надписи под мышкой ---
-    def word_key(self):
-        pos = tooltip.cursor_pos()
-        st = self.word_state
-        if st and self.word.visible and pos and abs(pos[0] - st["pos"][0]) + abs(pos[1] - st["pos"][1]) < 30:
-            self.word.hide()          # повторное нажатие на том же месте — убрать
-            self.word_state = None
-            return
-        threading.Thread(target=tooltip.translate_word, args=(pos,), daemon=True).start()
-
     def show_word(self, data):
         w, h = self.word.show(data["text"], data.get("orig"))
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
@@ -777,8 +771,6 @@ class App:
                     updater.check_async(quiet=False)
                 elif kind == "tooltip_key":
                     self.tooltip_key()
-                elif kind == "word_key":
-                    self.word_key()
                 elif kind == "word_show":
                     self.show_word(payload)
                 elif kind == "tooltip_show":

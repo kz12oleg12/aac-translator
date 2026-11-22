@@ -79,8 +79,63 @@ def pick_block(blocks, cx, cy):
     return min(blocks, key=score) if blocks else None
 
 
+TOOLTIP_MIN_LINES = 3       # блок из стольких строк у курсора — подсказка предмета (большое окно), меньше — надпись
+
+
+def _dist(box, cx, cy):
+    dx = max(box[0] - cx, 0, cx - box[2])
+    dy = max(box[1] - cy, 0, cy - box[3])
+    return (dx * dx + dy * dy) ** 0.5
+
+
+def choose(lines, cx, cy):
+    """Что под мышкой: ("tooltip", блок) — подсказка предмета, ("word", (текст, рамка)) — короткая надпись,
+    (None, None) — ничего. Координаты — внутри снимка."""
+    blocks = group_blocks(lines)
+    big = [b for b in blocks if len(b["lines"]) >= TOOLTIP_MIN_LINES]
+    near_big = min(big, key=lambda b: _dist(b["box"], cx, cy)) if big else None
+    hit = pick_line(lines, cx, cy)
+    if near_big is not None and _dist(near_big["box"], cx, cy) <= 160:
+        if hit is None or hit[0] in " ".join(near_big["lines"]) or _dist(near_big["box"], cx, cy) <= _dist(hit[1], cx, cy):
+            return "tooltip", near_big
+    if hit is not None:
+        return "word", hit
+    bl = pick_block(blocks, cx, cy)
+    return ("tooltip", bl) if bl is not None else (None, None)
+
+
+def translate_smart(pos=None):
+    """Одна кнопка: подсказка предмета → большой перевод рядом; имя/табличка/надпись на карте → маленькая плашка."""
+    if not _lock.acquire(blocking=False):
+        return
+    try:
+        pos = pos or cursor_pos()
+        if pos is None:
+            core.log("Подсказка: не удалось узнать, где мышка", "error")
+            return
+        cx, cy = pos
+        sw, sh = screen_size()
+        x, y, w, h = search_box(cx, cy, sw, sh)
+        img = capture.mask_out(capture.grab((x, y, w, h)), (x, y, w, h), list(core.own_rects))
+        try:
+            lines = ocr.ocr_boxes(img)
+        except core.ApiError as e:
+            core.log(f"Подсказка: {e}", "error")
+            return
+        kind, what = choose(lines, cx - x, cy - y)
+        if kind == "word":
+            _show_word(what, x, y, pos)
+        elif kind == "tooltip":
+            core.events.put(("tooltip_show", {"text": "⏳ Перевожу подсказку…", "pos": pos, "box": None}))
+            _translate_block(what, img, x, y, w, h, pos)
+        else:
+            core.events.put(("word_show", {"text": "Текста под мышкой не нашёл", "pos": pos, "box": None}))
+    finally:
+        _lock.release()
+
+
 def translate_at_cursor(pos=None):
-    """Найти подсказку у курсора и перевести. Работает в фоновом потоке."""
+    """Найти подсказку у курсора и перевести (большим окном). Работает в фоновом потоке."""
     if not _lock.acquire(blocking=False):
         return
     try:
@@ -100,39 +155,41 @@ def translate_at_cursor(pos=None):
             core.events.put(("tooltip_hide", None))
             return
         bl = pick_block(group_blocks(lines), cx - x, cy - y)
-        if bl is None:
-            core.events.put(("tooltip_show", {"text": "Текста возле мышки не нашёл. Наведите на предмет и нажмите ещё раз.",
-                                         "pos": pos, "box": None}))
-            return
-        pad = 10
-        bx0, by0, bx1, by1 = bl["box"]
-        crop = (max(0, bx0 - pad), max(0, by0 - pad), min(w, bx1 + pad), min(h, by1 + pad))
-        screen_box = (x + crop[0], y + crop[1], crop[2] - crop[0], crop[3] - crop[1])
-        if config.SHOW_OCR_IN_LOG:
-            core.log(f"Подсказка: {' / '.join(bl['lines'])[:150]}")
-        t0 = time.time()
-        text, err = translate.safe_translate(img.crop(crop), config.TOOLTIP_PROMPT)
-        if err == "rate":
-            err = "лимит запросов — подождите несколько секунд и нажмите ещё раз"
-        if err:
-            core.log(f"Подсказка: {err}", "error")
-            core.events.put(("tooltip_show", {"text": "❌ Не получилось — подробности в системной панели.",
-                                         "pos": pos, "box": screen_box}))
-            return
-        orig = history.last_source() or "\n".join(bl["lines"])
-        core.events.put(("tooltip_show", {"text": (text, orig) if text else "Текст не найден",
-                                     "pos": pos, "box": screen_box}))
-        if text:
-            history.history_add("Подсказка", orig, text)
-            core.log(f"Подсказка переведена за {time.time() - t0:.1f} с")
+        _translate_block(bl, img, x, y, w, h, pos)
     finally:
         _lock.release()
 
 
+def _translate_block(bl, img, x, y, w, h, pos):
+    """Перевести блок подсказки и показать большим окном рядом с ней."""
+    if bl is None:
+        core.events.put(("tooltip_show", {"text": "Текста возле мышки не нашёл. Наведите на предмет и нажмите ещё раз.",
+                                     "pos": pos, "box": None}))
+        return
+    pad = 10
+    bx0, by0, bx1, by1 = bl["box"]
+    crop = (max(0, bx0 - pad), max(0, by0 - pad), min(w, bx1 + pad), min(h, by1 + pad))
+    screen_box = (x + crop[0], y + crop[1], crop[2] - crop[0], crop[3] - crop[1])
+    if config.SHOW_OCR_IN_LOG:
+        core.log(f"Подсказка: {' / '.join(bl['lines'])[:150]}")
+    t0 = time.time()
+    text, err = translate.safe_translate(img.crop(crop), config.TOOLTIP_PROMPT)
+    if err == "rate":
+        err = "лимит запросов — подождите несколько секунд и нажмите ещё раз"
+    if err:
+        core.log(f"Подсказка: {err}", "error")
+        core.events.put(("tooltip_show", {"text": "❌ Не получилось — подробности в системной панели.",
+                                     "pos": pos, "box": screen_box}))
+        return
+    orig = history.last_source() or "\n".join(bl["lines"])
+    core.events.put(("tooltip_show", {"text": (text, orig) if text else "Текст не найден",
+                                 "pos": pos, "box": screen_box}))
+    if text:
+        history.history_add("Подсказка", orig, text)
+        core.log(f"Подсказка переведена за {time.time() - t0:.1f} с")
+
+
 # ---------- лёгкий перевод: короткая надпись под мышкой (имя НПС, табличка, вывеска) ----------
-WORD_BOX = (760, 160)
-
-
 def pick_line(lines, cx, cy, max_dist=70):
     """Надпись под курсором: ближайшая строка; соседние строки той же надписи (табличка в 2 строки) — вместе."""
     if not lines:
@@ -151,41 +208,19 @@ def pick_line(lines, cx, cy, max_dist=70):
     return text, box
 
 
-def translate_word(pos=None):
-    """Перевести короткую надпись у курсора. Работает в фоновом потоке."""
-    if not _lock.acquire(blocking=False):
-        return
+def _show_word(hit, x, y, pos):
+    src, b = hit
+    box = (x + b[0], y + b[1], b[2] - b[0], b[3] - b[1])
     try:
-        pos = pos or cursor_pos()
-        if pos is None:
-            return
-        cx, cy = pos
-        sw, sh = screen_size()
-        x, y, w, h = search_box(cx, cy, sw, sh, WORD_BOX)
-        img = capture.mask_out(capture.grab((x, y, w, h)), (x, y, w, h), list(core.own_rects))
-        try:
-            lines = ocr.ocr_boxes(img)
-        except core.ApiError as e:
-            core.log(f"Надпись: {e}", "error")
-            return
-        hit = pick_line(lines, cx - x, cy - y)
-        if hit is None:
-            core.events.put(("word_show", {"text": "Надписи под мышкой не нашёл", "pos": pos, "box": None}))
-            return
-        src, b = hit
-        box = (x + b[0], y + b[1], b[2] - b[0], b[3] - b[1])
-        try:
-            text = translate.translate_short(src)
-        except core.ApiError as e:
-            core.log(f"Надпись: {e}", "error")
-            core.events.put(("word_show", {"text": "❌ не получилось", "pos": pos, "box": box}))
-            return
-        if config.SHOW_OCR_IN_LOG:
-            core.log(f"Надпись: {src} → {text}")
-        core.events.put(("word_show", {"text": text, "orig": src, "pos": pos, "box": box}))
-        history.history_add("Надпись", src, text)
-    finally:
-        _lock.release()
+        text = translate.translate_short(src)
+    except core.ApiError as e:
+        core.log(f"Надпись: {e}", "error")
+        core.events.put(("word_show", {"text": "❌ не получилось", "pos": pos, "box": box}))
+        return
+    if config.SHOW_OCR_IN_LOG:
+        core.log(f"Надпись: {src} → {text}")
+    core.events.put(("word_show", {"text": text, "orig": src, "pos": pos, "box": box}))
+    history.history_add("Надпись", src, text)
 
 
 def place_word(box, pos, win_w, win_h, sw, sh, gap=6):
