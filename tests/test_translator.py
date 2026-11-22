@@ -534,23 +534,27 @@ def test_updater(monkey):
         def __init__(self, code, data): self.status_code, self._d = code, data
         def json(self): return self._d
         def raise_for_status(self): pass
-    release = {"tag_name": "v4.6", "body": "- голоса\n- чат",
-               "assets": [{"name": "AAC_Translator_v4.6.zip", "url": "https://api/asset/1",
-                           "browser_download_url": "https://dl/AAC_Translator_v4.6.zip", "size": 100}]}
-    monkey(updater.requests, "get", lambda url, headers=None, timeout=None, **k: calls.append((url, headers)) or Resp(200, release))
+    ver = {"version": "4.6", "notes": ["голоса", "чат"]}
+    monkey(updater.requests, "get", lambda url, headers=None, timeout=None, **k: calls.append((url, headers)) or Resp(200, ver))
     monkey(updater.os, "environ", {})
     drain()
     info = updater.check()
-    assert calls[0][0] == "https://api.github.com/repos/user/aac-translator/releases/latest"
+    assert calls[0][0] == "https://api.github.com/repos/user/aac-translator/contents/version.json?ref=main", calls
     assert "Authorization" not in calls[0][1]
-    assert info["version"] == "4.6" and info["asset_url"] == "https://dl/AAC_Translator_v4.6.zip"
+    assert info["version"] == "4.6" and info["notes"] == "голоса\nчат"
+    assert info["asset_url"] == "https://api.github.com/repos/user/aac-translator/zipball/main"
     assert [p for k, p in drain() if k == "update_available"][0]["version"] == "4.6"
-    # закрытый репозиторий: токен в заголовке и скачивание через API
+    # закрытый репозиторий: токен в заголовке
     monkey(updater.os, "environ", {"GITHUB_TOKEN": "tok"})
     calls.clear()
-    info = updater.check()
-    assert calls[0][1]["Authorization"] == "Bearer tok" and info["asset_url"] == "https://api/asset/1"
-    # нет релиза / закрыт без токена — понятное сообщение
+    updater.check()
+    assert calls[0][1]["Authorization"] == "Bearer tok"
+    # та же версия — кнопку не показываем
+    monkey(cfg, "VERSION", "4.6")
+    drain()
+    updater.check()
+    assert not [p for k, p in drain() if k == "update_available"]
+    # нет файла / закрыт без токена — понятное сообщение
     monkey(updater.os, "environ", {})
     monkey(updater.requests, "get", lambda *a, **k: Resp(404, {}))
     drain()
@@ -559,8 +563,8 @@ def test_updater(monkey):
     # распаковка: находит папку с install.py; «злой» путь в архиве — отказ
     src = os.path.join(TMP, "rel.zip")
     with zipfile.ZipFile(src, "w") as z:
-        z.writestr("AAC_Translator/install.py", "print(1)")
-        z.writestr("AAC_Translator/aac/__init__.py", "")
+        z.writestr("kz12oleg12-aac-translator-abc123/install.py", "print(1)")
+        z.writestr("kz12oleg12-aac-translator-abc123/aac/__init__.py", "")
 
     class Stream:
         def __init__(self, path): self.data = open(path, "rb").read()
@@ -571,7 +575,7 @@ def test_updater(monkey):
     monkey(updater.requests, "get", lambda url, headers=None, timeout=None, stream=False: Stream(src))
     d = tempfile.mkdtemp(dir=TMP)
     folder = updater.download({"asset_url": "x", "api_asset": False}, d)
-    assert folder.endswith("AAC_Translator") and os.path.exists(os.path.join(folder, "install.py"))
+    assert folder.endswith("aac-translator-abc123") and os.path.exists(os.path.join(folder, "install.py"))
     bad = os.path.join(TMP, "bad.zip")
     with zipfile.ZipFile(bad, "w") as z:
         z.writestr("../../evil.py", "x")

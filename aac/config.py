@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "4.5"
+VERSION = "4.6"
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # папка программы (настройки, словарь, история, иконки)
 
 # ===================== НАСТРОЙКИ =====================
@@ -163,7 +163,8 @@ TOOLTIP_MOVE_HIDE = 260      # увели мышку дальше стольки
 TOOLTIP_SHOW_TIME = 40       # и в любом случае через столько секунд
 
 # ---------- обновления ----------
-UPDATE_REPO = "kz12oleg12/aac-translator"   # откуда брать новые версии (GitHub, релизы)
+UPDATE_REPO = "kz12oleg12/aac-translator"   # откуда брать новые версии (GitHub)
+UPDATE_BRANCH = "main"
 UPDATE_CHECK = True                         # проверять при запуске и раз в несколько часов
 UPDATE_EVERY_HOURS = 6
 

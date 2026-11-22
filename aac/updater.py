@@ -1,9 +1,9 @@
 """Проверка и установка обновлений с GitHub.
 
-Новые версии выкладываются как «релизы» в репозиторий config.UPDATE_REPO (zip-файл программы).
-При запуске (и раз в несколько часов) программа спрашивает GitHub, какая версия последняя.
-Если новее — пишет в журнал и показывает кнопку «⬇ Обновить». По нажатию: скачивает zip,
-распаковывает во временную папку и запускает оттуда install.py --update, а сама закрывается.
+Новые версии лежат в ветке main репозитория config.UPDATE_REPO; номер версии и что нового —
+в файле version.json в корне. При запуске (и раз в несколько часов) программа читает этот файл.
+Если версия новее — пишет в журнал и показывает кнопку «⬇ Обновить». По нажатию: скачивает
+архив ветки, распаковывает во временную папку и запускает оттуда install.py --update, а сама закрывается.
 Установщик обновляет файлы (ключи, настройки, словарь, история, голоса персонажей не трогаются)
 и снова запускает программу.
 
@@ -22,7 +22,8 @@ import requests
 
 from . import config, core
 
-API = "https://api.github.com/repos/{repo}/releases/latest"
+VERSION_URL = "https://api.github.com/repos/{repo}/contents/version.json?ref={branch}"
+ZIP_URL = "https://api.github.com/repos/{repo}/zipball/{branch}"
 state = {"latest": None, "checking": False, "installing": False, "error": None}
 
 
@@ -37,7 +38,7 @@ def is_newer(latest, current=None):
 
 
 def _headers(raw=False):
-    h = {"Accept": "application/octet-stream" if raw else "application/vnd.github+json",
+    h = {"Accept": "application/vnd.github.raw+json" if raw else "application/vnd.github+json",
          "User-Agent": f"AAC-Translator/{config.VERSION}"}
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     if token:
@@ -51,12 +52,11 @@ def check(quiet=True):
         return None
     state["checking"] = True
     try:
-        r = requests.get(API.format(repo=config.UPDATE_REPO), headers=_headers(), timeout=15)
+        url = VERSION_URL.format(repo=config.UPDATE_REPO, branch=config.UPDATE_BRANCH)
+        r = requests.get(url, headers=_headers(raw=True), timeout=15)
         if r.status_code == 404:
             msg = ("Обновления: репозиторий не найден или закрыт. Если он Private — сохраните токен "
                    "только на чтение: setx GITHUB_TOKEN \"...\" и перезапустите программу.")
-            if not os.environ.get("GITHUB_TOKEN"):
-                msg += " (Или в репозитории ещё нет ни одного релиза.)"
             raise RuntimeError(msg)
         if r.status_code == 401:
             raise RuntimeError("Обновления: токен GITHUB_TOKEN не подходит или истёк — сделайте новый.")
@@ -64,15 +64,13 @@ def check(quiet=True):
             raise RuntimeError("Обновления: GitHub временно ограничил запросы — проверю позже.")
         r.raise_for_status()
         data = r.json()
-        asset = next((a for a in data.get("assets", []) if a.get("name", "").lower().endswith(".zip")), None)
-        if asset is None:
-            raise RuntimeError("Обновления: в последнем релизе нет zip-файла.")
-        info = {"version": (data.get("tag_name") or data.get("name") or "").lstrip("vV"),
-                "notes": (data.get("body") or "").strip(),
-                # закрытый репозиторий: качаем через API (с токеном), открытый — по прямой ссылке
-                "asset_url": asset["url"] if os.environ.get("GITHUB_TOKEN") else asset["browser_download_url"],
-                "api_asset": bool(os.environ.get("GITHUB_TOKEN")),
-                "size": asset.get("size", 0)}
+        info = {"version": str(data.get("version", "")).lstrip("vV"),
+                "notes": "\n".join(data.get("notes", [])) if isinstance(data.get("notes"), list)
+                else str(data.get("notes", "")).strip(),
+                "asset_url": ZIP_URL.format(repo=config.UPDATE_REPO, branch=config.UPDATE_BRANCH),
+                "api_asset": False}
+        if not info["version"]:
+            raise RuntimeError("Обновления: в version.json нет номера версии.")
         state["latest"], state["error"] = info, None
         if is_newer(info["version"]):
             core.events.put(("update_available", info))
@@ -109,7 +107,7 @@ def start_periodic():
 def download(info, dest_dir):
     """Скачать zip релиза и распаковать. Возвращает папку, где лежит install.py."""
     zpath = os.path.join(dest_dir, "update.zip")
-    with requests.get(info["asset_url"], headers=_headers(raw=info.get("api_asset")), timeout=60, stream=True) as r:
+    with requests.get(info["asset_url"], headers=_headers(), timeout=60, stream=True) as r:
         r.raise_for_status()
         with open(zpath, "wb") as f:
             for chunk in r.iter_content(256 * 1024):
@@ -142,8 +140,8 @@ def install(info):
         core.events.put(("quit", None))
     except Exception as e:
         state["installing"] = False
-        core.log(f"Обновление не удалось: {e}. Можно обновиться вручную — скачать zip со страницы "
-                 f"github.com/{config.UPDATE_REPO}/releases", "error")
+        core.log(f"Обновление не удалось: {e}. Можно обновиться вручную: github.com/{config.UPDATE_REPO} → "
+                 f"Code → Download ZIP, распаковать и запустить install.bat", "error")
 
 
 def install_async(info):
