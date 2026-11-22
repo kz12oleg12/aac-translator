@@ -42,6 +42,19 @@ def exclude_from_capture(widget):
             "НЕ заходили на области субтитров и ответов (Ctrl+Shift+L — расставить окна).", "warn")
 
 
+def release_mouse(widget=None):
+    """Отпустить «захват мыши» (Tk и Windows), чтобы спрятанное окно не держало мышь у себя."""
+    try:
+        if widget is not None:
+            widget.grab_release()
+    except Exception:
+        pass
+    try:
+        ctypes.windll.user32.ReleaseCapture()
+    except Exception:
+        pass
+
+
 class Overlay:
     """Полупрозрачное окно с текстом: перетаскивается мышкой, правый клик — скрыть."""
 
@@ -93,7 +106,9 @@ class Overlay:
             w.bind("<ButtonPress-1>", self._start_move)
             w.bind("<B1-Motion>", self._move)
             w.bind("<ButtonRelease-1>", self._end_move)
-            w.bind("<Button-3>", lambda e: self.hide())
+            # прячем на ОТПУСКАНИЕ правой кнопки и чуть позже: если спрятать окно, пока кнопка ещё зажата,
+            # Windows оставляет «захват мыши» за невидимым окном — и программа перестаёт реагировать
+            w.bind("<ButtonRelease-3>", lambda e: self.win.after(30, self.hide))
         self.visible = True
         win.after(200, lambda: exclude_from_capture(win))
 
@@ -303,6 +318,7 @@ class Overlay:
 
     def hide(self):
         was = self.visible
+        release_mouse(self.win)
         self.win.withdraw()
         self.visible = False
         if was and self.on_hide:
@@ -351,7 +367,7 @@ class Indicator:
         self.label.bind("<ButtonPress-1>", self._start)
         self.label.bind("<B1-Motion>", self._move)
         self.label.bind("<ButtonRelease-1>", self._end)
-        self.label.bind("<Button-3>", lambda e: core.events.put(("auto", None)))
+        self.label.bind("<ButtonRelease-3>", lambda e: core.events.put(("auto", None)))
         self.state = None
         self.visible = True
         win.after(200, lambda: exclude_from_capture(win))

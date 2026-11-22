@@ -188,6 +188,47 @@ def wait_pid(pid, timeout=30):
         time.sleep(0.2)
 
 
+def _gui_state():
+    """Что Windows думает о главном потоке окон: захват мыши, перетаскивание, меню (для hang.log)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class RECT(ctypes.Structure):
+            _fields_ = [("l", ctypes.c_long), ("t", ctypes.c_long), ("r", ctypes.c_long), ("b", ctypes.c_long)]
+
+        class GUITHREADINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("flags", wintypes.DWORD), ("hwndActive", wintypes.HWND),
+                        ("hwndFocus", wintypes.HWND), ("hwndCapture", wintypes.HWND),
+                        ("hwndMenuOwner", wintypes.HWND), ("hwndMoveSize", wintypes.HWND),
+                        ("hwndCaret", wintypes.HWND), ("rcCaret", RECT)]
+        gi = GUITHREADINFO(cbSize=ctypes.sizeof(GUITHREADINFO))
+        ok = ctypes.windll.user32.GetGUIThreadInfo(threading.main_thread().native_id, ctypes.byref(gi))
+        fg = ctypes.windll.user32.GetForegroundWindow()
+        return (f"GUI: ok={ok} flags={gi.flags:#x} capture={gi.hwndCapture} active={gi.hwndActive} "
+                f"focus={gi.hwndFocus} menu={gi.hwndMenuOwner} movesize={gi.hwndMoveSize} foreground={fg}")
+    except Exception as e:
+        return f"GUI: {e!r}"
+
+
+def _unstick_windows():
+    """Окна не отвечают: шлём им WM_CANCELMODE — Windows отменяет зависший захват мыши / модальный режим."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        tid = threading.main_thread().native_id
+        hwnds = []
+        proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(
+            lambda h, l: hwnds.append(h) or True)
+        user32.EnumThreadWindows(tid, proc, 0)
+        for h in hwnds:
+            user32.PostMessageW(h, 0x001F, 0, 0)    # WM_CANCELMODE
+        core.log(f"Окна не отвечали — отправил им сигнал «отменить зависший режим» ({len(hwnds)} окон)", "warn")
+    except Exception:
+        pass
+
+
 def _watchdog():
     """Если окна программы перестали отвечать дольше 8 с — записываем, чем занят каждый поток, в hang.log.
     Когда отвиснет — пишем в журнал, сколько висела (файл помогает найти причину)."""
@@ -195,6 +236,7 @@ def _watchdog():
     import traceback
     path = os.path.join(config.APP_DIR, "hang.log")
     dumped_at = None
+    kicked = False
     while True:
         time.sleep(2)
         if not core.heartbeat:
@@ -207,12 +249,18 @@ def _watchdog():
                 with open(path, "a", encoding="utf-8") as f:
                     f.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} v{config.VERSION}: окна не отвечают "
                             f"{stale:.0f} с =====\n")
+                    f.write(_gui_state() + "\n")
                     for ident, frame in sys._current_frames().items():
                         f.write(f"\n--- поток {names.get(ident, ident)} ---\n")
                         f.write("".join(traceback.format_stack(frame)))
             except Exception:
                 pass
-        elif stale < 2 and dumped_at is not None:
+        if stale > 5 and not kicked:
+            kicked = True
+            _unstick_windows()            # попробовать «растолкать» окна (отменить зависший режим мыши)
+        if stale < 2:
+            kicked = False
+        if stale < 2 and dumped_at is not None:
             core.log(f"Программа подвисала на {time.time() - dumped_at:.0f} с. Что она делала — записано в файл "
                      "hang.log в папке программы, пришлите его, пожалуйста.", "warn")
             dumped_at = None
