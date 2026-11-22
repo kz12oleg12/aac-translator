@@ -87,6 +87,7 @@ T = Target()
 T.set("SETTINGS_FILE", os.path.join(TMP, "settings.json"))
 T.set("GLOSSARY_FILE", os.path.join(TMP, "glossary.txt"))
 T.set("HISTORY_DIR", os.path.join(TMP, "history"))
+T.set("CACHE_FILE", os.path.join(TMP, "translation_cache.json"))
 try:   # голоса персонажей — тоже во временную папку, и по умолчанию выключены (включает их свой тест)
     from aac import voices as _voices
     _voices.FILE = os.path.join(TMP, "characters.json")
@@ -94,6 +95,19 @@ try:   # голоса персонажей — тоже во временную 
 except ImportError:
     pass
 T.set("SETTINGS", {})
+
+
+def cache_reset():
+    try:
+        from aac import tcache
+        with tcache._lock:
+            tcache._data = None
+            tcache._dirty = False
+        if os.path.exists(tcache.CACHE_FILE):
+            os.remove(tcache.CACHE_FILE)
+        tcache.stats.update(hits=0, misses=0)
+    except ImportError:
+        pass
 
 
 class R:
@@ -182,7 +196,7 @@ def test_google_then_microsoft(monkey):
     T.set("PROVIDER", "google")
     T.set("FALLBACK_PROVIDERS", ["microsoft"])
     monkey(T._owner("ocr_lines"), "ocr_lines", lambda im: ["Where do the pirates gather?"])
-    T._mt_cache.clear()
+    cache_reset()
     calls = []
 
     def get(url, params=None, headers=None, timeout=None):
@@ -238,7 +252,7 @@ def test_ocr_ai_context(monkey):
     T.set("FALLBACK_PROVIDERS", [])
     T.set("GROQ_API_KEY", "q")
     T.dialogue_history.clear()
-    T._ai_cache.clear()
+    cache_reset()
     T.provider_cooldown.clear()
     T.model_cooldown.clear()
     sent = []
@@ -1535,12 +1549,56 @@ def test_ignore_ui_words_and_same_text(monkey):
     assert sent == [], "обрывки не озвучиваем"
 
 
+def test_translation_cache(monkey):
+    """Одинаковая фраза — второй раз из кэша без запроса; кэш переживает перезапуск; по клавише — свежий перевод."""
+    from aac import tcache
+    T.set("PROVIDER", "groq_ocr")
+    T.set("FALLBACK_PROVIDERS", [])
+    T.set("GROQ_API_KEY", "q")
+    T.dialogue_history.clear()
+    T.provider_cooldown.clear()
+    T.model_cooldown.clear()
+    sent = []
+
+    def post(url, headers=None, json=None, timeout=None, **k):
+        sent.append(1)
+        return R(200, {"choices": [{"message": {"content": f"Добро пожаловать, путник №{len(sent)}"}}],
+                       "usage": {"prompt_tokens": 50}})
+
+    monkey(T.requests, "post", post)
+    lines = [["Welcome,  traveler."]]
+    monkey(T._owner("ocr_lines"), "ocr_lines", lambda im: lines[0])
+    assert T.safe_translate(img())[0] == "Добро пожаловать, путник №1"
+    lines[0] = ["welcome, traveler"]        # чуть иначе распознано — всё равно совпадение
+    assert T.safe_translate(img())[0] == "Добро пожаловать, путник №1"
+    assert len(sent) == 1, "повтор не должен тратить запрос"
+    assert tcache.stats["hits"] == 1
+    tcache.save()
+    with tcache._lock:
+        tcache._data = None                 # «перезапуск программы»
+    assert T.safe_translate(img())[0] == "Добро пожаловать, путник №1" and len(sent) == 1
+    with tcache.fresh():                    # разовый перевод по клавише — новый запрос, и кэш обновится
+        assert T.safe_translate(img())[0] == "Добро пожаловать, путник №2"
+    assert T.safe_translate(img())[0] == "Добро пожаловать, путник №2" and len(sent) == 2
+    T.set("CACHE_ENABLED", False)
+    try:
+        T.safe_translate(img())
+        assert len(sent) == 3, "выключенный кэш не используется"
+    finally:
+        T.set("CACHE_ENABLED", True)
+    tcache.clear()                          # не-русский ответ (сбой модели) в кэш не попадает
+    monkey(T.requests, "post", lambda *a, **k: R(200, {"choices": [{"message": {"content": "Welcome back, friend of mine"}}]}))
+    T.safe_translate(img())
+    assert tcache.size() == 0
+
+
 # ---------- запуск ----------
 def main():
     print(f"Проверяю: {ROOT}  ({T.kind}, версия {T.VERSION})\n")
     ok = fail = 0
     for name, fn in [(n, f) for n, f in globals().items() if n.startswith("test_") and callable(f)]:
         undo = []
+        cache_reset()
 
         def monkey(obj, attr, value):
             undo.append((obj, attr, getattr(obj, attr)))

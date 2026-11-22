@@ -10,7 +10,7 @@ import time
 import requests
 
 
-from . import capture, config, core, glossary, history, llm, mt, ocr, voices
+from . import capture, config, core, glossary, history, llm, mt, ocr, tcache, voices
 
 
 def provider_has_key(name):
@@ -54,7 +54,6 @@ OCR_AI = {  # режим «OCR + ИИ»: текст распознаётся н�
 }
 OCR_BASED = ("google", "microsoft", "deepl") + tuple(OCR_AI)  # переводчики, которые сначала распознают текст на ПК
 dialogue_history = []                     # [(оригинал, перевод)] последних реплик субтитров
-_ai_cache = {}
 
 
 def _history_context():
@@ -79,15 +78,23 @@ def ask_ocr_ai(name, img, prompt):
     is_tooltip = prompt is not None and prompt.startswith("Screenshot of a tooltip")
     if config.SHOW_OCR_IN_LOG:
         core.log(f"OCR прочитал: {src.replace(chr(10), ' / ')[:150]}")
-    key = (base, "tip" if is_tooltip else is_answers, src)
-    if key in _ai_cache:
-        return _ai_cache[key]
+    kind = "tip" if is_tooltip else "answers" if is_answers else "subs"
     hint = "" if (is_tooltip or is_answers) else voices.gender_hint(src)
+    gl = glossary.glossary_prompt(src)
+    key = tcache.make_key(kind, src, hint + gl)   # другой пол говорящего или словарь — другой перевод
+    cached = tcache.get(key)
+    if cached:
+        if kind == "subs":
+            dialogue_history.append((src, cached))
+            del dialogue_history[:-config.HISTORY_LINES]
+        core.stats["last"] = f"{time.strftime('%H:%M:%S')} · OCR {t_ocr:.2f} с + перевод из кэша (0 запросов)"
+        core.events.put(("panel", None))
+        return cached
     if is_tooltip:   # подсказка — без истории диалога
-        text_prompt = config.TEXT_TOOLTIP_PROMPT.replace("{context}", glossary.glossary_prompt(src)).replace("{text}", src)
+        text_prompt = config.TEXT_TOOLTIP_PROMPT.replace("{context}", gl).replace("{text}", src)
     else:
         tpl = config.TEXT_ANSWERS_PROMPT if is_answers else config.TEXT_PROMPT
-        text_prompt = tpl.replace("{context}", _history_context() + glossary.glossary_prompt(src) + hint).replace("{text}", src)
+        text_prompt = tpl.replace("{context}", _history_context() + gl + hint).replace("{text}", src)
     if base == "claude":
         out = llm.ask_claude(None, text_prompt)
     elif base in llm.OPENAI_COMPAT:
@@ -96,9 +103,10 @@ def ask_ocr_ai(name, img, prompt):
         out = llm.ask_gemini(None, text_prompt)
     out = (out or "").strip()
     if out and "НЕТ_ТЕКСТА" not in out:
-        _ai_cache[key] = out
-        if len(_ai_cache) > 300:
-            _ai_cache.pop(next(iter(_ai_cache)))
+        try:
+            tcache.put(key, clean_translation(out), "ai")   # в кэш — только настоящий перевод на русский
+        except core.ApiError:
+            pass
         if not is_answers and not is_tooltip:
             dialogue_history.append((src, out))
             del dialogue_history[:-config.HISTORY_LINES]

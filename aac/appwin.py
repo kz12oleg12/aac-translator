@@ -11,7 +11,7 @@ import threading
 import tkinter as tk
 
 
-from . import chat, config, menu, core, game, history, hotkeys, tooltip, tray, tts, ui_overlay, ui_panel, ui_windows, updater, watcher
+from . import chat, config, menu, core, game, history, hotkeys, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_windows, updater, watcher
 
 
 class App:
@@ -765,6 +765,7 @@ class App:
                 elif kind == "quit":
                     self._closing = True
                     tts.shutdown()
+                    tcache.save()
                     tray.stop_tray()
                     self.root.destroy()
                     return

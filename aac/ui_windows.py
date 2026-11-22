@@ -250,6 +250,11 @@ class SettingsWindow:
         check(left, "Не переводить и не озвучивать системные сообщения игры", self.skip_sys)
         self.gl_auto = tk.BooleanVar(value=config.GLOSSARY_AUTO)
         check(left, "Пополнять словарь сам (имена, предметы, места)", self.gl_auto)
+        self.cache_on = tk.BooleanVar(value=config.CACHE_ENABLED)
+        check(left, "Кэш переводов: повторы фраз — мгновенно и без запросов", self.cache_on)
+        tk.Button(left, text="🗑 Очистить кэш переводов", command=self._clear_cache,
+                  relief="flat", bg="#3a3f4b", fg="white", activebackground="#4a5060",
+                  cursor="hand2").pack(anchor="w", padx=24, pady=(0, 6))
         self.indicator = tk.BooleanVar(value=config.SHOW_INDICATOR)
         check(left, "Значок «● AAC» поверх игры, пока включён автоперевод", self.indicator)
 
@@ -488,6 +493,13 @@ class SettingsWindow:
         except Exception:
             return False
 
+    def _clear_cache(self):
+        from . import tcache
+        n = tcache.size()
+        tcache.clear()
+        core.log(f"Кэш переводов очищен ({n} фраз).")
+        core.events.put(("panel", None))
+
     def changed(self):
         config.FONT = ("Segoe UI", int(self.size.get()))
         config.HISTORY_FONT = ("Segoe UI", max(8, config.FONT[1] - 2))
@@ -498,6 +510,8 @@ class SettingsWindow:
         config.SHOW_OCR_IN_LOG = bool(self.ocrlog.get())
         config.SHOW_INDICATOR = bool(self.indicator.get())
         config.GLOSSARY_AUTO = bool(self.gl_auto.get())
+        config.CACHE_ENABLED = bool(self.cache_on.get())
+        core.save_settings(cache_enabled=config.CACHE_ENABLED)
         config.SKIP_SYSTEM = bool(self.skip_sys.get())
         if config.CHAT_COVER != bool(self.chat_cover.get()):
             from . import chat

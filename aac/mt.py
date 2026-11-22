@@ -10,10 +10,10 @@ import time
 import requests
 
 
-from . import config, core, glossary, history, ocr, ui_panel
+from . import config, core, glossary, history, ocr, tcache, ui_panel
 
 
-_mt_cache = {}          # распознанный текст -> перевод (одинаковое не переводим повторно)
+
 
 
 def _mt_google(text, sl=None, tl=None):
@@ -160,15 +160,14 @@ def ask_ocr_mt(name, img, prompt):
     is_answers = prompt is not None and prompt.startswith("Screenshot of the player's dialogue reply options")
     history._last_src[threading.get_ident()] = "\n".join(lines)
     src = glossary.glossary_apply_source("\n".join(lines))
-    key = (name, src)
-    if key in _mt_cache:
-        text = _mt_cache[key]
-    else:
+    key = tcache.make_key("mt-answers" if is_answers else "mt", src)
+    # одинаковую фразу машинный переводчик тоже переводит один раз
+    text = tcache.get(key)
+    from_cache = text is not None
+    if not from_cache:
         core.stats["requests"] += 1
         text = {"google": _mt_google, "microsoft": _mt_microsoft, "deepl": _mt_deepl}[name](src)
-        _mt_cache[key] = text
-        if len(_mt_cache) > 300:
-            _mt_cache.pop(next(iter(_mt_cache)))
+        tcache.put(key, text, "mt")
     out, seen = [], set()
     for ln in text.split("\n"):
         ln = ln.strip().strip("/").strip()
@@ -180,7 +179,8 @@ def ask_ocr_mt(name, img, prompt):
         out = out[:8]  # вариантов ответа в игре не бывает больше
         out = [f"{i}. {ln.lstrip('0123456789.) ')}" for i, ln in enumerate(out, 1)]
     core.stats["last"] = (f"{time.strftime('%H:%M:%S')} · OCR {t_ocr:.2f} с + перевод "
-                     f"{time.time() - t0 - t_ocr:.2f} с · {ui_panel.PROVIDER_NAMES.get(name, name)}")
+                     f"{time.time() - t0 - t_ocr:.2f} с · " + ("из кэша (0 запросов)" if from_cache
+                                                 else ui_panel.PROVIDER_NAMES.get(name, name)))
     core.events.put(("panel", None))
     print(f"  OCR: {src!r}")
     if config.SHOW_OCR_IN_LOG:

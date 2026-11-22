@@ -9,7 +9,7 @@ import threading
 import tkinter as tk
 
 
-from . import config, core, game, glossary, hotkeys, limits, llm, translate, tts, ui_overlay
+from . import config, core, game, glossary, hotkeys, limits, llm, tcache, translate, tts, ui_overlay
 
 
 PROVIDER_LABELS = {  # как переводчики называются в выпадающем списке панели
@@ -272,6 +272,7 @@ class Panel:
             f"Переводчики:       {' → '.join(PROVIDER_NAMES.get(p, p) for p in translate.provider_chain()) or 'нет ключей!'}\n"
             f"Последний ответ:   {core.stats['last']}\n"
             f"Лимиты:            {limits.summary()}\n"
+            f"Кэш переводов:     {tcache.summary()}\n"
             + (f"Модели на паузе:   {llm.models_status()}\n" if any(p in translate.provider_chain() for p in ("gemini", "groq")) else "")
             + (f"Потрачено Claude:  ${core.stats['cost']:.4f} за сессию, ${llm.spent_total():.3f} всего"
                + (f" (~${core.stats['cost'] / core.stats['requests'] * 1000:.2f} за 1000 переводов)" if core.stats['requests'] else "")

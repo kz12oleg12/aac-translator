@@ -8,7 +8,7 @@ import threading
 import time
 
 
-from . import capture, config, core, game, history, hotkeys, ocr, translate, tray, tts, voices
+from . import capture, config, core, game, history, hotkeys, ocr, tcache, translate, tray, tts, voices
 
 
 # ---------- разовый перевод (F7) — своя область, автоперевод не трогает ----------
@@ -20,7 +20,8 @@ def translate_once(reg, speak=False):
         return
     try:
         core.events.put(("quest", "⏳ Перевожу..."))
-        text, err = translate.safe_translate(capture.mask_out(capture.grab(reg), reg, list(core.own_rects)))
+        with tcache.fresh():   # по клавише — всегда свежий перевод (так исправляется неудачный из кэша)
+            text, err = translate.safe_translate(capture.mask_out(capture.grab(reg), reg, list(core.own_rects)))
         if err == "rate":
             err = "Превышен бесплатный лимит запросов. Подождите минуту."
         if err:
@@ -50,7 +51,8 @@ def translate_subs_once():
         core.events.put(("busy", ("Субтитры", True)))     # «⏳» в заголовке окна субтитров
         img = capture.mask_out(capture.grab(core.region), core.region,
                                [core.answers_region, core.region2] + list(core.own_rects))
-        text, err = translate.safe_translate(img, config.PROMPT)
+        with tcache.fresh():
+            text, err = translate.safe_translate(img, config.PROMPT)
         core.events.put(("busy", ("Субтитры", False)))
         if err == "rate":
             err = "лимит запросов — подождите несколько секунд и нажмите ещё раз"
@@ -81,8 +83,9 @@ def translate_answers_once():
         return
     try:
         core.events.put(("answers", "⏳ Перевожу ответы..."))
-        text, err = translate.safe_translate(capture.mask_out(capture.grab(core.answers_region), core.answers_region,
-                                                       [core.region] + list(core.own_rects)), _answers_prompt())
+        with tcache.fresh():
+            text, err = translate.safe_translate(capture.mask_out(capture.grab(core.answers_region), core.answers_region,
+                                                           [core.region] + list(core.own_rects)), _answers_prompt())
         if err == "rate":
             err = "лимит запросов — подождите несколько секунд и нажмите ещё раз"
         if err:
