@@ -942,6 +942,14 @@ def test_game_menu_pause(monkey):
     noisy = menu_img.copy()
     ImageDraw.Draw(noisy).point([(5, 5), (190, 90)], fill=(255, 255, 255))           # мелкие отличия — всё равно меню
     assert menu.is_menu(noisy)
+    import random                                                                     # тёмная сцена той же яркости — не меню
+    rnd = random.Random(1)
+    dark = Image.new("RGB", (200, 100), (30, 30, 40))
+    dd = ImageDraw.Draw(dark)
+    for _ in range(40):
+        x, y = rnd.randrange(200), rnd.randrange(100)
+        dd.ellipse([x, y, x + rnd.randrange(5, 30), y + rnd.randrange(5, 30)], fill=(rnd.randrange(20, 90),) * 3)
+    assert not menu.is_menu(dark), menu.similarity(dark)
     menu._ref.update(img=None, loaded=False)                                         # после перезапуска — из файла
     assert menu.is_menu(menu_img)
     menu.forget()
