@@ -481,11 +481,16 @@ def test_gui_smoke(monkey):
             sw.voice.set("Дмитрий — мужской, русский"); sw.changed()
             assert T._owner("TTS_ENGINE").TTS_NEURAL_VOICE == "ru-RU-DmitryNeural"
             assert T.load_settings()["tts_neural_voice"] == "ru-RU-DmitryNeural"
-            if hasattr(sw, "gender_vars"):   # мужской / женский голос по умолчанию — прямо в настройках
+            if hasattr(sw, "gender_vars"):   # один голос на всех женщин — прямо в настройках
+                if hasattr(sw, "vary"):
+                    sw.vary.set(False); sw._vary_changed()
+                    assert str(sw.gender_vars["f"][1]["state"]) == "normal"
                 sw.gender_vars["f"][0].set("Emma — женский, многоязычный"); sw.changed()
                 assert T.load_settings()["tts_default_voices"]["neural"]["f"] == "en-US-EmmaMultilingualNeural"
-                sw.gender_vars["f"][0].set(sw.AUTO); sw.changed()
-                assert T.load_settings()["tts_default_voices"]["neural"]["f"] == ""
+                if hasattr(sw, "vary"):
+                    sw.vary.set(True); sw._vary_changed()     # разные внутри пола — список неактивен
+                    assert str(sw.gender_vars["f"][1]["state"]) == "disabled"
+                    assert T.load_settings()["tts_vary_in_gender"] is True
                 sw.engine.set(sw.ENGINES["windows"]); sw._engine_changed()
                 assert not sw.gender_rows["m"][1].winfo_ismapped() or True
                 sw.engine.set(sw.ENGINES["neural"]); sw._engine_changed()
@@ -980,8 +985,12 @@ def test_character_voices(monkey):
     if hasattr(voices, "set_default_voice"):
         monkey(cfg, "TTS_DEFAULT_VOICES", {"neural": {"m": "", "f": ""}, "silero": {"m": "", "f": ""}})
         voices.set_default_voice("neural", "f", "en-US-EmmaMultilingualNeural")
+        if hasattr(cfg, "TTS_VARY_IN_GENDER"):
+            monkey(cfg, "TTS_VARY_IN_GENDER", True)       # «разные внутри пола» — общий голос не мешает
+            assert voices.voice_for(k1, "neural")[1] in voices.NEURAL_PITCH
+            monkey(cfg, "TTS_VARY_IN_GENDER", False)      # один голос на всех женщин
+            assert voices.voice_for(k1, "silero") == (voices.SILERO_POOL["f"][0], 0)   # не выбран — первый
         assert voices.voice_for(k1, "neural")[0] == "en-US-EmmaMultilingualNeural"
-        assert voices.voice_for(k1, "silero")[0] in voices.SILERO_POOL["f"]       # у Silero — по-прежнему авто
         assert voices.voice_for(k2, "neural") == ("ru-RU-DmitryNeural", 0)       # ручной выбор важнее
         assert T.load_settings()["tts_default_voices"]["neural"]["f"] == "en-US-EmmaMultilingualNeural"
         voices.set_default_voice("neural", "f", "")

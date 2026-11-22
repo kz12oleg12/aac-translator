@@ -33,6 +33,9 @@ def apply_view_settings():
     saved = core.SETTINGS.get("tts_default_voices") or {}
     for eng in config.TTS_DEFAULT_VOICES:
         config.TTS_DEFAULT_VOICES[eng].update({g: v for g, v in (saved.get(eng) or {}).items() if g in ("m", "f")})
+    any_default = any(v for eng in config.TTS_DEFAULT_VOICES.values() for v in eng.values())
+    # раньше «один голос на пол» включался выбором голоса в списке — сохраняем это поведение
+    config.TTS_VARY_IN_GENDER = bool(core.SETTINGS.get("tts_vary_in_gender", not any_default))
     config.TTS_RUSSIAN_ONLY = bool(core.SETTINGS.get("tts_russian_only", config.TTS_RUSSIAN_ONLY))
     config.TTS_ENGINE = str(core.SETTINGS.get("tts_engine", config.TTS_ENGINE))
     config.TTS_NEURAL_VOICE = str(core.SETTINGS.get("tts_neural_voice", config.TTS_NEURAL_VOICE))

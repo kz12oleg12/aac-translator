@@ -247,7 +247,7 @@ class SettingsWindow:
         self.ocrlog = tk.BooleanVar(value=config.SHOW_OCR_IN_LOG)
         check(left, "Показывать распознанный текст в журнале панели", self.ocrlog)
         self.indicator = tk.BooleanVar(value=config.SHOW_INDICATOR)
-        check(left, "Значок «● AAC: перевод вкл» поверх игры, пока включён автоперевод", self.indicator)
+        check(left, "Значок «● AAC» поверх игры, пока включён автоперевод", self.indicator)
 
         # ----- озвучка -----
         title(right, "Озвучка субтитров")
@@ -293,14 +293,20 @@ class SettingsWindow:
             btn.grid(row=r, column=2, padx=6, pady=2)
             self.gender_rows[g] = (lab, om, btn)
             self.gender_vars[g] = (var, om)
+        self.vary = tk.BooleanVar(value=config.TTS_VARY_IN_GENDER)
+        self.vary_cb = tk.Checkbutton(grid, text="Разные голоса внутри пола (у каждого персонажа свой)",
+                                      variable=self.vary, command=self._vary_changed, bg=right["bg"], fg="#ddd",
+                                      selectcolor="#2b3040", activebackground=right["bg"], activeforeground="#fff",
+                                      font=("Segoe UI", 9), anchor="w", highlightthickness=0, bd=0)
+        self.vary_cb.grid(row=2, column=0, columnspan=3, sticky="w", pady=(0, 4))
         self.voice_title = tk.Label(grid, text="Без имени", fg="#ddd", bg=right["bg"], font=("Segoe UI", 10),
                                     anchor="w", width=11)
-        self.voice_title.grid(row=2, column=0, sticky="w", pady=2)
+        self.voice_title.grid(row=3, column=0, sticky="w", pady=2)
         self.voice = tk.StringVar(value="")
         self.voice_menu = tk.OptionMenu(grid, self.voice, "", command=lambda v: self.changed())
         menu_style(self.voice_menu, 30)
-        self.voice_menu.grid(row=2, column=1, sticky="w", pady=2)
-        play_btn(2, self._test_voice).grid(row=2, column=2, padx=6, pady=2)
+        self.voice_menu.grid(row=3, column=1, sticky="w", pady=2)
+        play_btn(2, self._test_voice).grid(row=3, column=2, padx=6, pady=2)
         self.voice_note = tk.Label(right, text="", fg="#7d8590", bg=right["bg"],
                                    font=("Segoe UI", 8), anchor="w", justify="left", wraplength=440)
         self.voice_note.pack(fill="x", padx=16)
@@ -311,7 +317,7 @@ class SettingsWindow:
         self.volume = tk.IntVar(value=config.TTS_VOLUME)
         scale(right, self.volume, 10, 100, 5)
         self.per_char = tk.BooleanVar(value=config.TTS_PER_CHARACTER)
-        check(right, "Разные голоса персонажам (выкл — всем голос «без имени»)", self.per_char)
+        check(right, "Голос по полу персонажа (выкл — всем голос «без имени»)", self.per_char)
         crow = tk.Frame(right, bg=right["bg"])
         crow.pack(fill="x", padx=16)
         self.ru_only = tk.BooleanVar(value=config.TTS_RUSSIAN_ONLY)
@@ -345,28 +351,39 @@ class SettingsWindow:
             menu.add_command(label=n, command=lambda v=n: (self.voice.set(v), self.changed()))
         self.voice.set(current if current in names else (names[0] if names else ""))
 
-    AUTO = "разные — у каждого свой"
-
     def _fill_gender_menus(self):
-        """Мужской и женский голос по умолчанию (для движков с нейроголосами)."""
+        """Голос для всех мужчин и для всех женщин (для движков с нейроголосами)."""
         eng = self._engine_key()
         neural_like = eng in ("neural", "silero")
         for g, (lab, om, btn) in self.gender_rows.items():
             for wdg in (lab, om, btn):
                 (wdg.grid() if neural_like else wdg.grid_remove())
+        (self.vary_cb.grid() if neural_like else self.vary_cb.grid_remove())
         self.voice_title.config(text="Без имени" if neural_like else "Голос")
         if not neural_like:
             return
         labels = dict(tts.tts_silero.VOICES) if eng == "silero" else dict(tts.NEURAL_VOICES)
         pool = voices.SILERO_POOL if eng == "silero" else voices.NEURAL_POOL
+        vary = bool(self.vary.get())
         for g, (var, om) in self.gender_vars.items():
-            names = [self.AUTO] + [labels.get(v, v) for v in pool[g]]
+            names = [labels.get(v, v) for v in pool[g]]
             menu = om["menu"]
             menu.delete(0, "end")
             for n in names:
                 menu.add_command(label=n, command=lambda v=n, var=var: (var.set(v), self.changed()))
-            cur = voices.default_voice(eng, g)
-            var.set(labels.get(cur, self.AUTO) if cur else self.AUTO)
+            if vary:
+                var.set("разные — у каждого свой")
+                om.config(state="disabled")
+            else:
+                cur = voices.default_voice(eng, g) or pool[g][0]
+                var.set(labels.get(cur, names[0]))
+                om.config(state="normal")
+
+    def _vary_changed(self):
+        config.TTS_VARY_IN_GENDER = bool(self.vary.get())
+        core.save_settings(tts_vary_in_gender=config.TTS_VARY_IN_GENDER)
+        self._fill_gender_menus()
+        self.changed()
 
     def _gender_voice_id(self, g):
         eng = self._engine_key()
@@ -463,10 +480,11 @@ class SettingsWindow:
                     config.TTS_NEURAL_VOICE = tts.neural_id(v)
             else:
                 config.TTS_VOICE = "" if v == "по умолчанию" else v
-            if config.TTS_ENGINE in ("neural", "silero"):
+            if config.TTS_ENGINE in ("neural", "silero") and not self.vary.get():
                 for g in ("m", "f"):
-                    if self.gender_vars[g][0].get():
-                        voices.set_default_voice(config.TTS_ENGINE, g, self._gender_voice_id(g))
+                    vid = self._gender_voice_id(g)
+                    if vid:
+                        voices.set_default_voice(config.TTS_ENGINE, g, vid)
             config.TTS_PER_CHARACTER = bool(self.per_char.get())
             config.TTS_RUSSIAN_ONLY = bool(self.ru_only.get())
             core.save_settings(tts_per_character=config.TTS_PER_CHARACTER, tts_russian_only=config.TTS_RUSSIAN_ONLY)
