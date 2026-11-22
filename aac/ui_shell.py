@@ -1,0 +1,761 @@
+"""Главное окно в новом виде: боковая колонка разделов слева, выбранный раздел справа.
+
+Заменяет старую системную панель (ui_panel.Panel) и умеет всё то же: refresh(), add_log(), toggle(),
+update_keys(), reset_pos(), show_update(). Пока не перенесённые разделы открывают прежние окна.
+"""
+import os
+import threading
+import time
+import tkinter as tk
+
+from . import config, core, game, glossary, hotkeys, limits, menu, tcache, translate, tts, ui_overlay
+from . import ui_kit as K
+from .ui_panel import LOG_COLORS, PROVIDER_LABELS, PROVIDER_NAMES
+
+W, H = 960, 720
+SIDE_W = 220
+
+NAV = [  # (группа, [(id, название)])
+    ("Перевод", [("home", "Главная"), ("areas", "Области"), ("tr", "Переводчики"), ("win", "Окна перевода ↗")]),
+    ("Озвучка", [("voice", "Голос и интонация ↗"), ("chars", "Персонажи ↗")]),
+    ("Данные", [("hist", "История ↗"), ("gloss", "Словарь ↗"), ("keys", "Клавиши"), ("backup", "Резервная копия")]),
+]
+KEY_GROUPS = [
+    ("Перевод", ["auto", "subs_once", "answers_once", "once", "once_tts", "tooltip", "repeat"]),
+    ("Чат", ["chat_once", "chat_compose"]),
+    ("Области", ["select", "select_subs2", "select_answers", "select_chat", "menu_learn"]),
+    ("Окна и озвучка", ["toggle", "layout", "reset", "panel", "tts", "flip_gender", "quit"]),
+]
+HOME_KEYS = ["auto", "tooltip", "once", "repeat"]
+
+
+class Shell:
+    def __init__(self, app, win):
+        self.app, self.win = app, win
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-alpha", 0.97)
+        win.configure(bg=K.BG)
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        h = min(H, sh - 80)
+        default = (sw - W - 20, 40)
+        x, y = core.SETTINGS.get("panel_pos", default)
+        if not (0 <= x <= sw - 100 and 0 <= y <= sh - 60):
+            x, y = default
+        x = max(0, min(x, sw - W))
+        self.default_pos = default
+        win.geometry(f"{W}x{h}+{x}+{y}")
+        self.visible = True
+        self.busy = False
+        self.update_version = None
+        self.sections, self.nav_items, self.current = {}, {}, None
+        self.log_lines = []          # (время, текст, уровень) — для журнала на главной
+        self._build_sidebar()
+        self.content = tk.Frame(win, bg=K.BG)
+        self.content.pack(side="left", fill="both", expand=True)
+        self.show("home")
+        win.after(200, lambda: ui_overlay.exclude_from_capture(win))
+
+    # ---------- боковая колонка ----------
+    def _build_sidebar(self):
+        side = tk.Frame(self.win, bg=K.SIDEBAR, width=SIDE_W)
+        side.pack(side="left", fill="y")
+        side.pack_propagate(False)
+        tk.Frame(self.win, bg=K.LINE, width=1).pack(side="left", fill="y")
+        head = tk.Frame(side, bg=K.SIDEBAR)
+        head.pack(fill="x", padx=14, pady=(16, 10))
+        self._logo = None
+        for name in ("icon_32.png", "icon_22.png"):
+            path = os.path.join(config.APP_DIR, name)
+            try:
+                if os.path.exists(path):
+                    self._logo = tk.PhotoImage(file=path)
+                    break
+            except Exception:
+                self._logo = None
+        if self._logo:
+            tk.Label(head, image=self._logo, bg=K.SIDEBAR).pack(side="left", padx=(0, 10))
+        title = K.label(head, "AAC Translator", 13, K.TEXT, "bold")
+        title.pack(side="left")
+        for w in (head, title):        # окно без рамки — тащим за заголовок
+            w.bind("<ButtonPress-1>", self._start_move)
+            w.bind("<B1-Motion>", self._move)
+            w.bind("<ButtonRelease-1>", self._end_move)
+
+        nav = tk.Frame(side, bg=K.SIDEBAR)
+        nav.pack(fill="both", expand=True, padx=8)
+        for group, items in NAV:
+            K.caps(nav, group).pack(anchor="w", padx=10, pady=(12, 3))
+            for sid, text in items:
+                row = tk.Frame(nav, bg=K.SIDEBAR, cursor="hand2")
+                row.pack(fill="x", pady=1)
+                bar = tk.Frame(row, bg=K.SIDEBAR, width=4, height=18)
+                bar.pack(side="left", padx=(6, 8), pady=7)
+                lab = tk.Label(row, text=text, bg=K.SIDEBAR, fg=K.MUTED, font=K.f(10), anchor="w", cursor="hand2")
+                lab.pack(side="left", fill="x", expand=True)
+                for w in (row, bar, lab):
+                    w.bind("<Button-1>", lambda e, s=sid: self.show(s))
+                    w.bind("<Enter>", lambda e, s=sid: self._hover(s, True))
+                    w.bind("<Leave>", lambda e, s=sid: self._hover(s, False))
+                self.nav_items[sid] = (row, bar, lab)
+
+        bottom = tk.Frame(side, bg=K.SIDEBAR)
+        bottom.pack(fill="x", side="bottom", padx=8, pady=(0, 10))
+        K.separator(bottom).pack(fill="x", pady=(0, 6))
+        self.update_btn = K.button(bottom, "⬇ Обновить", lambda: core.events.put(("update_install", None)),
+                                   kind="primary", size=9)
+        self.check_btn = K.button(bottom, "Проверить обновления", lambda: core.events.put(("update_check", None)),
+                                  kind="flat")
+        self.check_btn.pack(fill="x")
+        K.button(bottom, "Перезапустить", lambda: core.events.put(("restart", None)), kind="flat").pack(fill="x")
+        K.button(bottom, "Выключить программу", lambda: core.events.put(("quit", None)),
+                 kind="danger").pack(fill="x")
+        K.label(bottom, f"версия {config.VERSION}", 8, K.FAINT).pack(anchor="w", padx=10, pady=(6, 0))
+        self.bottom = bottom
+
+    def _hover(self, sid, on):
+        if sid == self.current:
+            return
+        row, bar, lab = self.nav_items[sid]
+        bg = K.CARD if on else K.SIDEBAR
+        for w in (row, bar):
+            w.config(bg=bg)
+        lab.config(bg=bg)
+
+    def _mark(self, sid):
+        for s, (row, bar, lab) in self.nav_items.items():
+            on = s == sid
+            bg = K.CARD if on else K.SIDEBAR
+            row.config(bg=bg)
+            bar.config(bg=K.ACCENT if on else bg)
+            lab.config(bg=bg, fg=K.TEXT if on else K.MUTED)
+
+    # ---------- переключение разделов ----------
+    def show(self, sid):
+        external = {"win": lambda: core.events.put(("settings_open", None)),
+                    "voice": lambda: core.events.put(("settings_open", None)),
+                    "hist": lambda: core.events.put(("history_open", None)),
+                    "gloss": glossary.open_glossary,
+                    "chars": self._open_characters}
+        if sid in external:      # ещё не перенесено в новый вид — открываем прежнее окно
+            external[sid]()
+            return
+        if self.current == sid:
+            self.refresh()
+            return
+        if self.current in self.sections:
+            self.sections[self.current].pack_forget()
+        if sid not in self.sections:
+            self.sections[sid] = getattr(self, f"_build_{sid}")()
+        self.current = sid
+        self.sections[sid].pack(fill="both", expand=True)
+        self._mark(sid)
+        self.refresh()
+
+    def _open_characters(self):
+        from . import ui_windows
+        ui_windows.CharactersWindow(self.app)
+
+    def _page(self, title, sub=None):
+        sc = K.Scroll(self.content)
+        body = tk.Frame(sc.body, bg=K.BG)
+        body.pack(fill="both", expand=True, padx=26, pady=20)
+        hdr = K.section_title(body, title, sub)
+        hdr.pack(fill="x", pady=(0, 14))
+        for w in [hdr] + hdr.winfo_children():
+            w.bind("<ButtonPress-1>", self._start_move)
+            w.bind("<B1-Motion>", self._move)
+            w.bind("<ButtonRelease-1>", self._end_move)
+        return sc, body
+
+    # ---------- Главная ----------
+    def _build_home(self):
+        sc, b = self._page("Главная")
+        self.upd_banner = tk.Frame(b, bg=K.ACCENT_TINT, highlightthickness=1, highlightbackground=K.ACCENT_LINE)
+        self.upd_text = K.label(self.upd_banner, "", 10, K.TEXT, bg=K.ACCENT_TINT)
+        self.upd_text.pack(side="left", padx=14, pady=10)
+        K.button(self.upd_banner, "Обновить", lambda: core.events.put(("update_install", None)),
+                 kind="primary").pack(side="right", padx=10, pady=6)
+
+        hero, hi = K.card(b, padx=20, pady=16)
+        hero.pack(fill="x")
+        self.hero_card = hero
+        self.hero_dot = K.Dot(hi, K.ACCENT, 12)
+        self.hero_dot.pack(side="left", padx=(0, 14))
+        txt = tk.Frame(hi, bg=K.CARD)
+        txt.pack(side="left", fill="x", expand=True)
+        self.hero_title = K.label(txt, "", 15, K.TEXT, "bold")
+        self.hero_title.pack(anchor="w")
+        self.hero_sub = K.label(txt, "", 9, K.MUTED, wraplength=470)
+        self.hero_sub.pack(anchor="w")
+        self.hero_btn = K.button(hi, "", lambda: core.events.put(("auto", None)), kind="primary")
+        self.hero_btn.pack(side="right")
+
+        cards = tk.Frame(b, bg=K.BG)
+        cards.pack(fill="x", pady=(12, 0))
+        self.info = {}
+        for i, (key, title) in enumerate((("tts", "Озвучка"), ("tr", "Переводчик"), ("cache", "Из кэша"))):
+            c, ci = K.card(cards, bg=K.BG, padx=14, pady=10)
+            c.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
+            cards.columnconfigure(i, weight=1, uniform="c")
+            K.label(ci, title, 9, K.DIM).pack(anchor="w")
+            v = K.label(ci, "", 11, K.TEXT)
+            v.pack(anchor="w")
+            s = K.label(ci, "", 8, K.FAINT)
+            s.pack(anchor="w")
+            self.info[key] = (v, s)
+
+        lim = tk.Frame(b, bg=K.BG)
+        lim.pack(fill="x", pady=(16, 0))
+        K.h2(lim, "Лимиты").pack(anchor="w", pady=(0, 6))
+        self.lim_box = tk.Frame(lim, bg=K.BG)
+        self.lim_box.pack(fill="x")
+        self.lim_rows = []
+
+        K.separator(b).pack(fill="x", pady=16)
+        K.h2(b, "Что переводить").pack(anchor="w", pady=(0, 8))
+        tiles = tk.Frame(b, bg=K.BG)
+        tiles.pack(fill="x")
+
+        def set_answers(v):
+            core.answers_auto = bool(v)
+            core.save_settings(answers_auto=core.answers_auto)
+            if not v:
+                core.events.put(("answers_hide", None))
+            core.log("Автоперевод ответов " + ("включён" if v else f"выключен — кнопка {hotkeys.K('answers_once')}"),
+                     "ok")
+
+        def set_docked(v):
+            core.events.put(("dock_toggle", bool(v)))
+            config.ANSWERS_DOCKED = bool(v)
+
+        def set_chat(v):
+            core.chat_auto = bool(v)
+            core.save_settings(chat_auto=core.chat_auto)
+            core.log("Автоперевод чата " + ("включён" if v else "выключен"), "ok")
+
+        def set_pause(v):
+            config.PAUSE_OUTSIDE_GAME = bool(v)
+            core.save_settings(pause_outside_game=config.PAUSE_OUTSIDE_GAME)
+            if not v:
+                game.game_active.set()
+            core.log("Пауза вне игры " + ("включена" if v else "выключена"))
+
+        self.tiles = {
+            "answers": K.Tile(tiles, "❝", "Ответы сами", "переводятся без клавиши", None,
+                              lambda: core.answers_auto, set_answers),
+            "docked": K.Tile(tiles, "▤", "Одним окном", "ответы под субтитрами", None,
+                             lambda: config.ANSWERS_DOCKED, set_docked),
+            "chat": K.Tile(tiles, "#", "Чат", "", None, lambda: core.chat_auto, set_chat),
+            "pause": K.Tile(tiles, "Ⅱ", "Пауза", "игра свёрнута или меню", None,
+                            lambda: config.PAUSE_OUTSIDE_GAME, set_pause),
+        }
+        for i, t in enumerate(self.tiles.values()):
+            t.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
+            tiles.columnconfigure(i, weight=1, uniform="t")
+
+        keys = tk.Frame(b, bg=K.BG)
+        keys.pack(fill="x", pady=(18, 0))
+        top = tk.Frame(keys, bg=K.BG)
+        top.pack(fill="x")
+        K.h2(top, "Главные клавиши").pack(side="left")
+        more = K.label(top, f"Все {len(hotkeys.HOTKEY_DEFS)} — в разделе «Клавиши» →", 9, K.ACCENT_TEXT)
+        more.config(cursor="hand2")
+        more.bind("<Button-1>", lambda e: self.show("keys"))
+        more.pack(side="right")
+        grid = tk.Frame(keys, bg=K.BG)
+        grid.pack(fill="x", pady=(8, 0))
+        self.home_keys = {}
+        desc = {d[0]: d[1] for d in hotkeys.HOTKEY_DEFS}
+        for n, hid in enumerate(HOME_KEYS):
+            cell = tk.Frame(grid, bg=K.BG)
+            cell.grid(row=n // 2, column=n % 2, sticky="w", pady=3, padx=(0, 30))
+            chip = K.key_chip(cell)
+            chip.config(width=14)
+            chip.pack(side="left")
+            d = desc.get(hid, hid)
+            K.label(cell, d[:1].upper() + d[1:], 10, K.TEXT2).pack(side="left", padx=(10, 0))
+            self.home_keys[hid] = chip
+
+        K.separator(b).pack(fill="x", pady=16)
+        lt = tk.Frame(b, bg=K.BG)
+        lt.pack(fill="x")
+        K.h2(lt, "Журнал").pack(side="left")
+        self.log = tk.Text(b, height=7, bg=K.SIDEBAR, fg=K.MUTED, font=(K.MONO, 9), relief="flat",
+                           highlightthickness=0, wrap="word", padx=10, pady=6, state="disabled", cursor="arrow")
+        self.log.pack(fill="x", pady=(6, 0))
+        for tag, color in LOG_COLORS.items():
+            self.log.tag_config(tag, foreground=color)
+        for t, msg, level in self.log_lines:
+            self._log_insert(t, msg, level)
+        return sc
+
+    def _refresh_home(self):
+        on = core.auto_on.is_set()
+        paused = on and (core.in_menu or (config.PAUSE_OUTSIDE_GAME and not game.game_active.is_set()))
+        if not on:
+            title, color, btn = "Автоперевод выключен", K.FAINT, f"Включить · {hotkeys.K('auto')}"
+        elif paused:
+            title = "Пауза — открыто меню игры" if core.in_menu else "Пауза — игра не на экране"
+            color, btn = K.AMBER, f"Выключить · {hotkeys.K('auto')}"
+        else:
+            title = "Перевожу…" if self.busy else "Перевожу игру"
+            color, btn = K.ACCENT, f"Пауза · {hotkeys.K('auto')}"
+        self.hero_title.config(text=title)
+        self.hero_dot.set(color)
+        self.hero_btn.config(text=btn)
+        parts = []
+        if not core.region:
+            parts.append(f"Обведите субтитры: {hotkeys.K('select')}")
+        elif game.game_exe:
+            parts.append(f"Игра: {game.game_exe}")
+        if core.stats["last"] and core.stats["last"] != "—":
+            parts.append(f"последний перевод: {core.stats['last']}")
+        self.hero_sub.config(text=" · ".join(parts) or "Включите автоперевод, находясь в игре")
+        # карточки
+        self.info["tts"][0].config(text=tts.voice_title() if config.TTS_ENABLED else "выключена")
+        self.info["tts"][1].config(text=f"вкл/выкл: {hotkeys.K('tts')}")
+        chain = translate.provider_chain()
+        self.info["tr"][0].config(text=" → ".join(PROVIDER_NAMES.get(p, p).replace(" (OCR)", "")
+                                                 for p in chain[:2]) or "нет ключей!")
+        err = core.stats["errors"]
+        self.info["tr"][1].config(text=f"запросов {core.stats['requests']} · ошибок {err}",
+                                  fg=K.RED if err else K.FAINT)
+        total = tcache.stats["hits"] + tcache.stats["misses"]
+        pct = f"{100 * tcache.stats['hits'] // total}%" if total else "—"
+        self.info["cache"][0].config(text=pct if config.CACHE_ENABLED else "кэш выключен")
+        self.info["cache"][1].config(text=f"{tcache.size()} фраз в кэше" if config.CACHE_ENABLED else "")
+        # лимиты
+        bars = limits.bars()
+        if len(bars) != len(self.lim_rows):
+            for r in self.lim_rows:
+                r[0].destroy()
+            self.lim_rows = []
+            for _ in bars:
+                row = tk.Frame(self.lim_box, bg=K.BG)
+                row.pack(fill="x", pady=3)
+                name = K.label(row, "", 10, K.TEXT2, width=9)
+                name.pack(side="left")
+                bar = K.Bar(row, 300)
+                bar.pack(side="left", fill="x", expand=True, padx=10)
+                txt = K.label(row, "", 9, K.MUTED, width=28, anchor="e")
+                txt.pack(side="right")
+                self.lim_rows.append((row, name, bar, txt))
+            if not bars:
+                row = tk.Frame(self.lim_box, bg=K.BG)
+                row.pack(fill="x")
+                K.label(row, "появятся после первых переводов", 9, K.FAINT).pack(anchor="w")
+                self.lim_rows.append((row, None, None, None))
+        for (row, name, bar, txt), (n, frac, text) in zip(self.lim_rows, bars):
+            name.config(text=n)
+            txt.config(text=text)
+            if frac is None:
+                bar.set(0)
+            else:
+                bar.set(frac, K.ACCENT if frac > 0.25 else (K.AMBER if frac > 0.08 else K.RED))
+        # плитки
+        self.tiles["chat"].set_sub("переводится сам" if core.chat_region else "область не задана")
+        for t in self.tiles.values():
+            t.sync()
+        for hid, chip in self.home_keys.items():
+            chip.config(text=hotkeys.K(hid))
+        if self.update_version:
+            self.upd_text.config(text=f"Доступна новая версия {self.update_version}")
+            if not self.upd_banner.winfo_manager():
+                self.upd_banner.pack(fill="x", pady=(0, 12), before=self.hero_card)
+
+    # ---------- Области ----------
+    def _build_areas(self):
+        sc, b = self._page("Области", "Где программа читает текст на экране. Цвет — как у рамки в режиме расстановки.")
+        K.button(b, f"Расставить окна и рамки · {hotkeys.K('layout')}", lambda: core.events.put(("layout", None)),
+                 kind="primary").pack(anchor="w", pady=(0, 14))
+        grid = tk.Frame(b, bg=K.BG)
+        grid.pack(fill="x")
+        self.area_cards = {}
+        specs = [("region", "Субтитры", "#4c8dff", "select", "основная область реплик", None),
+                 ("region2", "Реплики 2", "#4c8dff", "select_subs2", "НПС говорят мимоходом в другом месте",
+                  "region2"),
+                 ("answers_region", "Ответы", "#f0a040", "select_answers", "варианты ответа игрока", None),
+                 ("chat_region", "Чат", "#3fb37f", "select_chat", "окно чата игры", "chat_region")]
+        for i, (attr, name, color, ev, sub, clearable) in enumerate(specs):
+            c, ci = K.card(grid, padx=14, pady=12)
+            c.grid(row=i // 2, column=i % 2, sticky="nsew", padx=(0 if i % 2 == 0 else 10, 0), pady=(0, 10))
+            grid.columnconfigure(i % 2, weight=1, uniform="a")
+            top = tk.Frame(ci, bg=K.CARD)
+            top.pack(fill="x")
+            tk.Frame(top, bg=color, width=12, height=12).pack(side="left", padx=(0, 10))
+            K.label(top, name, 11, K.TEXT, "bold").pack(side="left")
+            chip = K.key_chip(top, hotkeys.K(ev))
+            chip.pack(side="right")
+            size = K.label(ci, "", 9, K.MUTED)
+            size.pack(anchor="w", pady=(8, 0))
+            K.label(ci, sub, 9, K.DIM).pack(anchor="w")
+            btns = tk.Frame(ci, bg=K.CARD)
+            btns.pack(fill="x", pady=(10, 0))
+            pick = K.button(btns, "", lambda e=ev: core.events.put((e, None)), kind="ghost", size=9)
+            pick.pack(side="left")
+            clear = None
+            if clearable:
+                clear = K.button(btns, "Убрать", lambda a=clearable: self._clear_area(a), kind="danger", size=9)
+            self.area_cards[attr] = (size, pick, clear, chip, ev)
+        mc, mi = K.card(b, padx=14, pady=12)
+        mc.pack(fill="x", pady=(4, 0))
+        top = tk.Frame(mi, bg=K.CARD)
+        top.pack(fill="x")
+        K.label(top, "Меню игры", 11, K.TEXT, "bold").pack(side="left")
+        self.menu_chip = K.key_chip(top, hotkeys.K("menu_learn"))
+        self.menu_chip.pack(side="right")
+        self.menu_state = K.label(mi, "", 9, K.MUTED, wraplength=600)
+        self.menu_state.pack(anchor="w", pady=(8, 0))
+        K.label(mi, "Пока меню открыто, автоперевод на паузе. Узнаётся по надписям и рамкам, а не по цвету.",
+                9, K.DIM, wraplength=600).pack(anchor="w")
+        mb = tk.Frame(mi, bg=K.CARD)
+        mb.pack(fill="x", pady=(10, 0))
+        self.menu_pick = K.button(mb, "", lambda: core.events.put(("menu_learn", None)), kind="ghost", size=9)
+        self.menu_pick.pack(side="left")
+        self.menu_forget = K.button(mb, "Забыть", lambda: (menu.forget(), self.refresh()), kind="danger", size=9)
+        return sc
+
+    def _clear_area(self, attr):
+        setattr(core, attr, None)
+        core.save_settings(**{attr: None})
+        if attr == "chat_region":
+            self.app.chat.hide()
+            core.log("Область чата убрана")
+        else:
+            core.events.put(("subs2_hide", None))
+            core.log("Вторая область реплик убрана")
+        self.refresh()
+
+    def _refresh_areas(self):
+        for attr, (size, pick, clear, chip, ev) in self.area_cards.items():
+            reg = getattr(core, attr)
+            if reg:
+                size.config(text=f"{reg[2]} × {reg[3]} · x {reg[0]}, y {reg[1]}", fg=K.MUTED)
+                pick.config(text="Обвести заново")
+                if clear and not clear.winfo_manager():
+                    clear.pack(side="left", padx=(8, 0))
+            else:
+                size.config(text="не задана", fg=K.AMBER)
+                pick.config(text="Обвести")
+                if clear and clear.winfo_manager():
+                    clear.pack_forget()
+            chip.config(text=hotkeys.K(ev))
+        has = bool(core.menu_region)
+        self.menu_state.config(text=("Запомнено" + (" · сейчас открыто — пауза" if core.in_menu else ""))
+                               if has else "Не запомнено: откройте меню в игре и нажмите клавишу справа",
+                               fg=K.MUTED if has else K.AMBER)
+        self.menu_pick.config(text="Запомнить заново" if has else "Запомнить меню")
+        if has and not self.menu_forget.winfo_manager():
+            self.menu_forget.pack(side="left", padx=(8, 0))
+        elif not has and self.menu_forget.winfo_manager():
+            self.menu_forget.pack_forget()
+        self.menu_chip.config(text=hotkeys.K("menu_learn"))
+
+    # ---------- Переводчики ----------
+    def _build_tr(self):
+        sc, b = self._page("Переводчики", "Кто переводит текст. Если основной упрётся в лимит, сразу подхватит запасной.")
+        row = tk.Frame(b, bg=K.BG)
+        row.pack(fill="x")
+        self.main_var = tk.StringVar(value=PROVIDER_LABELS.get(config.PROVIDER, config.PROVIDER))
+        self.fb_var = tk.StringVar(value=PROVIDER_LABELS.get(config.FALLBACK_PROVIDERS[0], "нет")
+                                   if config.FALLBACK_PROVIDERS else "нет")
+        for i, (title, var, opts) in enumerate((("Основной", self.main_var, list(PROVIDER_LABELS.values())),
+                                                ("Запасной", self.fb_var, ["нет"] + list(PROVIDER_LABELS.values())))):
+            c, ci = K.card(row, padx=14, pady=10)
+            c.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
+            row.columnconfigure(i, weight=1, uniform="p")
+            K.label(ci, title, 9, K.DIM).pack(anchor="w", pady=(0, 4))
+            K.select(ci, var, opts, self._provider_changed, width=30).pack(fill="x")
+
+        c, ci = K.card(b, padx=16, pady=8)
+        c.pack(fill="x", pady=(14, 0))
+        K.h2(ci, "Все переводчики").pack(anchor="w", pady=(4, 2))
+        self.prov_box = tk.Frame(ci, bg=K.CARD)
+        self.prov_box.pack(fill="x")
+
+        c, ci = K.card(b, padx=16, pady=6)
+        c.pack(fill="x", pady=(14, 0))
+        K.h2(ci, "Как переводить").pack(anchor="w", pady=(6, 0))
+
+        def setter(attr, key):
+            def s(v):
+                setattr(config, attr, bool(v))
+                core.save_settings(**{key: bool(v)})
+            return s
+        self.tr_rows = [
+            K.ToggleRow(ci, "Кэш переводов", "повторы фраз — мгновенно и без запросов",
+                        lambda: config.CACHE_ENABLED, setter("CACHE_ENABLED", "cache_enabled")),
+            K.ToggleRow(ci, "Не переводить системные сообщения игры", "и не озвучивать их",
+                        lambda: config.SKIP_SYSTEM, setter("SKIP_SYSTEM", "skip_system")),
+            K.ToggleRow(ci, "Пополнять словарь сам", "имена, предметы и места из переводов",
+                        lambda: config.GLOSSARY_AUTO, setter("GLOSSARY_AUTO", "glossary_auto")),
+            K.ToggleRow(ci, "Показывать распознанный текст в журнале", "чтобы видеть, что программа читает",
+                        lambda: config.SHOW_OCR_IN_LOG, setter("SHOW_OCR_IN_LOG", "show_ocr_in_log")),
+            K.ToggleRow(ci, "Сохранять историю в файл", "папка history, по файлу на день",
+                        lambda: config.SAVE_HISTORY, setter("SAVE_HISTORY", "save_history"), last=True),
+        ]
+        for r in self.tr_rows:
+            r.pack(fill="x")
+        cb = tk.Frame(b, bg=K.BG)
+        cb.pack(fill="x", pady=(10, 0))
+        K.button(cb, "Очистить кэш переводов", self._clear_cache, kind="ghost", size=9).pack(side="left")
+        return sc
+
+    def _clear_cache(self):
+        n = tcache.size()
+        tcache.clear()
+        core.log(f"Кэш переводов очищен ({n} фраз).")
+        self.refresh()
+
+    def _provider_changed(self):
+        by_label = {v: k for k, v in PROVIDER_LABELS.items()}
+        config.PROVIDER = by_label.get(self.main_var.get(), config.PROVIDER)
+        fb = by_label.get(self.fb_var.get())
+        config.FALLBACK_PROVIDERS = [fb] if fb and fb != config.PROVIDER else []
+        core.save_settings(provider=config.PROVIDER, fallback=config.FALLBACK_PROVIDERS)
+        chain = translate.provider_chain()
+        core.log(f"Переводчик: {' → '.join(PROVIDER_NAMES.get(p, p) for p in chain) or 'нет ключей!'} (сохранено)", "ok")
+        for p in [config.PROVIDER] + config.FALLBACK_PROVIDERS:
+            if not translate.provider_has_key(p):
+                core.log(f"У «{PROVIDER_NAMES.get(p, p)}» нет ключа — он будет пропущен", "warn")
+        self.refresh()
+
+    def _refresh_tr(self):
+        for w in self.prov_box.winfo_children():
+            w.destroy()
+        chain = translate.provider_chain()
+        lim = {n.lower(): t for n, _, t in limits.bars()}
+        rows = [("deepl", "DeepL"), ("microsoft", "Microsoft"), ("google", "Google"), ("groq_ocr", "Groq · нейросеть"),
+                ("gemini_ocr", "Gemini · нейросеть"), ("claude_ocr", "Claude · нейросеть, платно")]
+        for i, (pid, name) in enumerate(rows):
+            r = tk.Frame(self.prov_box, bg=K.CARD)
+            r.pack(fill="x")
+            body = tk.Frame(r, bg=K.CARD)
+            body.pack(fill="x", pady=7)
+            has = translate.provider_has_key(pid)
+            K.Dot(body, K.GREEN if has else K.FAINT, 8).pack(side="left", padx=(0, 12))
+            t = tk.Frame(body, bg=K.CARD)
+            t.pack(side="left", fill="x", expand=True)
+            top = tk.Frame(t, bg=K.CARD)
+            top.pack(anchor="w")
+            K.label(top, name, 10, K.TEXT if has else K.MUTED, "bold").pack(side="left")
+            role = "основной" if chain[:1] == [pid] else ("запасной" if pid in chain[1:] else "")
+            if role:
+                tk.Label(top, text=role, bg=K.ACCENT, fg="#ffffff", font=K.f(8, "bold"), padx=6).pack(
+                    side="left", padx=(8, 0))
+            need_key = pid not in ("microsoft", "google")
+            K.label(t, ("ключ сохранён в Windows" if has else "нет ключа") if need_key else "без ключа", 9,
+                    K.DIM).pack(anchor="w")
+            info = lim.get(name.split(" ")[0].lower(), "без лимита" if not need_key else "")
+            K.label(body, info, 9, K.MUTED).pack(side="right")
+            if i < len(rows) - 1:
+                K.separator(r).pack(fill="x")
+        for r in self.tr_rows:
+            r.sync()
+        self.main_var.set(PROVIDER_LABELS.get(config.PROVIDER, config.PROVIDER))
+        self.fb_var.set(PROVIDER_LABELS.get(config.FALLBACK_PROVIDERS[0], "нет") if config.FALLBACK_PROVIDERS else "нет")
+
+    # ---------- Клавиши ----------
+    def _build_keys(self):
+        sc, b = self._page("Клавиши", "Нажмите «Изменить», затем нужную клавишу или кнопку мыши. Можно с Ctrl / Shift / Alt.")
+        cols = tk.Frame(b, bg=K.BG)
+        cols.pack(fill="x")
+        desc = {d[0]: d[1] for d in hotkeys.HOTKEY_DEFS}
+        known = {h for _, ids in KEY_GROUPS for h in ids}
+        groups = [(g, [h for h in ids if h in desc]) for g, ids in KEY_GROUPS]
+        rest = [d[0] for d in hotkeys.HOTKEY_DEFS if d[0] not in known]
+        if rest:
+            groups.append(("Другое", rest))
+        self.key_chips = {}
+        for g, ids in groups:
+            c, ci = K.card(cols, padx=16, pady=8)
+            c.pack(fill="x", pady=(0, 12))
+            K.caps(ci, g).pack(anchor="w", pady=(2, 4))
+            for n, hid in enumerate(ids):
+                r = tk.Frame(ci, bg=K.CARD)
+                r.pack(fill="x")
+                line = tk.Frame(r, bg=K.CARD)
+                line.pack(fill="x", pady=5)
+                d = desc[hid]
+                btn = tk.Label(line, text="Изменить", bg=K.CARD, fg=K.ACCENT_TEXT, font=K.f(9), cursor="hand2")
+                btn.pack(side="right", padx=(8, 0))
+                btn.bind("<Button-1>", lambda e, h=hid: threading.Thread(
+                    target=hotkeys.capture_hotkey, args=(h,), daemon=True).start())
+                chip = K.key_chip(line)
+                chip.config(width=16)
+                chip.pack(side="right", padx=(8, 0))
+                K.label(line, d[:1].upper() + d[1:], 10, K.TEXT).pack(side="left", fill="x", expand=True)
+                self.key_chips[hid] = chip
+                if n < len(ids) - 1:
+                    K.separator(r).pack(fill="x")
+        return sc
+
+    # ---------- Резервная копия ----------
+    def _build_backup(self):
+        from . import backup
+        sc, b = self._page("Резервная копия", "Настройки, области, голоса персонажей, словарь и кэш — одним файлом. "
+                                              "Для переноса на другой ПК или после переустановки.")
+        row = tk.Frame(b, bg=K.BG)
+        row.pack(fill="x")
+        for i, (title, text, btxt, cmd, kind) in enumerate((
+                ("Сохранить в файл", "Создаст zip-файл. Лучше хранить его на флешке или в облаке.",
+                 "Сохранить…", self._backup_export, "primary"),
+                ("Загрузить из файла", "Текущие настройки сначала сохранятся в папку backups. "
+                 "Программа перезапустится.", "Выбрать файл…", self._backup_import, "ghost"))):
+            c, ci = K.card(row, padx=16, pady=14)
+            c.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
+            row.columnconfigure(i, weight=1, uniform="b")
+            K.label(ci, title, 12, K.TEXT, "bold").pack(anchor="w")
+            K.label(ci, text, 9, K.MUTED, wraplength=290).pack(anchor="w", pady=(4, 10))
+            K.button(ci, btxt, cmd, kind=kind).pack(anchor="w")
+        c, ci = K.card(b, padx=16, pady=12)
+        c.pack(fill="x", pady=(14, 0))
+        K.h2(ci, "Что входит в копию").pack(anchor="w", pady=(0, 8))
+        g = tk.Frame(ci, bg=K.CARD)
+        g.pack(fill="x")
+        items = [("Настройки и области", "все переключатели и рамки"), ("Голоса персонажей", "кто каким голосом"),
+                 ("Словарь", "имена и названия"), ("Кэш переводов", "готовые переводы фраз"),
+                 ("Образец меню", "для паузы в меню"), ("Ключи переводчиков", "не входят — они в Windows")]
+        for i, (a, s) in enumerate(items):
+            cell = tk.Frame(g, bg=K.SIDEBAR)
+            cell.grid(row=i // 3, column=i % 3, sticky="nsew", padx=(0 if i % 3 == 0 else 8, 0), pady=(0, 8))
+            g.columnconfigure(i % 3, weight=1, uniform="i")
+            K.label(cell, a, 10, K.TEXT, bg=K.SIDEBAR).pack(anchor="w", padx=10, pady=(8, 0))
+            K.label(cell, s, 9, K.DIM, bg=K.SIDEBAR).pack(anchor="w", padx=10, pady=(0, 8))
+        self.bk_box_card, self.bk_box = K.card(b, padx=16, pady=10)
+        self.bk_box_card.pack(fill="x", pady=(14, 0))
+        return sc
+
+    def _refresh_backup(self):
+        from . import backup
+        for w in self.bk_box.winfo_children():
+            w.destroy()
+        K.h2(self.bk_box, "Автокопии перед восстановлением").pack(anchor="w", pady=(2, 6))
+        try:
+            names = sorted((n for n in os.listdir(backup.BACKUP_DIR) if n.endswith(".zip")), reverse=True)[:5]
+        except OSError:
+            names = []
+        if not names:
+            K.label(self.bk_box, "пока нет", 9, K.FAINT).pack(anchor="w", pady=(0, 4))
+        for i, n in enumerate(names):
+            r = tk.Frame(self.bk_box, bg=K.CARD)
+            r.pack(fill="x", pady=4)
+            K.label(r, n, 10, K.TEXT).pack(side="left")
+            K.button(r, "Вернуть", lambda p=os.path.join(backup.BACKUP_DIR, n): self._backup_restore(p),
+                     kind="ghost", size=9).pack(side="right")
+
+    def _backup_export(self):
+        from tkinter import filedialog, messagebox
+        from . import backup
+        path = filedialog.asksaveasfilename(parent=self.win, title="Сохранить резервную копию",
+                                            initialfile=backup.default_name(), defaultextension=".zip",
+                                            filetypes=[("Резервная копия AAC", "*.zip")])
+        if not path:
+            return
+        try:
+            saved = backup.export(path)
+        except Exception as e:
+            messagebox.showerror("AAC Translator", f"Не удалось сохранить: {e}", parent=self.win)
+            return
+        core.log(f"Резервная копия сохранена: {path} ({backup.describe(saved)})", "ok")
+        messagebox.showinfo("AAC Translator", f"Сохранено: {backup.describe(saved)}.\n\n{path}", parent=self.win)
+
+    def _backup_import(self):
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(parent=self.win, title="Загрузить резервную копию",
+                                          filetypes=[("Резервная копия AAC", "*.zip"), ("Все файлы", "*.*")])
+        if path:
+            self._backup_restore(path)
+
+    def _backup_restore(self, path):
+        from tkinter import messagebox
+        from . import backup
+        try:
+            info = backup.read_manifest(path)
+        except Exception as e:
+            messagebox.showerror("AAC Translator", f"Не получилось открыть файл: {e}", parent=self.win)
+            return
+        if not messagebox.askyesno(
+                "AAC Translator",
+                f"Копия от {info.get('created', '?')} (версия {info.get('version', '?')}).\n"
+                f"В ней: {backup.describe(info.get('files', []))}.\n\n"
+                "Заменить текущие настройки? Нынешние сохранятся в папку backups. Программа перезапустится.",
+                parent=self.win):
+            return
+        try:
+            restored, before = backup.restore(path)
+        except Exception as e:
+            messagebox.showerror("AAC Translator", f"Не удалось восстановить: {e}", parent=self.win)
+            return
+        core.log(f"Восстановлено: {backup.describe(restored)}. Прежние настройки — в {before}", "ok")
+        self.app.restart()
+
+    # ---------- то, что вызывает остальная программа ----------
+    def refresh(self):
+        fn = getattr(self, f"_refresh_{self.current}", None)
+        if fn:
+            try:
+                fn()
+            except tk.TclError:
+                pass
+
+    def _refresh_keys(self):
+        for hid, chip in getattr(self, "key_chips", {}).items():
+            if hotkeys.capturing == hid:
+                chip.config(text="нажмите…", fg=K.AMBER)
+            else:
+                chip.config(text=hotkeys.K(hid), fg=K.TEXT2)
+
+    def update_keys(self):
+        self._refresh_keys()
+        self.refresh()
+
+    def add_log(self, t, msg, level):
+        self.log_lines.append((t, msg, level))
+        del self.log_lines[:-100]
+        if hasattr(self, "log"):
+            self._log_insert(t, msg, level)
+        if level == "error" and not self.visible:
+            self.toggle()  # при ошибке панель сама показывается
+
+    def _log_insert(self, t, msg, level):
+        self.log.config(state="normal")
+        self.log.insert("end", f"{t}  {msg}\n", level)
+        lines = int(self.log.index("end-1c").split(".")[0])
+        if lines > 100:
+            self.log.delete("1.0", f"{lines - 100}.0")
+        self.log.see("end")
+        self.log.config(state="disabled")
+
+    def show_update(self, version):
+        self.update_version = version
+        self.update_btn.config(text=f"⬇ Обновить до {version}")
+        if not self.update_btn.winfo_manager():
+            self.update_btn.pack(fill="x", pady=(0, 6), before=self.check_btn)
+        self.refresh()
+
+    def sync_vars(self):
+        self.refresh()
+
+    def toggle(self):
+        if self.visible:
+            self.win.withdraw()
+        else:
+            self.win.deiconify()
+            self.refresh()
+        self.visible = not self.visible
+
+    def reset_pos(self):
+        x, y = self.default_pos
+        self.win.geometry(f"+{x}+{y}")
+        core.save_settings(panel_pos=(x, y))
+
+    def _start_move(self, e):
+        self._dx, self._dy = e.x_root - self.win.winfo_x(), e.y_root - self.win.winfo_y()
+
+    def _move(self, e):
+        self.win.geometry(f"+{e.x_root - self._dx}+{e.y_root - self._dy}")
+
+    def _end_move(self, e):
+        core.save_settings(panel_pos=(self.win.winfo_x(), self.win.winfo_y()))

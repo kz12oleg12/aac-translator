@@ -11,7 +11,7 @@ import threading
 import tkinter as tk
 
 
-from . import chat, config, menu, core, game, history, hotkeys, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_windows, updater, watcher
+from . import chat, config, menu, core, game, history, hotkeys, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_shell, ui_windows, updater, watcher
 
 
 class App:
@@ -79,7 +79,7 @@ class App:
         self.answers.hide()
         self.subs.hide()  # окно субтитров появится с первым переводом
         self.busy = set()
-        self.panel = ui_panel.Panel(tk.Toplevel(self.root))
+        self.panel = ui_shell.Shell(self, tk.Toplevel(self.root))   # главное окно: разделы слева
         self.panel.refresh()
 
         core.log(f"AAC Translator v{config.VERSION} запущен", "ok")

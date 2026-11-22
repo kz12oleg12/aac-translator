@@ -110,3 +110,23 @@ def summary():
     if d and d.get("limit"):
         parts.append(f"DeepL {d['used'] * 100 // d['limit']}% месяца ({_fmt(d['limit'] - d['used'])} симв. осталось)")
     return " · ".join(parts) or "—"
+
+
+def bars():
+    """Для полосок на главной: [(название, доля оставшегося 0..1, подпись)]."""
+    out = []
+    with _lock:
+        snap = {k: dict(v) for k, v in state.items()}
+    d = snap.get("deepl")
+    if d and d.get("limit"):
+        left = max(0, d["limit"] - d["used"])
+        out.append(("DeepL", left / d["limit"], f"{_fmt(left)} симв. на месяц"))
+    for name in ("groq", "mistral"):
+        s = snap.get(name)
+        if s and s.get("req_left") is not None and s.get("req_limit"):
+            out.append((name.capitalize(), s["req_left"] / s["req_limit"],
+                        f"{_fmt(s['req_left'])} из {_fmt(s['req_limit'])} на сегодня"))
+    g = snap.get("gemini_count")
+    if g and g.get("day") == time.strftime("%Y-%m-%d"):
+        out.append(("Gemini", None, f"{g['n']} запр. сегодня"))
+    return out

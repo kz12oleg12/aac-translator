@@ -1791,6 +1791,55 @@ def test_repeat_line(monkey):
             app.root.destroy()
 
 
+def test_new_shell(monkey):
+    """Новое главное окно: разделы открываются, плитки и переключатели меняют настройки, клавиши подписаны."""
+    if not GUI:
+        print("   (без экрана — пропуск)")
+        return
+    try:
+        from aac import ui_shell
+    except ImportError:
+        print("   (в этой версии нет — пропуск)")
+        return
+    T.set("SETTINGS", {})
+    T.load_hotkeys()
+    app = T.App()
+    try:
+        sh = app.panel
+        assert isinstance(sh, ui_shell.Shell) and sh.current == "home"
+        for sid in ("areas", "tr", "keys", "backup", "home"):
+            sh.show(sid)
+            app.root.update()
+            assert sh.current == sid
+        core_m = T._owner("answers_auto")
+        was = core_m.answers_auto
+        sh.tiles["answers"].toggle.click()
+        assert core_m.answers_auto == (not was) and T.load_settings()["answers_auto"] == (not was)
+        sh.tiles["answers"].toggle.click()
+        sh.show("tr")
+        cfg = T._owner("CACHE_ENABLED")
+        before = cfg.CACHE_ENABLED
+        sh.tr_rows[0].toggle.click()
+        assert cfg.CACHE_ENABLED == (not before) and T.load_settings()["cache_enabled"] == (not before)
+        sh.tr_rows[0].toggle.click()
+        sh.show("keys")
+        assert sh.key_chips["auto"].cget("text") == T.K("auto")
+        drain()
+        sh.show("hist")          # ещё не перенесено — открывает прежнее окно
+        assert any(k == "history_open" for k, _ in drain()) and sh.current == "keys"
+        sh.show("home")
+        sh.show_update("9.9")
+        app.root.update()
+        assert sh.upd_banner.winfo_manager() and "9.9" in sh.upd_text.cget("text")
+        T.log("проверка журнала", "warn")
+        for k, p in drain():
+            if k == "log":
+                sh.add_log(*p)
+        assert "проверка журнала" in sh.log.get("1.0", "end")
+    finally:
+        app.root.destroy()
+
+
 # ---------- запуск ----------
 def main():
     print(f"Проверяю: {ROOT}  ({T.kind}, версия {T.VERSION})\n")
