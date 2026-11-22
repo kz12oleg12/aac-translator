@@ -47,6 +47,7 @@ class Panel:
         sw = win.winfo_screenwidth()
         if not (0 <= x <= sw - 100 and 0 <= y <= sh - 60):
             x, y = default
+        x = max(0, min(x, sw - config.PANEL_WIDTH))   # панель стала шире — не уезжает за правый край
         self.default_pos = default
         win.geometry(f"{config.PANEL_WIDTH}x750+{x}+{y}")
 
@@ -131,7 +132,7 @@ class Panel:
         for n, (hid, desc, _, _) in enumerate(hotkeys.HOTKEY_DEFS):
             # две колонки, в каждой: клавиша | что делает | кнопка «изменить» (справа, ровно в столбик)
             r, c = 1 + n // 2, (n % 2) * 4
-            kl = tk.Label(keys, text="", width=12, anchor="w", fg="#eee", bg="#1a1d23", font=("Consolas", 9))
+            kl = tk.Label(keys, text="", width=15, anchor="w", fg="#eee", bg="#1a1d23", font=("Consolas", 9))
             kl.grid(row=r, column=c, sticky="w", pady=1)
             tk.Label(keys, text=desc, fg="#aaa", bg="#1a1d23", font=("Segoe UI", 9), anchor="w").grid(
                 row=r, column=c + 1, sticky="w", padx=(0, 6))
@@ -139,7 +140,7 @@ class Panel:
                       bg="#2b3040", fg="#8cf", activebackground="#3a4258", activeforeground="#fff",
                       cursor="hand2", command=lambda h=hid: threading.Thread(
                           target=hotkeys.capture_hotkey, args=(h,), daemon=True).start()).grid(
-                row=r, column=c + 2, sticky="w", padx=(0, 18))
+                row=r, column=c + 2, sticky="w", padx=(0, 14))
             self.key_labels[hid] = kl
         self.update_keys()
         tk.Label(win, text="Журнал:", fg="#8cf", bg="#1a1d23", font=("Segoe UI", 10), anchor="w").pack(fill="x", padx=10)

@@ -42,11 +42,38 @@ mouse_bindings = {}   # "mouse_x1" -> событие
 mouse_capture = None  # функция, которая ловит нажатие мыши при переназначении
 
 
+MODIFIERS = ("ctrl", "shift", "alt")
+
+
+def is_mouse(combo):
+    """Сочетание с кнопкой мыши: «mouse_x1», «ctrl+mouse_x1»…"""
+    return bool(combo) and combo.split("+")[-1] in MOUSE_NAMES
+
+
+def held_modifiers():
+    """Какие из Ctrl/Shift/Alt сейчас зажаты (для сочетаний «Ctrl + кнопка мыши»)."""
+    out = []
+    for m in MODIFIERS:
+        try:
+            if keyboard.is_pressed(m):
+                out.append(m)
+        except Exception:
+            pass
+    return out
+
+
+def pretty(combo):
+    """shift+f9 -> Shift+F9, ctrl+mouse_x1 -> Ctrl+Мышь назад."""
+    parts = (combo or "?").split("+")
+    return "+".join(MOUSE_NAMES.get(p) or (p.upper() if (p[:1] == "f" and p[1:].isdigit()) or len(p) == 1
+                                           else p.capitalize()) for p in parts)
+
+
 def K(hid):
     """Красивое имя сочетания для подсказок: shift+f9 -> Shift+F9, mouse_x1 -> Мышь назад."""
     combo = hotkeys.get(hid, "?")
-    if combo in MOUSE_NAMES:
-        return MOUSE_NAMES[combo]
+    if is_mouse(combo):
+        return pretty(combo)
     parts = combo.split("+")
     return "+".join(p.upper() if (p[:1] == "f" and p[1:].isdigit()) or len(p) == 1 else p.capitalize()
                     for p in parts)
@@ -79,7 +106,7 @@ def register_hotkeys():
     unregister_hotkeys()
     for hid, _, _, ev in HOTKEY_DEFS:
         combo = hotkeys[hid]
-        if combo in MOUSE_NAMES:
+        if is_mouse(combo):
             mouse_bindings[combo] = ev
             if not MOUSE_OK:
                 core.log("Кнопки мыши не работают: установите pynput (py -m pip install pynput)", "error")
@@ -112,9 +139,13 @@ def _on_mouse_click(x, y, button, pressed):
     name = _mouse_button_name(button)
     if not name:
         return
+    combo = "+".join(held_modifiers() + [name])
     if mouse_capture:
-        mouse_capture(name)
+        mouse_capture(combo)
+    elif combo in mouse_bindings:
+        core.events.put((mouse_bindings[combo], None))
     elif name in mouse_bindings:
+        # Ctrl+кнопка не назначена отдельно — срабатывает просто кнопка (например, бежите с зажатым Shift)
         core.events.put((mouse_bindings[name], None))
 
 
@@ -130,7 +161,7 @@ def capture_hotkey(hid):
     unregister_hotkeys()  # чтобы при нажатии не сработали старые действия
     core.events.put(("keys", None))
     desc = next(d for i, d, _, _ in HOTKEY_DEFS if i == hid)
-    mouse_hint = ", боковую кнопку мыши или колесо (нажатием)" if MOUSE_OK else ""
+    mouse_hint = (", боковую кнопку мыши или колесо (нажатием), можно с Ctrl/Shift/Alt" if MOUSE_OK else "")
     core.log(f"Нажмите клавишу/сочетание{mouse_hint} для «{desc}». Esc — отмена.")
 
     result = {}
@@ -166,11 +197,14 @@ def capture_hotkey(hid):
     other = {hotkeys[i]: d for i, d, _, _ in HOTKEY_DEFS if i != hid}
     if not combo or combo == "esc":
         core.log("Назначение отменено")
+    elif all(p in MODIFIERS or p in ("left ctrl", "right ctrl", "left shift", "right shift", "left alt",
+                                     "right alt", "alt gr") for p in parts):
+        core.log("Только Ctrl/Shift/Alt — мало: зажмите их и нажмите ещё клавишу или кнопку мыши.", "warn")
     elif len(parts) == 1 and len(parts[0]) == 1:
         core.log(f"Одна буква «{combo}» не подходит — будет срабатывать, когда пишете в чат. "
             "Возьмите F-клавишу, кнопку мыши или добавьте Ctrl/Shift/Alt.", "warn")
     elif combo in other:
-        core.log(f"«{MOUSE_NAMES.get(combo, combo)}» уже занято: {other[combo]}. Выберите другое.", "warn")
+        core.log(f"«{pretty(combo)}» уже занято: {other[combo]}. Выберите другое.", "warn")
     else:
         hotkeys[hid] = combo
         core.save_settings(hotkeys=dict(hotkeys))

@@ -1056,6 +1056,40 @@ def test_tooltip(monkey):
     assert ev[-1]["text"][0].startswith("Клинок рассвета")
 
 
+def test_mouse_with_modifier(monkey):
+    """Сочетания «Ctrl + кнопка мыши»: назначение, подпись, срабатывание; без Ctrl — обычная кнопка."""
+    hk = T._owner("load_hotkeys")
+    if not hasattr(hk, "is_mouse"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    assert hk.pretty("ctrl+mouse_x1") == "Ctrl+Мышь назад" and hk.pretty("shift+f9") == "Shift+F9"
+    monkey(hk, "hotkeys", dict(hk.hotkeys, once="mouse_x1", once_tts="ctrl+mouse_x1"))
+    monkey(hk, "MOUSE_OK", True)
+    hk.register_hotkeys()
+    assert hk.mouse_bindings.get("ctrl+mouse_x1") == "once_tts" and hk.mouse_bindings.get("mouse_x1") == "once"
+    assert hk.K("once_tts") == "Ctrl+Мышь назад"
+    monkey(hk, "_mouse_button_name", lambda b: "mouse_x1")
+    mods = []
+    monkey(hk, "held_modifiers", lambda: list(mods))
+    drain()
+    mods[:] = ["ctrl"]
+    hk._on_mouse_click(0, 0, "b", True)
+    mods[:] = []
+    hk._on_mouse_click(0, 0, "b", True)
+    mods[:] = ["shift"]                       # Shift+кнопка не назначена — срабатывает просто кнопка
+    hk._on_mouse_click(0, 0, "b", True)
+    evs = [k for k, _ in drain() if k in ("once", "once_tts")]
+    assert evs == ["once_tts", "once", "once"], evs
+    # назначение: зажали Ctrl и нажали кнопку мыши
+    got = {}
+    monkey(hk, "mouse_capture", lambda combo: got.setdefault("c", combo))
+    mods[:] = ["ctrl"]
+    hk._on_mouse_click(0, 0, "b", True)
+    assert got["c"] == "ctrl+mouse_x1"
+    monkey(hk, "mouse_capture", None)
+    hk.unregister_hotkeys()
+
+
 def test_new_hotkey_does_not_steal(monkey):
     """Новая клавиша из обновления не забирает кнопку, которую вы уже назначили на другое."""
     hk = T._owner("load_hotkeys")
