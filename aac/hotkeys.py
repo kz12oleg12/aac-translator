@@ -14,6 +14,7 @@ from . import config, core
 HOTKEY_DEFS = [  # (id, что делает, клавиша по умолчанию, событие)
     ("once", "перевести задание", config.HOTKEY_ONCE, "once"),
     ("answers_once", "перевести ответы", config.HOTKEY_ANSWERS_ONCE, "answers_once"),
+    ("once_tts", "обвести и озвучить", config.HOTKEY_ONCE_TTS, "once_tts"),
     ("tooltip", "подсказка у мыши", config.HOTKEY_TOOLTIP, "tooltip_key"),
     ("auto", "автоперевод вкл/выкл", config.HOTKEY_AUTO, "auto"),
     ("select", "область субтитров", config.HOTKEY_SELECT, "select"),

@@ -299,9 +299,17 @@ class Overlay:
         self.visible = True
         self.fit()
 
+    on_hide = None   # что сделать, когда окно прячут (например, остановить чтение вслух)
+
     def hide(self):
+        was = self.visible
         self.win.withdraw()
         self.visible = False
+        if was and self.on_hide:
+            try:
+                self.on_hide()
+            except Exception:
+                pass
         self._notify()   # склеенное окно ответов поднимается на место субтитров
 
     def reset_pos(self):

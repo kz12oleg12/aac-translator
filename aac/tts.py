@@ -251,6 +251,17 @@ def shutdown():
 _last = {"text": None, "t": 0.0}
 
 
+def speak_text(translation):
+    """Прочитать вслух переведённый текст (обведённая область): голосом «без имени», целиком."""
+    text = re.sub(r"\s*\([^)]*\)", "", translation or "")          # «Клинок (Dawn Blade)» → «Клинок»
+    text = re.sub(r"[⏳❌✅📜💬🔎]", "", text)
+    text = " ".join(ln.strip() for ln in text.splitlines() if ln.strip())
+    if sum(ch.isalpha() for ch in text) < 2:
+        return
+    stop()
+    _say(text)
+
+
 def speak_subtitle_once(translation, seen=None, orig=None):
     if translation == _last["text"] and time.time() - _last["t"] < 30:
         return

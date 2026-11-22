@@ -14,7 +14,7 @@ from . import capture, config, core, game, history, hotkeys, ocr, translate, tra
 once_lock = threading.Lock()
 
 
-def translate_once(reg):
+def translate_once(reg, speak=False):
     if not once_lock.acquire(blocking=False):
         return
     try:
@@ -29,6 +29,8 @@ def translate_once(reg):
             orig = history.last_source()
             core.events.put(("quest", (text, orig) if text else "Текст не найден"))
             history.history_add("Задание", orig, text)
+            if speak and text:
+                tts.speak_text(text)   # «обвести и озвучить» — читаем, даже если озвучка субтитров выключена
     finally:
         once_lock.release()
 

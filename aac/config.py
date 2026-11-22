@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "5.3"
+VERSION = "5.4"
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # папка программы (настройки, словарь, история, иконки)
 
 # ===================== НАСТРОЙКИ =====================
@@ -91,6 +91,7 @@ HOTKEY_LAYOUT = "ctrl+shift+l"   # режим расстановки окон (L
 HOTKEY_PANEL = "f6"
 HOTKEY_QUIT = "ctrl+shift+q"
 HOTKEY_TTS = "ctrl+shift+v"       # озвучка субтитров вкл/выкл
+HOTKEY_ONCE_TTS = "ctrl+f7"          # обвести текст → перевести и прочитать вслух (книги, письма, задания)
 HOTKEY_FLIP_GENDER = "ctrl+shift+g"   # «не тот голос»: сменить пол последнего говорящего
 HOTKEY_TOOLTIP = "mouse_x2"       # перевести подсказку под мышкой (предмет, навык) — боковая кнопка «вперёд»
 

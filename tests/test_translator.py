@@ -655,6 +655,32 @@ def test_updater(monkey):
     assert not any("→" in p[1] for k, p in drain() if k == "log")
 
 
+def test_area_read_aloud(monkey):
+    """«Обвести и озвучить»: перевод обведённого текста показывается и читается целиком голосом «без имени»."""
+    tts = T._owner("speak_subtitle")
+    if not hasattr(tts, "speak_text"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    said = []
+    monkey(tts, "_say", lambda text, seen=None, vp=None: said.append((text, vp)))
+    monkey(tts, "stop", lambda: said.append("stop"))
+    tts.speak_text("Письмо от Кеспера\nПринеси мне Клинок рассвета (Dawn Blade).\n📜")
+    assert said == ["stop", ("Письмо от Кеспера Принеси мне Клинок рассвета.", None)], said
+    from PIL import Image
+    w = T._owner("translate_once")
+    monkey(w.translate, "safe_translate", lambda img, prompt=None: ("Дорогой друг,\nприходи скорее.", None))
+    monkey(w.capture, "grab", lambda reg: Image.new("RGB", (10, 10)))
+    monkey(w.tts, "speak_text", lambda t: said.append(("speak", t)))
+    said.clear()
+    drain()
+    w.translate_once((0, 0, 10, 10), speak=True)
+    assert ("speak", "Дорогой друг,\nприходи скорее.") in said, said
+    assert any(k == "quest" and isinstance(p, tuple) for k, p in drain())
+    said.clear()
+    w.translate_once((0, 0, 10, 10))                 # обычный F7 — без чтения
+    assert not said
+
+
 def test_dock_overlays(monkey):
     """Ответы и субтитры одним окном: ответы вплотную под субтитрами, двигаются и тянутся вместе."""
     if not GUI:

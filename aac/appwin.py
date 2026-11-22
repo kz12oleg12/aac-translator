@@ -45,6 +45,7 @@ class App:
         self.tip_state = None
         if config.ANSWERS_DOCKED:
             self.answers.dock(self.subs)
+        self.quest.on_hide = tts.stop   # закрыли окно задания (правый клик) — чтение тоже останавливается
         self.quest.hide()
         self.answers.hide()
         self.subs.hide()  # окно субтитров появится с первым переводом
@@ -350,13 +351,14 @@ class App:
                     self.answers.fit()
         self.pick_area("Обведите область ВАРИАНТОВ ОТВЕТА (для автоперевода).", done)
 
-    def select_quest_once(self):
+    def select_quest_once(self, speak=False):
         def done(reg):
             if reg:
                 # небольшая пауза, чтобы затемнение успело пропасть со скриншота
                 self.root.after(150, lambda: threading.Thread(
-                    target=watcher.translate_once, args=(reg,), daemon=True).start())
-        self.pick_area("Обведите ЗАДАНИЕ / текст для разового перевода.", done)
+                    target=watcher.translate_once, args=(reg, speak), daemon=True).start())
+        self.pick_area("Обведите текст — переведу и прочитаю вслух." if speak else
+                       "Обведите ЗАДАНИЕ / текст для разового перевода.", done)
 
     def _poll(self):
         core.heartbeat = time.time()
@@ -408,6 +410,8 @@ class App:
                     self.select_subs2_region()
                 elif kind == "select":
                     self.select_subs_region()
+                elif kind == "once_tts":
+                    self.select_quest_once(speak=True)
                 elif kind == "once":
                     self.select_quest_once()
                 elif kind == "answers_once":
