@@ -118,8 +118,8 @@ def _ocr_raw(img):
             else:
                 out.append((t, bx))
                 cur_y = y
-    if scale != 1.0:
-        out = [(t, tuple(int(v / scale) for v in b) if b else None) for t, b in out]
+    # координаты — целые пиксели (OCR Windows отдаёт дробные, Tk такие не принимает)
+    out = [(t, tuple(int(v / scale) for v in b) if b else None) for t, b in out]
     return out
 
 

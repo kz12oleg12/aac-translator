@@ -132,6 +132,7 @@ class Overlay:
         return self.width, self.win.winfo_height(), self.win.winfo_x(), self.win.winfo_y()
 
     def _place(self, w, h, x, y):
+        w, h, x, y = int(w), int(h), int(x), int(y)   # Tk не принимает «+889.0» (дробные координаты)
         self._geom = (w, h, x, y)
         self.win.geometry(f"{w}x{h}+{x}+{y}")
         self._notify()

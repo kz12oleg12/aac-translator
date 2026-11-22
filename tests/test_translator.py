@@ -434,7 +434,8 @@ def test_gui_smoke(monkey):
         app.open_settings()
         app.toggle_layout()
         if hasattr(app, "show_tooltip"):
-            app.show_tooltip({"text": ("Клинок\nМеч", "Blade\nSword"), "pos": (700, 400), "box": (720, 380, 200, 120)})
+            app.show_tooltip({"text": ("Клинок\nМеч", "Blade\nSword"), "pos": (700, 400),
+                              "box": (720.0, 380.0, 200.0, 120.0)})
             done["tip"] = app.tip.visible and app.tip._pos()[2] == 720 - 12 - app.tip.width
             app.tip.hide()
             from aac import ui_windows
@@ -1117,6 +1118,9 @@ def test_tooltip(monkey):
     # окно перевода: слева от подсказки, если есть место, иначе справа
     assert tooltip.place((600, 300, 200, 100), (590, 310), 420, 150, 1920, 1080) == (168, 300)
     assert tooltip.place((100, 300, 200, 100), (90, 310), 420, 150, 1920, 1080) == (312, 300)
+    # OCR Windows отдаёт дробные координаты — окно всё равно ставится (журнал: «bad geometry +889.0+449.0»)
+    x, y = tooltip.place((1309.0, 449.0, 200.0, 100.0), (1300, 450), 420, 62, 1920, 1080)
+    assert isinstance(x, int) and isinstance(y, int) and (x, y) == (877, 449)
     # весь путь: снимок → OCR с рамками → перевод вырезанного блока
     shots, crops = [], []
     from PIL import Image

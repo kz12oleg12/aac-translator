@@ -140,6 +140,6 @@ def place(box, pos, win_w, win_h, sw, sh, gap=12):
         else:
             x = max(0, min(sw - win_w, x0))
         y = max(0, min(sh - win_h, y0))
-        return x, y
+        return int(x), int(y)
     cx, cy = pos
-    return max(0, min(sw - win_w, cx + 24)), max(0, min(sh - win_h, cy + 24))
+    return int(max(0, min(sw - win_w, cx + 24))), int(max(0, min(sh - win_h, cy + 24)))
