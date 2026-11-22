@@ -63,6 +63,10 @@ class Panel:
         tk.Button(top, text="⟳ Перезапустить", font=("Segoe UI", 8), relief="flat", bd=0, highlightthickness=0,
                   padx=8, bg="#2b3040", fg="#8cf", activebackground="#3a4258", activeforeground="#fff",
                   cursor="hand2", command=lambda: core.events.put(("restart", None))).pack(side="right")
+        tk.Button(top, text="⬇ Проверить обновления", font=("Segoe UI", 8), relief="flat", bd=0,
+                  highlightthickness=0, padx=8, bg="#2b3040", fg="#8cf", activebackground="#3a4258",
+                  activeforeground="#fff", cursor="hand2",
+                  command=lambda: core.events.put(("update_check", None))).pack(side="right", padx=(0, 4))
         hdr = tk.Label(top, text=f"  AAC Translator v{config.VERSION} — система   (тащите мышкой)" if self._logo
                        else f"⚙ AAC Translator v{config.VERSION} — система   (тащите мышкой)",
                        image=self._logo, compound="left",

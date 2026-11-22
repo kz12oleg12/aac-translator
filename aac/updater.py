@@ -88,6 +88,8 @@ def check(quiet=True):
 
 
 def check_async(quiet=True):
+    if not quiet:
+        core.log("Проверяю обновления…")
     threading.Thread(target=check, args=(quiet,), daemon=True).start()
 
 
