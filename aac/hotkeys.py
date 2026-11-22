@@ -102,6 +102,14 @@ def unregister_hotkeys():
     mouse_bindings.clear()
 
 
+def _fire(ev):
+    import time
+    if ev == "quit" and core.heartbeat and time.time() - core.heartbeat > 3:
+        from . import tray
+        tray.emergency("quit")      # окна зависли — выход сразу
+    core.events.put((ev, None))
+
+
 def register_hotkeys():
     unregister_hotkeys()
     for hid, _, _, ev in HOTKEY_DEFS:
@@ -112,7 +120,7 @@ def register_hotkeys():
                 core.log("Кнопки мыши не работают: установите pynput (py -m pip install pynput)", "error")
             continue
         try:
-            _hotkey_handles.append(keyboard.add_hotkey(combo, lambda ev=ev: core.events.put((ev, None))))
+            _hotkey_handles.append(keyboard.add_hotkey(combo, lambda ev=ev: _fire(ev)))
         except Exception as e:
             core.log(f"Не удалось назначить «{combo}»: {e}", "error")
 

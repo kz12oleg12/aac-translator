@@ -2,6 +2,7 @@
 
 
 import os
+import time
 
 
 import threading
@@ -31,7 +32,14 @@ def start_tray():
         img = Image.new("RGBA", (64, 64), (47, 107, 255, 255))
 
     def put(ev):
-        return lambda icon, item: core.events.put((ev, None))
+        def handler(icon, item):
+            # окна программы зависли (главный цикл не отмечается) — «Перезапустить» и «Выход» срабатывают сразу,
+            # мимо зависшего окна
+            if ev in ("restart", "quit") and core.heartbeat and time.time() - core.heartbeat > 3:
+                emergency(ev)
+            else:
+                core.events.put((ev, None))
+        return handler
 
     menu = pystray.Menu(
         pystray.MenuItem(f"AAC Translator v{config.VERSION}", None, enabled=False),
@@ -71,6 +79,25 @@ def stop_tray():
             _tray.stop()
         except Exception:
             pass
+
+
+def emergency(ev):
+    """Аварийный перезапуск/выход, когда окна не отвечают: без участия зависшего главного потока."""
+    import subprocess
+    import sys
+    if ev == "restart":
+        try:
+            script = os.path.join(config.APP_DIR, "aac_translator.py")
+            subprocess.Popen([sys.executable, script, "--after-pid", str(os.getpid())], cwd=config.APP_DIR,
+                             creationflags=(0x00000008 | 0x00000200) if os.name == "nt" else 0, close_fds=True)
+        except Exception:
+            pass
+    try:
+        if _tray is not None:
+            _tray.visible = False      # убрать значок, чтобы не остался «призрак»
+    except Exception:
+        pass
+    os._exit(0)
 
 
 def _update_version():
