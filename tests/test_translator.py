@@ -1046,6 +1046,22 @@ def test_character_voices(monkey):
     assert said[-1] == ("До встречи.", None), said
     voices.forget(k1)
     assert k1 not in dict(voices.all_chars())
+    if hasattr(voices, "same_name"):
+        # двойники из-за ошибок распознавания: «Dometos» / «Dometosn» / «Дометос» — один персонаж
+        monkey(voices, "ask_ai", None)
+        kd = voices.note_line("Дометос\nПривет.", "Dometos\nHi.")
+        assert voices.note_line("Дометос\nЕщё.", "Dometosn\nMore.") == kd
+        assert voices.note_line("Дометос\nИ ещё.", None) == kd
+        assert not voices.same_name("Marik", "Mario") and voices.same_name("Дометос", "Дометоса")
+        # уже сохранённые двойники склеиваются при загрузке (ручной пол не теряется)
+        json.dump({"dometos": {"en": "Dometos", "ru": "Дометос", "lines": 5, "f": 0, "m": 1},
+                   "дометос": {"en": "", "ru": "Дометос", "lines": 2, "gender_manual": "f"},
+                   "dometosn": {"en": "Dometosn", "ru": "Дометосн", "lines": 1}},
+                  open(voices.FILE, "w", encoding="utf-8"))
+        monkey(voices, "_data", {"loaded": False, "chars": {}})
+        chars = dict(voices.all_chars())
+        assert list(chars) == ["dometos"] and chars["dometos"]["lines"] == 8, chars
+        assert chars["dometos"]["gender_manual"] == "f"
     if hasattr(voices, "flip_last"):
         # новый персонаж: нейросеть угадывает пол по имени и реплике — сразу, уже для первой реплики
         asked = []

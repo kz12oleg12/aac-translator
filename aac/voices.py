@@ -68,6 +68,53 @@ def _load():
             _data["chars"] = json.load(f)
     except Exception:
         _data["chars"] = {}
+    if _dedupe():
+        _save()
+
+
+def _norm(name):
+    return re.sub(r"[^\w]", "", (name or "").lower()).replace("ё", "е")
+
+
+def same_name(a, b):
+    """Одно и то же имя с ошибкой распознавания: «Dometos» / «Dometosn», «Дометос» / «Дометоса»."""
+    import difflib
+    a, b = _norm(a), _norm(b)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if min(len(a), len(b)) < 4 or abs(len(a) - len(b)) > 2:
+        return False
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.85
+
+
+def _same_char(c1, c2):
+    return (same_name(c1.get("en"), c2.get("en")) or same_name(c1.get("ru"), c2.get("ru")))
+
+
+def _merge(into, other):
+    for k in ("f", "m", "lines"):
+        into[k] = into.get(k, 0) + other.get(k, 0)
+    into["seen"] = max(into.get("seen", 0), other.get("seen", 0))
+    for k, v in other.items():
+        if k not in into or into[k] in ("", None):
+            into[k] = v          # ручной пол/голос, имя по-английски или по-русски — если у основного нет
+
+
+def _dedupe():
+    """Склеить двойников (один персонаж, имя распознано по-разному). True — что-то склеили."""
+    chars = _data["chars"]
+    order = sorted(chars, key=lambda k: -chars[k].get("lines", 0))   # основной — у кого больше реплик
+    merged = False
+    for i, k in enumerate(order):
+        if k not in chars:
+            continue
+        for k2 in order[i + 1:]:
+            if k2 in chars and _same_char(chars[k], chars[k2]):
+                _merge(chars[k], chars.pop(k2))
+                merged = True
+    return merged
 
 
 def _save():
@@ -180,6 +227,9 @@ def gender_hint(src):
     with _lock:
         _load()
         c = _data["chars"].get(key_of(name))
+        if c is None:
+            probe = {"en": name, "ru": name}
+            c = next((x for x in _data["chars"].values() if _same_char(probe, x)), None)
         g = known_gender(c) if c else None
     if not g:
         return ""
@@ -210,16 +260,17 @@ def note_line(translation, orig=None):
     f, m = gender_votes(translation)
     with _lock:
         _load()
-        if key not in _data["chars"] and ru:
-            # тот же персонаж, но в прошлый раз имя пришло по-русски (или наоборот) — не заводим двойника
+        if key not in _data["chars"]:
+            # тот же персонаж, но имя пришло по-русски (или наоборот) или с ошибкой распознавания — не двойник
+            probe = {"en": en, "ru": ru}
             for k, c in _data["chars"].items():
-                if c.get("ru") == ru or (en and c.get("en") == en):
+                if _same_char(probe, c):
                     key = k
                     break
         c = _data["chars"].setdefault(key, {"en": en, "ru": ru, "guess": guess_by_name(en, ru), "f": 0, "m": 0})
         if en and not c.get("en"):
             c["en"] = en
-        if ru:
+        if ru and not c.get("ru"):
             c["ru"] = ru
         c["f"] = c.get("f", 0) + f
         c["m"] = c.get("m", 0) + m
