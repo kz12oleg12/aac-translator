@@ -344,6 +344,7 @@ class App:
         self.pick_area("Обведите ЗАДАНИЕ / текст для разового перевода.", done)
 
     def _poll(self):
+        core.heartbeat = time.time()
         try:
             while True:
                 kind, payload = core.events.get_nowait()

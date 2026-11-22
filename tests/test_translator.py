@@ -366,14 +366,45 @@ def test_single_instance():
         print("   (порт занят — пропуск)")
         return
     assert T.single_instance() is True
-    code = ("import sys,types\nfor m in ('keyboard','tkinter'): sys.modules[m]=types.ModuleType(m)\n"
-            f"sys.path.insert(0,{ROOT!r})\n")
-    code += ("from aac import main as a\n" if T.kind == "package" else "import aac_translator as a\n")
-    code += "print(a.single_instance())"
-    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=30)
-    assert r.stdout.strip().endswith("False"), r.stdout + r.stderr
+
+    def second(extra="", call="a.single_instance()"):
+        code = ("import sys,types\nfor m in ('keyboard','tkinter'): sys.modules[m]=types.ModuleType(m)\n"
+                f"sys.path.insert(0,{ROOT!r})\n")
+        code += ("from aac import main as a\n" if T.kind == "package" else "import aac_translator as a\n")
+        code += extra + f"print({call})"
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60)
+        return r.stdout.strip() + r.stderr
+    # та же версия, программа жива — вторая копия показывает панель первой и выходит
+    out = second()
+    assert out.endswith("False"), out
     time.sleep(0.3)
     assert any(k == "second_copy" for k, _ in drain())
+    if not hasattr(T._owner("single_instance"), "_ask"):
+        return
+    # запускается более новая версия — просит старую закрыться
+    out = second("a.config.VERSION = '99.0'\n", "a.single_instance(takeover_wait=1)")
+    time.sleep(0.3)
+    assert any(k == "quit" for k, _ in drain()), out
+    # программа «зависла» (окна не отвечают) — новая копия не уступает ей, а пытается закрыть
+    core_mod = T._owner("heartbeat")
+    monkey_old = core_mod.heartbeat
+    core_mod.heartbeat = 0
+    out = second("", "a._ask('hello 1.0')")
+    core_mod.heartbeat = monkey_old
+    assert out.endswith("hung"), out
+
+
+def test_port_owner_parse(monkey):
+    """Поиск процесса, который держит порт программы (вывод netstat в Windows, в т.ч. русской)."""
+    m = T._owner("single_instance")
+    if not hasattr(m, "_port_owner_pid"):
+        return
+    out = ("\nАктивные подключения\n\n  Имя    Локальный адрес        Внешний адрес          Состояние       PID\n"
+           "  TCP    127.0.0.1:47911        0.0.0.0:0              ПРОСЛУШИВАНИЕ   5520\n"
+           "  TCP    127.0.0.1:47911        127.0.0.1:50001        TIME_WAIT       0\n"
+           "  TCP    127.0.0.1:479110       0.0.0.0:0              LISTENING       77\n")
+    monkey(m.subprocess, "run", lambda *a, **k: types.SimpleNamespace(stdout=out))
+    assert m._port_owner_pid(47911) == 5520
 
 
 def test_settings_roundtrip():

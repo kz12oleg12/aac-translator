@@ -4,6 +4,9 @@ import ctypes
 
 
 import threading
+import os
+import time
+import subprocess
 
 
 from . import updater, tts, appwin, config, core, game, hotkeys, translate, tray, watcher
@@ -47,30 +50,111 @@ def apply_saved_provider():
     apply_view_settings()
 
 
-def single_instance():
-    """True — мы первая копия. Если программа уже запущена — просим её показать панель и выходим."""
+NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+
+
+def _port_owner_pid(port):
+    """Номер процесса, который держит порт (Windows, через netstat). None — не нашли."""
+    try:
+        out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, timeout=10,
+                             creationflags=NO_WINDOW).stdout
+        for ln in out.splitlines():
+            parts = ln.split()
+            if len(parts) >= 5 and parts[1].endswith(f":{port}") and parts[-1].isdigit() \
+                    and parts[2] in ("0.0.0.0:0", "*:*", "[::]:0"):
+                return int(parts[-1])
+    except Exception:
+        pass
+    return None
+
+
+def _kill(pid):
+    try:
+        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=10, creationflags=NO_WINDOW)
+    except Exception:
+        pass
+
+
+def _ask(msg, timeout=2.0):
+    """Отправить сообщение запущенной копии; ответ (строка, может быть пустой) или None — не подключились."""
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", config.SINGLE_PORT), timeout=timeout) as c:
+            c.settimeout(timeout)
+            c.sendall(msg.encode())
+            try:
+                return c.recv(64).decode(errors="ignore").strip()
+            except OSError:
+                return ""          # подключились, но не ответила: старая версия или зависла
+    except OSError:
+        return None
+
+
+def single_instance(takeover_wait=8.0):
+    """True — мы единственная копия. Если программа уже запущена:
+    — та же или более новая версия и отвечает → просим её показать панель и выходим;
+    — старая версия или зависла → закрываем её и запускаемся сами."""
     import socket
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         srv.bind(("127.0.0.1", config.SINGLE_PORT))
     except OSError:
-        try:
-            with socket.create_connection(("127.0.0.1", config.SINGLE_PORT), timeout=2) as c:
-                c.sendall(b"show")
-        except OSError:
-            pass
-        return False
+        reply = _ask(f"hello {config.VERSION}")
+        if reply and reply.startswith("aac "):
+            ver = (reply.split() + [""])[1]
+            from . import updater
+            if not updater.is_newer(config.VERSION, ver):
+                _ask("show")
+                return False
+            print(f"Запущена старая версия {ver} — закрываю её")
+            _ask("quit")
+        else:
+            print("Запущенная копия не отвечает (старая версия или зависла) — закрываю её")
+        pid = _port_owner_pid(config.SINGLE_PORT)
+        killed = False
+        t0 = time.time()
+        while True:
+            time.sleep(0.5)
+            try:
+                srv.bind(("127.0.0.1", config.SINGLE_PORT))
+                break
+            except OSError:
+                waited = time.time() - t0
+                if not killed and (waited > 3 or not (reply or "").startswith("aac ")) and pid and pid != os.getpid():
+                    _kill(pid)
+                    killed = True
+                if waited > takeover_wait:
+                    return False
+        core.log("Предыдущая копия программы (старая или зависшая) закрыта", "warn")
     srv.listen(5)
 
     def serve():
         while True:
             try:
                 conn, _ = srv.accept()
-                with conn:
-                    if conn.recv(16).startswith(b"show"):
-                        core.events.put(("second_copy", None))
             except OSError:
                 return
+            try:
+                with conn:
+                    conn.settimeout(2)
+                    msg = conn.recv(32)
+                    if msg.startswith(b"hello"):
+                        # окна программы живы? (главный цикл отмечается каждые 50 мс) — иначе мы «зависли»
+                        alive = time.time() - core.heartbeat < 5
+                        conn.sendall((f"aac {config.VERSION} {os.getpid()}" if alive else "hung").encode())
+                    elif msg.startswith(b"quit"):
+                        core.log("Запущена более новая версия — эта копия закрывается", "warn")
+                        core.events.put(("quit", None))
+                        conn.sendall(b"ok")
+                    elif msg.startswith(b"show"):
+                        core.events.put(("second_copy", None))
+                        conn.sendall(b"ok")
+                    # ждём, пока закроет собеседник: тогда «хвост» соединения остаётся у него,
+                    # а порт программы сразу свободен для следующего запуска
+                    conn.recv(1)
+            except OSError:
+                continue
+    core.heartbeat = time.time()
     threading.Thread(target=serve, daemon=True).start()
     return True
 
