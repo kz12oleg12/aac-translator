@@ -18,6 +18,7 @@ from . import capture, config, core, game, history, llm, mt, ocr, translate
 _LINE = re.compile(r"^((?:\s*\[[^\]]{1,20}\])*\s*[^\s:\[\]][^:\[\]]{0,24}?\s*[:：]\s*)(.+)$")
 _SYSTEM_HINT = re.compile(r"^\s*\[[^\]]{1,20}\]")
 
+hide_for_capture = lambda on: False      # подставляет окно программы (режим «перевод поверх чата»)
 seen = collections.deque(maxlen=400)       # ключи уже переведённых строк
 _seen_set = set()
 _state = {"prev": None, "started": False}
@@ -131,7 +132,15 @@ def translate_outgoing(text):
 def _step():
     """Одна проверка области чата (вызывается раз в секунду)."""
     reg = core.chat_region
-    img = capture.mask_out(capture.grab(reg), reg, list(core.own_rects))   # панель и окна программы — не чат
+    hidden = hide_for_capture(True)        # перевод лежит поверх чата — на миг делаем его прозрачным
+    try:
+        if hidden:
+            time.sleep(0.04)                   # дать Windows перерисовать экран без нашего окна
+        shot = capture.grab(reg)
+    finally:
+        if hidden:
+            hide_for_capture(False)
+    img = capture.mask_out(shot, reg, list(core.own_rects))   # панель и окна программы — не чат
     try:
         lines = read_lines(img)
     except core.ApiError as e:

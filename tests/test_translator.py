@@ -478,7 +478,26 @@ def test_gui_smoke(monkey):
             app.chat_out_ready("Привет", "Hi there")
             ok_clip = app.root.clipboard_get() == "Hi there" and "Скопировано" in app.compose_info.cget("text")
             app._close_compose()
-            done["chat"] = ok_chat and ok_clip
+            ok_style = True
+            if hasattr(app.chat, "cover"):
+                cfg = T._owner("CHAT_COVER")
+                core_m = T._owner("chat_region")
+                core_m.chat_region = (100, 400, 380, 90)
+                # предельная высота: старые сообщения уходят, окно не выше предела
+                cfg.CHAT_COVER, cfg.CHAT_HEIGHT = False, 70
+                app.show_chat([(f"P{i}: ", f"сообщение номер {i}") for i in range(8)])
+                ok_style = app.chat._pos()[1] <= 70 and len(app.chat_lines) < 9
+                # поверх чата: ровно на месте области чата
+                cfg.CHAT_COVER = True
+                app.show_chat([("Z: ", "ещё одно")])
+                ok_style = ok_style and app.chat._pos() == (380, 90, 100, 400)
+                cfg.CHAT_FG, cfg.CHAT_ALPHA = "#ffe08a", 0.6
+                app.chat.apply_style()
+                ok_style = ok_style and app.chat.label.cget("fg") == "#ffe08a"
+                cfg.CHAT_COVER, cfg.CHAT_HEIGHT, cfg.CHAT_FG, cfg.CHAT_ALPHA = False, 0, "#eeeeee", 0.85
+                core_m.chat_region = None
+                app.chat.apply_style()
+            done["chat"] = ok_chat and ok_clip and ok_style
         if hasattr(app, "restart"):     # «Перезапустить»: новая копия с --after-pid, эта — закрывается
             started = []
             real = subprocess.Popen

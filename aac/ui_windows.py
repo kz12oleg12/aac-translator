@@ -198,7 +198,7 @@ class SettingsWindow:
 
     def __init__(self, app):
         self.app = app
-        self.win = w = _normal_window(app, "AAC Translator — настройки", "1000x560")
+        self.win = w = _normal_window(app, "AAC Translator — настройки", "1000x780")
         left = tk.Frame(w, bg="#1a1d23")
         left.pack(side="left", fill="both", expand=True, pady=6)
         right = tk.Frame(w, bg="#1d2129")
@@ -252,6 +252,27 @@ class SettingsWindow:
         check(left, "Пополнять словарь сам (имена, предметы, места)", self.gl_auto)
         self.indicator = tk.BooleanVar(value=config.SHOW_INDICATOR)
         check(left, "Значок «● AAC» поверх игры, пока включён автоперевод", self.indicator)
+
+        # ----- окно чата -----
+        title(left, "Окно перевода чата")
+        self.chat_cover = tk.BooleanVar(value=config.CHAT_COVER)
+        check(left, "Показывать перевод прямо поверх чата игры (та же область)", self.chat_cover)
+        label(left, "Предельная высота окна чата, px (0 — сколько займут сообщения)")
+        self.chat_height = tk.IntVar(value=config.CHAT_HEIGHT)
+        scale(left, self.chat_height, 0, 600, 20)
+        label(left, "Непрозрачность окна чата, %")
+        self.chat_alpha = tk.IntVar(value=int(round(config.CHAT_ALPHA * 100)))
+        scale(left, self.chat_alpha, 20, 100, 5)
+        crow = tk.Frame(left, bg=left["bg"])
+        crow.pack(fill="x", padx=16, pady=(6, 0))
+        tk.Label(crow, text="Цвет текста:", fg="#ddd", bg=left["bg"], font=("Segoe UI", 10)).pack(side="left")
+        self.chat_fg_btn = tk.Button(crow, text="  Аа  ", bg="#111", fg=config.CHAT_FG, relief="flat", bd=0,
+                                     font=("Segoe UI", 10, "bold"), activebackground="#222", cursor="hand2",
+                                     command=self._pick_chat_color)
+        self.chat_fg_btn.pack(side="left", padx=8)
+        for col in ("#eeeeee", "#ffe08a", "#8cf0ff", "#9dff9d", "#ffb3e6"):
+            tk.Button(crow, text=" ", bg=col, activebackground=col, relief="flat", bd=0, width=2, cursor="hand2",
+                      command=lambda c=col: self._set_chat_color(c)).pack(side="left", padx=2)
 
         # ----- озвучка -----
         title(right, "Озвучка субтитров")
@@ -442,6 +463,18 @@ class SettingsWindow:
         else:
             self.voice_note.config(text=f"Русские голоса: {', '.join(ru)}")
 
+    def _pick_chat_color(self):
+        from tkinter import colorchooser
+        col = colorchooser.askcolor(color=config.CHAT_FG, title="Цвет текста перевода чата", parent=self.win)[1]
+        if col:
+            self._set_chat_color(col)
+
+    def _set_chat_color(self, col):
+        config.CHAT_FG = col
+        core.save_settings(chat_fg=col)
+        self.chat_fg_btn.config(fg=col)
+        self.changed()
+
     def _test_voice(self):
         self.changed()
         tts.say_test()
@@ -463,6 +496,10 @@ class SettingsWindow:
         config.SHOW_INDICATOR = bool(self.indicator.get())
         config.GLOSSARY_AUTO = bool(self.gl_auto.get())
         config.SKIP_SYSTEM = bool(self.skip_sys.get())
+        config.CHAT_COVER = bool(self.chat_cover.get())
+        config.CHAT_HEIGHT = int(self.chat_height.get())
+        config.CHAT_ALPHA = int(self.chat_alpha.get()) / 100
+        core.save_settings(chat_cover=config.CHAT_COVER, chat_height=config.CHAT_HEIGHT, chat_alpha=config.CHAT_ALPHA)
         core.save_settings(skip_system=config.SKIP_SYSTEM)
         core.save_settings(glossary_auto=config.GLOSSARY_AUTO)
         core.save_settings(show_indicator=config.SHOW_INDICATOR)
@@ -505,8 +542,9 @@ class SettingsWindow:
             tts.apply_settings()
             if was_on and not config.TTS_ENABLED:
                 tts.stop()
-        for ov in (self.app.subs, self.app.answers, self.app.quest):
-            ov.apply_style()
+        for ov in (self.app.subs, self.app.answers, self.app.quest, getattr(self.app, "chat", None)):
+            if ov is not None:
+                ov.apply_style()
         if config.SUBS_HISTORY == 0:
             self.app.subs.clear_history()
 

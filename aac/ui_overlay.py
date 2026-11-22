@@ -71,6 +71,11 @@ class Overlay:
         self.leader = None
         self.followers = []
         self._geom = None
+        # своё оформление (окно чата): прозрачность, цвет текста, «поверх области», предельная высота
+        self.style_alpha = None       # функция → число или None (как у всех окон)
+        self.style_fg = None          # функция → цвет или None
+        self.cover = None             # функция → прямоугольник, который окно должно накрыть целиком, или None
+        self.max_height = None        # функция → px или None
         # manual = вы сами перетащили окно: оно больше не прилипает к области (F11 — вернуть авто)
         self.manual = core.SETTINGS.get(f"{name}_manual", False)
         width = core.SETTINGS.get(f"{name}_width", width)
@@ -184,11 +189,11 @@ class Overlay:
 
     def apply_style(self):
         """Применить размер шрифта и прозрачность из настроек."""
-        self.label.config(font=config.FONT)
+        self.label.config(font=config.FONT, fg=(self.style_fg() if self.style_fg else None) or "#eee")
         self.hist_label.config(font=config.HISTORY_FONT)
         self.orig_label.config(font=("Segoe UI", max(8, config.FONT[1] - 3)))
         try:
-            self.win.attributes("-alpha", config.OVERLAY_ALPHA)
+            self.win.attributes("-alpha", (self.style_alpha() if self.style_alpha else None) or config.OVERLAY_ALPHA)
         except Exception:
             pass
         if not config.SHOW_ORIGINAL and self.orig_label.winfo_manager():
@@ -225,6 +230,15 @@ class Overlay:
             lab.config(wraplength=w - 32)
 
     def fit(self):
+        rect = self.cover() if self.cover else None
+        if rect:
+            # окно лежит точно поверх области (перевод на месте оригинала)
+            x0, y0, rw, rh = (int(v) for v in rect)
+            if self.width != rw:
+                self.width = rw
+                self._set_wrap(rw)
+            self._place(rw, rh, x0, y0)
+            return
         if self.leader is not None:
             # склеено: вплотную под окном субтитров, та же ширина (если субтитров нет — на их месте)
             lw, lh, lx, ly = self.leader._pos()
@@ -280,6 +294,13 @@ class Overlay:
         self._place(self.width, h, x, y)
 
     def _content_height(self):
+        h = sum(w.winfo_reqheight() for w in self.win.pack_slaves() if w is not self.grip)
+        limit = self.max_height() if self.max_height else None
+        return min(h, limit) if limit else h
+
+    def natural_height(self):
+        """Сколько окну нужно по содержимому (без ограничения высоты)."""
+        self.win.update_idletasks()
         return sum(w.winfo_reqheight() for w in self.win.pack_slaves() if w is not self.grip)
 
     def push(self, text, orig=None):

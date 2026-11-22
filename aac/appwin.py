@@ -47,7 +47,15 @@ class App:
         self.chat = ui_overlay.Overlay(tk.Toplevel(self.root), "chat", (20, max(60, self.root.winfo_screenheight() // 2)), config.CHAT_WIDTH,
                                        title="💬 Чат (правый клик — скрыть)")
         self.chat.anchor = lambda: core.chat_region
+        self.chat.cover = lambda: core.chat_region if config.CHAT_COVER else None
+        self.chat.max_height = lambda: (core.chat_region[3] if (config.CHAT_COVER and core.chat_region)
+                                        else config.CHAT_HEIGHT or None)
+        self.chat.style_alpha = lambda: config.CHAT_ALPHA
+        self.chat.style_fg = lambda: config.CHAT_FG
+        self.chat.label.config(anchor="sw")    # как в игровом чате: свежие сообщения внизу
+        self.chat.apply_style()
         self.chat.hide()
+        self.chat.win.after(400, self._remember_chat_hwnd)
         self.chat_lines = []
         self.chat_last = 0.0
         self.indicator = ui_overlay.Indicator(tk.Toplevel(self.root))   # «● AAC: перевод вкл»
@@ -249,6 +257,8 @@ class App:
         Windows обычно сама прячет их от снимков, но не везде это срабатывает — подстраховываемся."""
         rects = []
         for w in [self.root] + [c for c in self.root.winfo_children() if isinstance(c, tk.Toplevel)]:
+            if config.CHAT_COVER and w is self.chat.win:
+                continue      # окно чата поверх области на время снимка становится прозрачным само
             try:
                 if w.winfo_ismapped() and w.state() != "withdrawn":
                     rects.append((w.winfo_rootx(), w.winfo_rooty(), w.winfo_width(), w.winfo_height()))
@@ -263,6 +273,31 @@ class App:
         self.chat_lines = self.chat_lines[-config.CHAT_LINES:]
         self.chat_last = time.time()
         self.chat.show("\n".join(self.chat_lines))
+        # ограничение высоты: старые сообщения уходят сверху, пока свежие не поместятся
+        limit = self.chat.max_height() if self.chat.max_height else None
+        while limit and len(self.chat_lines) > 1 and self.chat.natural_height() > limit:
+            self.chat_lines.pop(0)
+            self.chat.label.config(text="\n".join(self.chat_lines))
+        self.chat.fit()
+
+    def _remember_chat_hwnd(self):
+        """Окно чата «поверх области»: на время снимка чата делаем его прозрачным (иначе прочитаем себя)."""
+        try:
+            hwnd = int(self.chat.win.wm_frame(), 16)
+        except Exception:
+            hwnd = None
+
+        def hide_for_capture(on):
+            if not (config.CHAT_COVER and self.chat.visible and hwnd):
+                return False
+            try:
+                import ctypes
+                alpha = 0 if on else int(255 * config.CHAT_ALPHA)
+                ctypes.windll.user32.SetLayeredWindowAttributes(hwnd, 0, alpha, 2)   # LWA_ALPHA
+                return True
+            except Exception:
+                return False
+        chat.hide_for_capture = hide_for_capture
 
     def select_chat_region(self):
         def done(reg):
