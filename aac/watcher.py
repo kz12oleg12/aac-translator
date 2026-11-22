@@ -35,6 +35,38 @@ def translate_once(reg, speak=False):
         once_lock.release()
 
 
+subs_once_lock = threading.Lock()
+
+
+def translate_subs_once():
+    """Перевести субтитры один раз — по сохранённой области, без обводки мышкой и без автоперевода."""
+    if core.region is None:
+        core.log(f"Сначала выделите область субтитров ({hotkeys.K('select')}).", "warn")
+        return
+    if not subs_once_lock.acquire(blocking=False):
+        return
+    try:
+        core.events.put(("busy", ("Субтитры", True)))     # «⏳» в заголовке окна субтитров
+        img = capture.mask_out(capture.grab(core.region), core.region, [core.answers_region, core.region2])
+        text, err = translate.safe_translate(img, config.PROMPT)
+        core.events.put(("busy", ("Субтитры", False)))
+        if err == "rate":
+            err = "лимит запросов — подождите несколько секунд и нажмите ещё раз"
+        if err:
+            core.log(f"Субтитры: {err}", "error")
+        elif not text:
+            core.log("Субтитры: в области сейчас нет текста", "warn")
+        else:
+            core.events.put(("subs_from", "subs_hide"))
+            orig = history.last_source()
+            core.events.put(("text", (text, orig)))
+            history.history_add("Субтитры", orig, text)
+            _remember_subtitle(text)
+            tts.speak_subtitle_once(text, None, orig)
+    finally:
+        subs_once_lock.release()
+
+
 answers_once_lock = threading.Lock()
 
 

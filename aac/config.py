@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "6.7"
+VERSION = "6.8"
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # папка программы (настройки, словарь, история, иконки)
 
 # ===================== НАСТРОЙКИ =====================
@@ -81,6 +81,7 @@ TARGET_LANG = "русский"
 
 HOTKEY_AUTO = "f8"
 HOTKEY_ONCE = "f7"
+HOTKEY_SUBS_ONCE = "shift+f8"       # перевести субтитры один раз (по сохранённой области, без автоперевода)
 HOTKEY_ANSWERS_ONCE = "shift+f7"   # перевести варианты ответа один раз (по сохранённой области)
 HOTKEY_SELECT = "f9"
 HOTKEY_SELECT_ANSWERS = "shift+f9"

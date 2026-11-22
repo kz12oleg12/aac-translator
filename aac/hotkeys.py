@@ -13,6 +13,7 @@ from . import config, core
 # ---------- горячие клавиши (переназначаются кнопками «изменить» в системной панели) ----------
 HOTKEY_DEFS = [  # (id, что делает, клавиша по умолчанию, событие)
     ("once", "перевести задание", config.HOTKEY_ONCE, "once"),
+    ("subs_once", "перевести субтитры", config.HOTKEY_SUBS_ONCE, "subs_once"),
     ("answers_once", "перевести ответы", config.HOTKEY_ANSWERS_ONCE, "answers_once"),
     ("once_tts", "обвести и озвучить", config.HOTKEY_ONCE_TTS, "once_tts"),
     ("tooltip", "подсказка у мыши", config.HOTKEY_TOOLTIP, "tooltip_key"),

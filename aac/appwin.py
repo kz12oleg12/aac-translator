@@ -445,6 +445,8 @@ class App:
                     self.select_quest_once(speak=True)
                 elif kind == "once":
                     self.select_quest_once()
+                elif kind == "subs_once":
+                    threading.Thread(target=watcher.translate_subs_once, daemon=True).start()
                 elif kind == "answers_once":
                     threading.Thread(target=watcher.translate_answers_once, daemon=True).start()
                 elif kind == "toggle":

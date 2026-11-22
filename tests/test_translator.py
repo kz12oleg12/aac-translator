@@ -748,6 +748,29 @@ def test_limits_and_glossary_learning(monkey):
     assert not g.learn("Dawn Blade", "Клинок рассвета")
 
 
+def test_subs_once(monkey):
+    """«Перевести субтитры» (Shift+F8): один раз по сохранённой области, с озвучкой и историей."""
+    w = T._owner("translate_once")
+    if not hasattr(w, "translate_subs_once"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    from PIL import Image
+    monkey(w.core, "region", (0, 0, 10, 10))
+    monkey(w.translate, "safe_translate", lambda img, prompt=None: ("Кеспер\nПривет!", None))
+    monkey(w.capture, "grab", lambda reg: Image.new("RGB", (10, 10)))
+    spoken = []
+    monkey(w.tts, "speak_subtitle_once", lambda t, *a: spoken.append(t))
+    drain()
+    w.translate_subs_once()
+    ev = drain()
+    assert ("subs_from", "subs_hide") in ev and ("text", ("Кеспер\nПривет!", None)) in [
+        (k, (p[0], None) if isinstance(p, tuple) else p) for k, p in ev], ev
+    assert spoken == ["Кеспер\nПривет!"]
+    monkey(w.core, "region", None)
+    w.translate_subs_once()
+    assert any(k == "log" and "выделите область субтитров" in p[1] for k, p in drain())
+
+
 def test_dock_overlays(monkey):
     """Ответы и субтитры одним окном: ответы вплотную под субтитрами, двигаются и тянутся вместе."""
     if not GUI:
