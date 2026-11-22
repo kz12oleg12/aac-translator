@@ -130,8 +130,10 @@ class App:
             self.quest.hide()
             self.answers.hide()
             self.chat.hide()
-        elif self.subs.label.cget("text"):
-            self.subs.show(self.subs.label.cget("text"))
+        else:
+            if self.subs.label.cget("text"):
+                self.subs.show(self.subs.label.cget("text"))
+            self.show_chat_window()
 
     def pick_area(self, prompt, on_done, on_clear=None):
         """Затемняет экран и даёт обвести прямоугольник мышкой."""
@@ -314,6 +316,13 @@ class App:
             except Exception:
                 return False
         chat.hide_for_capture = hide_for_capture
+
+    def show_chat_window(self):
+        """Вернуть окно чата (после правого клика): последние переводы или подсказку."""
+        self.chat.show("\n".join(self.chat_lines) if self.chat_lines else
+                       "Здесь появятся переводы новых сообщений чата.")
+        self.chat_last = time.time()
+        self._trim_chat()
 
     def select_chat_region(self):
         def done(reg):
@@ -646,6 +655,8 @@ class App:
                     self.show_chat(payload)
                 elif kind == "select_chat":
                     self.select_chat_region()
+                elif kind == "chat_show":
+                    self.show_chat_window()
                 elif kind == "chat_compose":
                     self.chat_compose()
                 elif kind == "chat_out":

@@ -52,6 +52,7 @@ def start_tray():
                          checked=lambda item: config.ANSWERS_DOCKED),
         pystray.MenuItem("Системная панель", put("panel_toggle"), default=True),
         pystray.MenuItem("Скрыть / показать переводы", put("toggle")),
+        pystray.MenuItem("Показать окно чата", put("chat_show")),
         pystray.MenuItem("Окна и области", put("layout")),
         pystray.MenuItem("Окна на место", put("reset")),
         pystray.MenuItem("История переводов", put("history_open")),

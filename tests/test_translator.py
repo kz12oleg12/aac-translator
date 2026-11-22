@@ -500,6 +500,10 @@ def test_gui_smoke(monkey):
                 cfg.CHAT_COVER, cfg.CHAT_HEIGHT, cfg.CHAT_FG, cfg.CHAT_ALPHA = False, 0, "#eeeeee", 0.85
                 core_m.chat_region = None
                 app.chat.apply_style()
+            if hasattr(app, "show_chat_window"):     # закрыли правым кликом — вернуть
+                app.chat.hide()
+                app.show_chat_window()
+                ok_style = ok_style and app.chat.visible
             done["chat"] = ok_chat and ok_clip and ok_style
         if hasattr(app, "restart"):     # «Перезапустить»: новая копия с --after-pid, эта — закрывается
             started = []
