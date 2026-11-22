@@ -512,6 +512,10 @@ def test_gui_smoke(monkey):
                 cfg.CHAT_COVER, cfg.CHAT_HEIGHT, cfg.CHAT_FG, cfg.CHAT_ALPHA = False, 0, "#eeeeee", 0.85
                 core_m.chat_region = None
                 app.chat.apply_style()
+            if hasattr(app, "chat_btn"):             # кнопка «Перевести» на окне чата
+                drain()
+                app.chat_btn.invoke()
+                ok_style = ok_style and any(k == "chat_once" for k, _ in drain())
             if hasattr(app, "show_chat_window"):     # закрыли правым кликом — вернуть
                 app.chat.hide()
                 app.show_chat_window()

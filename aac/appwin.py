@@ -53,6 +53,12 @@ class App:
         self.chat.style_alpha = lambda: config.CHAT_ALPHA
         self.chat.style_fg = lambda: config.CHAT_FG
         self.chat.label.config(anchor="sw")    # как в игровом чате: свежие сообщения внизу
+        # кнопка «Перевести» прямо на окне чата (справа в заголовке)
+        self.chat_btn = tk.Button(self.chat.win, text="⟳ Перевести", font=("Segoe UI", 8), relief="flat", bd=0,
+                                  highlightthickness=0, padx=6, bg="#2b3040", fg="#8cf", activebackground="#3a4258",
+                                  activeforeground="#fff", cursor="hand2",
+                                  command=lambda: core.events.put(("chat_once", None)))
+        self.chat_btn.place(relx=1.0, x=-14, y=2, anchor="ne")
         self.chat.enable_height_grip(self._chat_height_drag,
                                      lambda: core.save_settings(chat_height=config.CHAT_HEIGHT))
         self.chat.apply_style()
@@ -734,8 +740,6 @@ class App:
         except queue.Empty:
             pass
         self._tick = getattr(self, "_tick", 0) + 1
-        if self.chat.visible and self.chat_last and time.time() - self.chat_last > config.CHAT_SHOW_TIME:
-            self.chat.hide()       # давно не было новых сообщений чата
         if self._tick % 6 == 0:    # где сейчас наши окна — их закрашиваем на снимках областей
             self._update_own_rects()
         if self._tick % 10 == 0:   # 2 раза в секунду проверяем, игра ли на переднем плане
