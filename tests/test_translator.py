@@ -1692,6 +1692,26 @@ def test_key_hints_skipped():
         assert not is_key_hints(ln), ln
 
 
+def test_quest_key_closes_window(monkey):
+    """Окно задания открыто — клавиша «перевести задание» его закрывает (мышкой не дотянуться в игре)."""
+    if not GUI:
+        print("   (без экрана — пропуск)")
+        return
+    T.set("SETTINGS", {})
+    app = T.App()
+    try:
+        picked = []
+        monkey(app, "pick_area", lambda *a, **k: picked.append(a))
+        app.quest.show("Найдите том II")
+        app.root.update()
+        app.select_quest_once()
+        assert not app.quest.visible and not picked, "первое нажатие — закрыть окно"
+        app.select_quest_once()
+        assert picked, "второе нажатие — обвести новое задание"
+    finally:
+        app.root.destroy()
+
+
 # ---------- запуск ----------
 def main():
     print(f"Проверяю: {ROOT}  ({T.kind}, версия {T.VERSION})\n")

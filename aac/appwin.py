@@ -614,6 +614,10 @@ class App:
         self.pick_area("Обведите область ВАРИАНТОВ ОТВЕТА (для автоперевода).", done)
 
     def select_quest_once(self, speak=False):
+        if self.quest.visible:
+            # окно задания открыто — та же клавиша его закрывает (мышкой не дотянуться, когда управляете персонажем)
+            self.quest.hide()
+            return
         def done(reg):
             if reg:
                 # небольшая пауза, чтобы затемнение успело пропасть со скриншота
