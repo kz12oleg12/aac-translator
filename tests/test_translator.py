@@ -776,6 +776,10 @@ def test_tts_text_and_calls(monkey):
         assert T.speech_text("Аренда — это важно.", o) == "Аренда — это важно."      # не имя — не трогаем
         assert T.speech_text("Я Итан, рад знакомству.", o) == "Я Итан, рад знакомству."
         assert T.speech_text("Капитан Морган — Вперёд!", "Captain Morgan\nForward!") == "Вперёд!"
+        # имя с должностью (журнал: «Archivist Rotild / Ah, you've already recovered Volume I.»)
+        o2 = "Archivist Rotild\nAh, you've already recovered Volume I."
+        assert T.speech_text("Архивариус Ротильд А, ты уже нашёл первый том.", o2) == "А, ты уже нашёл первый том."
+        assert T.speech_text("Архивист Ротильд — А, ты уже нашёл том.", o2) == "А, ты уже нашёл том."
     monkey(T._owner("TTS_READ_NAME"), "TTS_READ_NAME", True)
     assert T.speech_text("Ренальд\nПривет!") == "Ренальд Привет!"
     assert T.speech_text("Полдат: Привет!") == "Полдат: Привет!"

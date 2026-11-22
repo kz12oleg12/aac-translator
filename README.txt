@@ -1,4 +1,4 @@
-AAC Translator v6.0 — экранный переводчик для ArcheAge Chronicles
+AAC Translator v6.1 — экранный переводчик для ArcheAge Chronicles
 =============================================================
 
 УСТАНОВКА

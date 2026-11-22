@@ -188,8 +188,44 @@ def wait_pid(pid, timeout=30):
         time.sleep(0.2)
 
 
+def _watchdog():
+    """Если окна программы перестали отвечать дольше 8 с — записываем, чем занят каждый поток, в hang.log.
+    Когда отвиснет — пишем в журнал, сколько висела (файл помогает найти причину)."""
+    import sys
+    import traceback
+    path = os.path.join(config.APP_DIR, "hang.log")
+    dumped_at = None
+    while True:
+        time.sleep(2)
+        if not core.heartbeat:
+            continue
+        stale = time.time() - core.heartbeat
+        if stale > 8 and dumped_at is None:
+            dumped_at = time.time() - stale
+            try:
+                names = {t.ident: t.name for t in threading.enumerate()}
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} v{config.VERSION}: окна не отвечают "
+                            f"{stale:.0f} с =====\n")
+                    for ident, frame in sys._current_frames().items():
+                        f.write(f"\n--- поток {names.get(ident, ident)} ---\n")
+                        f.write("".join(traceback.format_stack(frame)))
+            except Exception:
+                pass
+        elif stale < 2 and dumped_at is not None:
+            core.log(f"Программа подвисала на {time.time() - dumped_at:.0f} с. Что она делала — записано в файл "
+                     "hang.log в папке программы, пришлите его, пожалуйста.", "warn")
+            dumped_at = None
+
+
 def main():
     import sys
+    try:   # если программа упадёт целиком — причина попадёт в crash.log
+        import faulthandler
+        faulthandler.enable(open(os.path.join(config.APP_DIR, "crash.log"), "a"))
+    except Exception:
+        pass
+    threading.Thread(target=_watchdog, daemon=True, name="watchdog").start()
     if "--after-pid" in sys.argv:   # кнопка «Перезапустить»
         try:
             wait_pid(sys.argv[sys.argv.index("--after-pid") + 1])

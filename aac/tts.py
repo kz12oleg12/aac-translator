@@ -115,16 +115,32 @@ def _start():
     return True
 
 
+_out_q = queue.Queue()
+_writer = {"t": None}
+
+
+def _writer_loop():
+    """Пишем команды озвучке Windows в отдельном потоке: если она подвиснет, окна программы не зависнут."""
+    while True:
+        line = _out_q.get()
+        p = _proc
+        if p is None or p.poll() is not None:
+            continue
+        try:
+            p.stdin.write(line)
+            p.stdin.flush()
+        except Exception:
+            pass
+
+
 def _send(cmd, arg=""):
     if _proc is None or _proc.poll() is not None:
         return
     text = str(arg).replace("\t", " ").replace("\r", " ").replace("\n", ". ")
-    with _lock:
-        try:
-            _proc.stdin.write(f"{cmd}\t{text}\n".encode("utf-8"))
-            _proc.stdin.flush()
-        except Exception:
-            pass
+    if _writer["t"] is None:
+        _writer["t"] = threading.Thread(target=_writer_loop, daemon=True)
+        _writer["t"].start()
+    _out_q.put(f"{cmd}\t{text}\n".encode("utf-8"))
 
 
 _NAME_PREFIX = re.compile(r"^[A-ZА-ЯЁ][^\s:.!?…,]{0,24}(?:\s+[A-ZА-ЯЁ][^\s:.!?…,]{0,24}){0,2}\s*[:：]\s*(\S.*)$")
@@ -133,11 +149,18 @@ _NAME_PREFIX = re.compile(r"^[A-ZА-ЯЁ][^\s:.!?…,]{0,24}(?:\s+[A-ZА-ЯЁ][^
 def _sounds_like(ru, en):
     """«Итан» похоже на «Ethan»? Сравниваем с грубой русской записью английского имени."""
     import difflib
-    a = re.sub(r"[^а-яё]", "", ru.lower()).replace("ё", "е")
-    b = re.sub(r"[^а-яё]", "", tts_silero.translit(en).lower()).replace("ё", "е")
+    def norm(t):
+        return re.sub(r"[^а-яё]", "", t.lower()).replace("ё", "е")
+    a = norm(ru)
+    b = norm(tts_silero.translit(en))
     if not a or not b:
         return False
-    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.6 or (len(a) >= 3 and a[:3] == b[:3])
+    if difflib.SequenceMatcher(None, a, b).ratio() >= 0.6 or (len(a) >= 3 and a[:3] == b[:3]):
+        return True
+    # имя с должностью: «Архивариус Ротильд» ↔ «Archivist Rotild» — хватит совпадения самого имени
+    ru_words = [norm(w) for w in ru.split() if len(norm(w)) >= 4]
+    en_words = [norm(tts_silero.translit(w)) for w in en.split() if len(w) >= 4]
+    return any(difflib.SequenceMatcher(None, x, y).ratio() >= 0.7 for x in ru_words for y in en_words)
 
 
 def _strip_speaker(text, orig):
