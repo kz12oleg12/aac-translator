@@ -963,6 +963,28 @@ def test_character_voices(monkey):
     assert said[-1] == ("До встречи.", None), said
     voices.forget(k1)
     assert k1 not in dict(voices.all_chars())
+    if hasattr(voices, "flip_last"):
+        # новый персонаж: нейросеть угадывает пол по имени и реплике — сразу, уже для первой реплики
+        asked = []
+        monkey(voices, "ask_ai", lambda prompt: asked.append(prompt) or "f")
+        monkey(cfg, "TTS_DEFAULT_VOICES", {"neural": {"m": "", "f": ""}, "silero": {"m": "", "f": ""}})
+        monkey(cfg, "TTS_RUSSIAN_ONLY", False)
+        k3 = voices.note_line("Видрин\nСапоги из шкуры волка!", "Vidrin\nWolf-hide boots!")
+        assert asked and "Vidrin" in asked[0] and "Wolf-hide boots!" in asked[0], asked
+        assert voices.voice_for(k3, "neural")[0] in voices.NEURAL_POOL["f"]
+        voices.note_line("Видрин\nЕщё раз.", "Vidrin\nAgain.")
+        assert len(asked) == 1                                   # спрашиваем один раз на персонажа
+        # подсказка переводчику о поле говорящего
+        assert "a woman" in voices.gender_hint("Vidrin\nWolf-hide boots!")
+        assert voices.gender_hint("Nobody here.") == ""
+        # клавиша «сменить пол говорящего» — последний персонаж, запоминается
+        assert voices.flip_last()[1] == "m"
+        assert voices.voice_for(k3, "neural")[0] in voices.NEURAL_POOL["m"]
+        assert "a man" in voices.gender_hint("Vidrin\nHi there.")
+        # нейросеть не знает — не мешает остальным догадкам
+        monkey(voices, "ask_ai", lambda prompt: "u")
+        k4 = voices.note_line("Марианна\nДобро пожаловать.", "Marianna\nWelcome.")
+        assert voices.voice_for(k4, "neural")[0] in voices.NEURAL_POOL["f"]
 
 
 def test_tooltip(monkey):

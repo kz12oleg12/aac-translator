@@ -14,9 +14,11 @@ from xml.sax.saxutils import escape
 
 from . import config, core
 
-MODEL_URL = "https://models.silero.ai/models/tts/ru/v4_ru.pt"
+# v5 — новее: живее интонация, правильнее ударения и омографы («зАмок / замОк»). Если не скачается — v4.
+MODELS = [("v5", "https://models.silero.ai/models/tts/ru/v5_ru.pt"),
+          ("v4", "https://models.silero.ai/models/tts/ru/v4_ru.pt")]
 MODEL_DIR = os.path.join(config.APP_DIR, "models")
-MODEL_FILE = os.path.join(MODEL_DIR, "silero_v4_ru.pt")
+MODEL_FILE = os.path.join(MODEL_DIR, "silero_v4_ru.pt")    # путь последней загруженной модели (для проверок)
 SAMPLE_RATE = 24000      # 24 кГц: звучит чисто и считается быстрее, чем 48
 CPU_THREADS = 4          # не забираем все ядра у игры
 
@@ -79,17 +81,29 @@ def _load(time):
         import torch
         import torch.package  # noqa: F401  (загрузчик модели)
         torch.set_num_threads(CPU_THREADS)
-        if not os.path.exists(MODEL_FILE) or os.path.getsize(MODEL_FILE) < 10_000_000:
-            os.makedirs(MODEL_DIR, exist_ok=True)
-            core.log("Silero: скачиваю голоса (~100 МБ, один раз)…", "warn")
-            tmp = MODEL_FILE + ".part"
-            torch.hub.download_url_to_file(MODEL_URL, tmp, progress=False)
-            os.replace(tmp, MODEL_FILE)
-        model = torch.package.PackageImporter(MODEL_FILE).load_pickle("tts_models", "model")
-        model.to(torch.device("cpu"))
-        _model.update(m=model, torch=torch)
-        core.log(f"Silero: голоса загружены за {time.time() - t0:.1f} с", "ok")
-        return model
+        global MODEL_FILE
+        last_err = None
+        for ver, url in MODELS:
+            path = os.path.join(MODEL_DIR, f"silero_{ver}_ru.pt")
+            try:
+                if not os.path.exists(path) or os.path.getsize(path) < 10_000_000:
+                    os.makedirs(MODEL_DIR, exist_ok=True)
+                    core.log(f"Silero: скачиваю голоса {ver} (~100 МБ, один раз)…", "warn")
+                    tmp = path + ".part"
+                    torch.hub.download_url_to_file(url, tmp, progress=False)
+                    os.replace(tmp, path)
+                model = torch.package.PackageImporter(path).load_pickle("tts_models", "model")
+            except Exception as e:
+                last_err = e
+                core.log(f"Silero {ver}: не получилось ({type(e).__name__}: {str(e)[:100]}) — пробую другую версию",
+                         "warn")
+                continue
+            model.to(torch.device("cpu"))
+            MODEL_FILE = path
+            _model.update(m=model, torch=torch, ver=ver)
+            core.log(f"Silero {ver}: голоса загружены за {time.time() - t0:.1f} с", "ok")
+            return model
+        raise RuntimeError(f"модель не загрузилась: {last_err}")
 
 
 def _prosody_rate(level):
@@ -147,6 +161,14 @@ def clean(text):
     return text.strip(" ,:;-—")
 
 
+def _apply(model, kw, **text_kw):
+    """apply_tts с удачными настройками ударений; у старых моделей части параметров нет — без них."""
+    try:
+        return model.apply_tts(**text_kw, **kw, put_stress_homo=True, put_yo_homo=True)
+    except TypeError:
+        return model.apply_tts(**text_kw, **kw)
+
+
 _PITCHES = {-2: "x-low", -1: "low", 0: "medium", 1: "high", 2: "x-high"}
 
 
@@ -161,11 +183,15 @@ def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
     pitch = _PITCHES.get(max(-2, min(2, int(pitch_level))), "medium")
     kw = dict(speaker=voice, sample_rate=SAMPLE_RATE, put_accent=True, put_yo=True)
     with torch.no_grad():
+        audio = None
         if rate != "medium" or pitch != "medium":
             attrs = (f' rate="{rate}"' if rate != "medium" else "") + (f' pitch="{pitch}"' if pitch != "medium" else "")
-            audio = model.apply_tts(ssml_text=f'<speak><prosody{attrs}>{escape(text)}</prosody></speak>', **kw)
-        else:
-            audio = model.apply_tts(text=text, **kw)
+            try:
+                audio = _apply(model, kw, ssml_text=f'<speak><prosody{attrs}>{escape(text)}</prosody></speak>')
+            except Exception:
+                audio = None     # модель не поняла разметку скорости/высоты — читаем обычным голосом
+        if audio is None:
+            audio = _apply(model, kw, text=text)
     pcm = (audio.clamp(-1, 1) * 32767).to(torch.int16).tolist()
     with wave.open(path, "wb") as w:
         w.setnchannels(1)

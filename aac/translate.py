@@ -10,7 +10,7 @@ import time
 import requests
 
 
-from . import capture, config, core, glossary, history, llm, mt, ocr
+from . import capture, config, core, glossary, history, llm, mt, ocr, voices
 
 
 def provider_has_key(name):
@@ -82,11 +82,12 @@ def ask_ocr_ai(name, img, prompt):
     key = (base, "tip" if is_tooltip else is_answers, src)
     if key in _ai_cache:
         return _ai_cache[key]
+    hint = "" if (is_tooltip or is_answers) else voices.gender_hint(src)
     if is_tooltip:   # подсказка — без истории диалога
         text_prompt = config.TEXT_TOOLTIP_PROMPT.replace("{context}", glossary.glossary_prompt(src)).replace("{text}", src)
     else:
         tpl = config.TEXT_ANSWERS_PROMPT if is_answers else config.TEXT_PROMPT
-        text_prompt = tpl.replace("{context}", _history_context() + glossary.glossary_prompt(src)).replace("{text}", src)
+        text_prompt = tpl.replace("{context}", _history_context() + glossary.glossary_prompt(src) + hint).replace("{text}", src)
     if base == "claude":
         out = llm.ask_claude(None, text_prompt)
     elif base in llm.OPENAI_COMPAT:
@@ -104,6 +105,27 @@ def ask_ocr_ai(name, img, prompt):
     core.stats["last"] = f"OCR {t_ocr:.2f} с + " + core.stats["last"]
     core.events.put(("panel", None))
     return out
+
+
+def ask_text(prompt):
+    """Короткий текстовый вопрос нейросети из вашей цепочки переводчиков (например, пол персонажа).
+    None — в цепочке нет нейросетей (только Google/Microsoft) или все на паузе."""
+    for name in provider_chain():
+        base = OCR_AI.get(name, name)
+        if base not in ("groq", "gemini", "claude", "mistral") or llm.provider_cooldown.get(name, 0) > time.time():
+            continue
+        try:
+            if base == "claude":
+                return llm.ask_claude(None, prompt)
+            if base in llm.OPENAI_COMPAT:
+                return llm.ask_openai_compat(base, None, prompt)
+            return llm.ask_gemini(None, prompt)
+        except Exception:
+            continue
+    return None
+
+
+voices.ask_ai = ask_text
 
 
 def _ask(name, img_b64, prompt):

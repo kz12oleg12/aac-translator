@@ -441,6 +441,17 @@ class App:
                         updater.install_async(info)
                     else:
                         updater.check_async(quiet=False)
+                elif kind == "flip_gender":
+                    from . import voices
+                    res = voices.flip_last()
+                    if res:
+                        core.log(f"🎭 {res[0]} — теперь {'женщина' if res[1] == 'f' else 'мужчина'} "
+                                 f"(голос сменится со следующей реплики; запомнено)", "ok")
+                        cw = getattr(self, "chars_win", None)
+                        if cw is not None and cw.alive():
+                            cw.render()
+                    else:
+                        core.log("Сменить пол: ещё не было реплик с именем говорящего", "warn")
                 elif kind == "restart":
                     self.restart()
                 elif kind == "update_check":

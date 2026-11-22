@@ -106,14 +106,80 @@ def guess_by_name(en, ru):
 
 
 def gender(c):
+    """Пол персонажа: ваш выбор → догадка нейросети по имени и реплике → русская грамматика → имя."""
     if c.get("gender_manual") in ("m", "f"):
         return c["gender_manual"]
+    if c.get("ai") in ("m", "f"):
+        return c["ai"]
     f, m = c.get("f", 0), c.get("m", 0)
     if f > m:
         return "f"
     if m > f:
         return "m"
     return c.get("guess", "m")
+
+
+def known_gender(c):
+    """Пол, в котором мы уверены (для подсказки переводчику), или None."""
+    if c.get("gender_manual") in ("m", "f"):
+        return c["gender_manual"]
+    if c.get("ai") in ("m", "f"):
+        return c["ai"]
+    f, m = c.get("f", 0), c.get("m", 0)
+    if abs(f - m) >= 2:
+        return "f" if f > m else "m"
+    return None
+
+
+AI_PROMPT = ("In the fantasy MMORPG ArcheAge Chronicles an NPC named \"{name}\" says: \"{line}\"\n"
+             "Is this character male or female? Judge by the name and the line. "
+             "Answer with exactly one letter: m (male), f (female) or u (cannot tell).")
+ask_ai = None        # функция prompt -> ответ (подставляет translate: та же нейросеть, что переводит)
+
+
+def _ai_gender(key, en, line):
+    """Спросить нейросеть о поле нового персонажа (один раз на персонажа, ответ запоминается)."""
+    if ask_ai is None or not en:
+        return
+    try:
+        ans = (ask_ai(AI_PROMPT.format(name=en, line=(line or "")[:200])) or "").strip().lower()
+    except Exception:
+        return
+    g = ans[:1] if ans[:1] in ("m", "f") else "u"
+    with _lock:
+        c = _data["chars"].get(key)
+        if c is not None:
+            c["ai"] = g
+            _save()
+
+
+def gender_hint(src):
+    """Подсказка переводчику: кто из говорящих мужчина/женщина (чтобы «я пришёл/пришла» было верно)."""
+    name = _name_from(src)
+    if not name:
+        return ""
+    with _lock:
+        _load()
+        c = _data["chars"].get(key_of(name))
+        g = known_gender(c) if c else None
+    if not g:
+        return ""
+    return (f"\nThe speaker {name} is {'a woman' if g == 'f' else 'a man'} — use matching "
+            f"{config.TARGET_LANG_EN} grammar (verb and adjective endings).")
+
+
+def flip_last():
+    """Клавиша «сменить пол говорящего»: последний персонаж — противоположного пола (запоминается)."""
+    with _lock:
+        _load()
+        key = _data.get("last")
+        c = _data["chars"].get(key) if key else None
+        if c is None:
+            return None
+        new = "f" if gender(c) == "m" else "m"
+        c["gender_manual"] = new
+        _save()
+        return (c.get("ru") or c.get("en") or key), new
 
 
 def note_line(translation, orig=None):
@@ -140,8 +206,23 @@ def note_line(translation, orig=None):
         c["m"] = c.get("m", 0) + m
         c["seen"] = time.time()
         c["lines"] = c.get("lines", 0) + 1
+        _data["last"] = key
+        need_ai = "ai" not in c and not c.get("gender_manual")
         _save()
+    if need_ai:
+        # новый персонаж: спрашиваем нейросеть (с ожиданием до ~3 с — чтобы уже первая реплика была нужным голосом)
+        t = threading.Thread(target=_ai_gender, args=(key, en or ru, _line_of(orig or translation)), daemon=True)
+        t.start()
+        t.join(3.0)
     return key
+
+
+def _line_of(text):
+    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+    if len(lines) > 1 and _name_from(text) == lines[0]:
+        return " ".join(lines[1:])
+    m = _NAME_COLON.match(lines[0]) if lines else None
+    return lines[0][m.end(1):].lstrip(" :：") if m else " ".join(lines)
 
 
 def voice_for(key, engine=None, auto_only=False):

@@ -24,6 +24,7 @@ HOTKEY_DEFS = [  # (id, что делает, клавиша по умолчан�
     ("reset", "окна на место", config.HOTKEY_RESET, "reset"),
     ("panel", "скрыть эту панель", config.HOTKEY_PANEL, "panel_toggle"),
     ("tts", "озвучка вкл/выкл", config.HOTKEY_TTS, "tts_toggle"),
+    ("flip_gender", "сменить пол говорящего", config.HOTKEY_FLIP_GENDER, "flip_gender"),
     ("quit", "выход", config.HOTKEY_QUIT, "quit"),
 ]
 hotkeys = {hid: default for hid, _, default, _ in HOTKEY_DEFS}  # текущие назначения
