@@ -355,7 +355,7 @@ def test_hotkey_capture(monkey):
     T.set("SETTINGS", {})
     T.load_hotkeys()
     T.register_hotkeys()
-    assert len(kb.registered) == sum(1 for d in T.HOTKEY_DEFS if not str(T.hotkeys[d[0]]).startswith("mouse_"))
+    assert len(kb.registered) == sum(1 for d in T.HOTKEY_DEFS if not T.is_mouse(str(T.hotkeys[d[0]])))
     t = threading.Thread(target=T.capture_hotkey, args=("once",))
     t.start()
     time.sleep(0.2)
@@ -365,7 +365,7 @@ def test_hotkey_capture(monkey):
     kb.hooks[-1](E("up", "g"))
     t.join(3)
     assert T.hotkeys["once"] == "ctrl+g" and T.K("once") == "Ctrl+G"
-    assert len(kb.registered) == sum(1 for d in T.HOTKEY_DEFS if not str(T.hotkeys[d[0]]).startswith("mouse_"))
+    assert len(kb.registered) == sum(1 for d in T.HOTKEY_DEFS if not T.is_mouse(str(T.hotkeys[d[0]])))
     T.hotkeys["once"] = "mouse_x1"
     assert T.K("once") == "Мышь назад"
 
@@ -1139,10 +1139,12 @@ def test_neural_voice(monkey):
     monkey(cfg, "TTS_ENGINE", "neural")
     monkey(cfg, "TTS_NEURAL_VOICE", "ru-RU-DmitryNeural")
     monkey(cfg, "TTS_RATE", 2)
+    if hasattr(cfg, "TTS_EXPRESSIVE"):
+        monkey(cfg, "TTS_EXPRESSIVE", False)     # интонацию проверяет свой тест
     monkey(tts, "neural_available", lambda: True)
     synth, played, win = [], [], []
 
-    async def fake_synth(text, path, voice, rate, pitch="+0Hz"):
+    async def fake_synth(text, path, voice, rate, pitch="+0Hz", volume="+0%"):
         import asyncio
         synth.append((text, voice, rate))
         await asyncio.sleep(0.05 + len(text) / 400)
@@ -1598,6 +1600,72 @@ def test_translation_cache(monkey):
     monkey(T.requests, "post", lambda *a, **k: R(200, {"choices": [{"message": {"content": "Welcome back, friend of mine"}}]}))
     T.safe_translate(img())
     assert tcache.size() == 0
+
+
+def test_intonation(monkey):
+    """Интонация: «!» живее и громче, «?» выше, «…» медленнее; фразы с разной интонацией не склеиваются."""
+    tts = T._owner("speak_subtitle")
+    if not hasattr(tts, "mood_of"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    cfg = T._owner("TTS_READ_NAME")
+    monkey(cfg, "TTS_EXPRESSIVE", True)
+    assert [tts.mood_of(x) for x in ("Беги!", "Ты кто?", "Ну… не знаю…", "СТОЙ НА МЕСТЕ", "Ладно.", "Что?!")] == \
+        ["excl", "ask", "pause", "excl", "", "excl"]
+    ch = tts.split_chunks("Привет. Как дела? Хорошо. Отлично. Беги отсюда!")
+    assert [tts.mood_of(c) for c in ch] == ["", "ask", "", "excl"], ch
+    assert ch[2] == "Хорошо. Отлично."
+    # нейроголос получает другие скорость/высоту/громкость
+    monkey(cfg, "TTS_ENGINE", "neural")
+    monkey(cfg, "TTS_RATE", 0)
+    got = []
+
+    async def fake(text, path, voice, rate, pitch="+0Hz", volume="+0%"):
+        got.append((text, rate, pitch, volume))
+    monkey(tts, "_synth_async", fake)
+    import asyncio
+    n = tts._Neural.__new__(tts._Neural)
+    for t in ("Беги!", "Ладно."):
+        asyncio.run(n._synth_coro(t, os.path.join(TMP, "x"), False, ("ru-RU-DmitryNeural", -5)))
+    assert got[0] == ("Беги!", "+8%", "+5Hz", "+15%"), got
+    assert got[1] == ("Ладно.", "+0%", "-5Hz", "+0%"), got
+    monkey(cfg, "TTS_EXPRESSIVE", False)
+    assert tts.mood_of("Беги!") == ""
+
+
+def test_word_at_cursor(monkey):
+    """Надпись под мышкой: берётся строка у курсора (табличка в 2 строки — целиком), перевод в кэш."""
+    try:
+        from aac import tooltip, tcache
+    except ImportError:
+        print("   (в этой версии нет — пропуск)")
+        return
+    if not hasattr(tooltip, "pick_line"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    lines = [("Archivist Rotild", (300, 70, 420, 88)), ("Quest", (300, 10, 340, 26)),
+             ("The Drunken", (600, 70, 690, 86)), ("Sailor Inn", (605, 88, 685, 104))]
+    assert tooltip.pick_line(lines, 350, 95)[0] == "Archivist Rotild"
+    assert tooltip.pick_line(lines, 640, 95)[0] == "The Drunken Sailor Inn"
+    assert tooltip.pick_line(lines, 100, 150) is None        # далеко от надписей
+    asked = []
+    monkey(T._owner("ask_text"), "ask_text", lambda p: asked.append(p) or "«Таверна «Пьяный моряк»»")
+    assert T.translate_short("The Drunken  Sailor Inn") == "Таверна «Пьяный моряк»"
+    assert T.translate_short("the drunken sailor inn") == "Таверна «Пьяный моряк»" and len(asked) == 1
+    # без нейросети — Google
+    monkey(T._owner("ask_text"), "ask_text", lambda p: None)
+    monkey(T._owner("_mt_google"), "_mt_google", lambda t, sl=None, tl=None: "Архивариус Ротильд")
+    assert T.translate_short("Archivist Rotild") == "Архивариус Ротильд"
+    # весь путь: снимок → OCR → событие для маленькой плашки
+    from PIL import Image
+    monkey(tooltip, "screen_size", lambda: (1920, 1080))
+    monkey(tooltip.capture, "grab", lambda reg: Image.new("RGB", (reg[2], reg[3])))
+    monkey(tooltip.ocr, "ocr_boxes", lambda img: [("Archivist Rotild", (330, 70, 450, 88))])
+    drain()
+    tooltip.translate_word((800, 520))
+    ev = [e for e in drain() if e[0] == "word_show"]
+    assert ev and ev[0][1]["text"] == "Архивариус Ротильд" and ev[0][1]["orig"] == "Archivist Rotild", ev
+    assert tooltip.place_word((500, 300, 120, 18), (560, 310), 200, 40, 1920, 1080) == (460, 254)
 
 
 # ---------- запуск ----------

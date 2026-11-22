@@ -136,6 +136,38 @@ def ask_text(prompt):
 voices.ask_ai = ask_text
 
 
+def translate_short(src):
+    """Короткая надпись (имя НПС, табличка, вывеска, кнопка) → перевод. Кэш, затем нейросеть, затем Google."""
+    src = " ".join(src.split())
+    gl = glossary.glossary_prompt(src)
+    key = tcache.make_key("word", src, gl)
+    cached = tcache.get(key)
+    if cached:
+        return cached
+    prompt = (f"Translate this short label from the MMORPG ArcheAge Chronicles (an NPC name, sign, place, "
+              f"item or button) into {config.TARGET_LANG_EN}. Names of people: transliterate. "
+              f"Reply with the translation only, no quotes, no explanations.{gl}\n\n{src}")
+    out = None
+    try:
+        out = ask_text(prompt)
+        out = out.strip().splitlines()[0].strip() if out and out.strip() else None
+        for a, b in (('"', '"'), ("«", "»"), ("'", "'")):
+            if out and len(out) > 2 and out[0] == a and out[-1] == b:
+                out = out[1:-1].strip()       # убираем кавычки вокруг всего ответа, но не внутри
+        out = clean_translation(out) if out else None
+        quality = "ai"
+    except Exception:
+        out = None
+    if not out:
+        quality = "mt"
+        try:
+            out = mt._mt_google(glossary.glossary_apply_source(src)).strip()
+        except Exception as e:
+            raise core.ApiError(f"не удалось перевести: {e}")
+    tcache.put(key, out, quality)
+    return out
+
+
 def _ask(name, img_b64, prompt):
     if name in OCR_AI:
         return ask_ocr_ai(name, img_b64, prompt)

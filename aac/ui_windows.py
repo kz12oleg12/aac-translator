@@ -340,6 +340,12 @@ class SettingsWindow:
         menu_style(self.voice_menu, 30)
         self.voice_menu.grid(row=3, column=1, sticky="w", pady=2)
         play_btn(2, self._test_voice).grid(row=3, column=2, padx=6, pady=2)
+        self.expressive = tk.BooleanVar(value=config.TTS_EXPRESSIVE)
+        tk.Checkbutton(grid, text="Интонация: «!» — живее, «?» — вопросом, «…» — медленнее",
+                       variable=self.expressive, command=self._expressive_changed, bg=right["bg"], fg="#ddd",
+                       selectcolor="#2b3040", activebackground=right["bg"], activeforeground="#fff",
+                       font=("Segoe UI", 9), anchor="w", highlightthickness=0, bd=0
+                       ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(2, 0))
         self.voice_note = tk.Label(right, text="", fg="#7d8590", bg=right["bg"],
                                    font=("Segoe UI", 8), anchor="w", justify="left", wraplength=440)
         self.voice_note.pack(fill="x", padx=16)
@@ -411,6 +417,10 @@ class SettingsWindow:
                 cur = voices.default_voice(eng, g) or pool[g][0]
                 var.set(labels.get(cur, names[0]))
                 om.config(state="normal")
+
+    def _expressive_changed(self):
+        config.TTS_EXPRESSIVE = bool(self.expressive.get())
+        core.save_settings(tts_expressive=config.TTS_EXPRESSIVE)
 
     def _vary_changed(self):
         config.TTS_VARY_IN_GENDER = bool(self.vary.get())

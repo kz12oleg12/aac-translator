@@ -43,6 +43,8 @@ class App:
         self.tip.manual = True     # ставится рядом с подсказкой, а не в сохранённое место
         self.tip.hide()
         self.tip_state = None
+        self.word = ui_overlay.WordTip(tk.Toplevel(self.root))   # лёгкий перевод надписи под мышкой
+        self.word_state = None
         # перевод игрового чата — над областью чата
         self.chat = ui_overlay.Overlay(tk.Toplevel(self.root), "chat", (20, max(60, self.root.winfo_screenheight() // 2)), config.CHAT_WIDTH,
                                        title="💬 Чат (правый клик — скрыть)")
@@ -248,6 +250,38 @@ class App:
             self.tip_state = None
             return
         self.root.after(300, self._tip_watch)
+
+    # --- лёгкий перевод надписи под мышкой ---
+    def word_key(self):
+        pos = tooltip.cursor_pos()
+        st = self.word_state
+        if st and self.word.visible and pos and abs(pos[0] - st["pos"][0]) + abs(pos[1] - st["pos"][1]) < 30:
+            self.word.hide()          # повторное нажатие на том же месте — убрать
+            self.word_state = None
+            return
+        threading.Thread(target=tooltip.translate_word, args=(pos,), daemon=True).start()
+
+    def show_word(self, data):
+        w, h = self.word.show(data["text"], data.get("orig"))
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        self.word.move(*tooltip.place_word(data["box"], data["pos"], w, h, sw, sh))
+        first = self.word_state is None
+        self.word_state = {"pos": data["pos"], "t": time.time()}
+        if first:
+            self.root.after(300, self._word_watch)
+
+    def _word_watch(self):
+        st = self.word_state
+        if not st or not self.word.visible:
+            self.word_state = None
+            return
+        pos = tooltip.cursor_pos()
+        far = pos and ((pos[0] - st["pos"][0]) ** 2 + (pos[1] - st["pos"][1]) ** 2) ** 0.5 > config.WORD_MOVE_HIDE
+        if far or time.time() - st["t"] > config.WORD_SHOW_TIME:
+            self.word.hide()
+            self.word_state = None
+            return
+        self.root.after(300, self._word_watch)
 
     def restart(self):
         """Перезапуск: новая копия ждёт, пока эта закроется, и запускается."""
@@ -743,6 +777,10 @@ class App:
                     updater.check_async(quiet=False)
                 elif kind == "tooltip_key":
                     self.tooltip_key()
+                elif kind == "word_key":
+                    self.word_key()
+                elif kind == "word_show":
+                    self.show_word(payload)
                 elif kind == "tooltip_show":
                     self.show_tooltip(payload)
                 elif kind == "tooltip_hide":

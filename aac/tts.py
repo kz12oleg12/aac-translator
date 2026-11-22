@@ -403,8 +403,31 @@ def engine_ready():
     return False
 
 
-def _rate_str(extra=0):
-    return f"{(int(config.TTS_RATE) + extra) * 10:+d}%"   # ползунок −5…6 → −50%…+60%
+def _rate_str(extra=0, pct=0):
+    return f"{(int(config.TTS_RATE) + extra) * 10 + pct:+d}%"   # ползунок −5…6 → −50%…+60%
+
+
+# ---------- интонация: восклицание звучит живее, «…» — медленнее, вопрос — чуть выше ----------
+# нейроголос: (скорость %, высота Гц, громкость %); Silero: (шаг скорости, шаг высоты)
+MOOD_EDGE = {"excl": (8, 10, 15), "ask": (0, 5, 0), "pause": (-12, -4, -5)}
+MOOD_SILERO = {"excl": (1, 1), "ask": (0, 0), "pause": (-2, 0)}
+
+
+def mood_of(phrase):
+    """Настроение фразы по знакам: excl — «!» или КРИК, ask — «?», pause — «…», "" — обычная."""
+    if not config.TTS_EXPRESSIVE:
+        return ""
+    s = phrase.strip().rstrip("»\"')» ")
+    if s.endswith("!") or s.endswith("?!") or s.endswith("!?"):
+        return "excl"
+    letters = [c for c in s if c.isalpha()]
+    if len(letters) >= 6 and sum(c.isupper() for c in letters) > 0.8 * len(letters):
+        return "excl"
+    if s.endswith("?"):
+        return "ask"
+    if s.endswith(("…", "...")):
+        return "pause"
+    return ""
 
 CATCHUP_RATE = 2   # реплика ждала в очереди — читаем её на 20% быстрее, чтобы догнать диалог
 
@@ -420,17 +443,18 @@ def split_chunks(text, first_max=90, max_len=220):
         if m:
             parts[0:1] = [m.group(1), m.group(2)]
     chunks = [parts[0]]
-    for p in parts[1:]:                 # остальное склеиваем в куски покрупнее
-        if len(chunks) > 1 and len(chunks[-1]) + len(p) < max_len:
+    for p in parts[1:]:                 # остальное склеиваем в куски покрупнее (но с одной интонацией)
+        if len(chunks) > 1 and len(chunks[-1]) + len(p) < max_len and mood_of(chunks[-1]) == mood_of(p):
             chunks[-1] += " " + p
         else:
             chunks.append(p)
     return chunks
 
 
-async def _synth_async(text, path, voice, rate, pitch="+0Hz"):
+async def _synth_async(text, path, voice, rate, pitch="+0Hz", volume="+0%"):
     edge_tts = _edge["mod"]
-    com = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, connect_timeout=6, receive_timeout=20)
+    com = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, volume=volume, connect_timeout=6,
+                               receive_timeout=20)
     await com.save(path)
     if not os.path.exists(path) or os.path.getsize(path) < 200:
         raise RuntimeError("сервис вернул пустой звук")
@@ -561,17 +585,22 @@ class _Neural:
         """Корутина синтеза фразы выбранным движком → путь к звуковому файлу."""
         extra = CATCHUP_RATE if faster else 0
         pv, pitch = voice_pitch if voice_pitch else (None, 0)
+        mood = mood_of(text)
         if config.TTS_ENGINE == "silero":
-            voice, level = pv or config.TTS_SILERO_VOICE, int(config.TTS_RATE) + extra
+            d_rate, d_pitch = MOOD_SILERO.get(mood, (0, 0))
+            voice, level = pv or config.TTS_SILERO_VOICE, int(config.TTS_RATE) + extra + d_rate
+            pitch_s = pitch + d_pitch
 
             async def run():
                 return await asyncio.get_running_loop().run_in_executor(
-                    tts_silero.executor, tts_silero.synth_to_wav, text, path_base + ".wav", voice, level, pitch)
+                    tts_silero.executor, tts_silero.synth_to_wav, text, path_base + ".wav", voice, level, pitch_s)
             return run()
-        voice, rate = pv or config.TTS_NEURAL_VOICE, _rate_str(extra)
+        d_rate, d_hz, d_vol = MOOD_EDGE.get(mood, (0, 0, 0))
+        voice, rate = pv or config.TTS_NEURAL_VOICE, _rate_str(extra, d_rate)
+        kw = {"volume": f"{d_vol:+d}%"} if d_vol else {}
 
         async def run():
-            await _synth_async(text, path_base + ".mp3", voice, rate, f"{int(pitch):+d}Hz")
+            await _synth_async(text, path_base + ".mp3", voice, rate, f"{int(pitch) + d_hz:+d}Hz", **kw)
             return path_base + ".mp3"
         return run()
 

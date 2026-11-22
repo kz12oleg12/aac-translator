@@ -390,6 +390,51 @@ class Overlay:
             self.status.config(text=text)
 
 
+class WordTip:
+    """Маленькая плашка с переводом надписи под мышкой (имя НПС, табличка). Правый клик — убрать."""
+
+    def __init__(self, win):
+        self.win = win
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-alpha", 0.92)
+        win.configure(bg="#3a3f4b")
+        inner = tk.Frame(win, bg="#14161c")
+        inner.pack(padx=1, pady=1)
+        self.label = tk.Label(inner, text="", fg="#fff", bg="#14161c", font=("Segoe UI", config.FONT[1], "bold"),
+                              padx=10, pady=2, justify="center", wraplength=520)
+        self.label.pack()
+        self.orig = tk.Label(inner, text="", fg="#8b93a3", bg="#14161c", font=("Segoe UI", 8),
+                             padx=10, pady=0, justify="center", wraplength=520)
+        self.orig.pack(pady=(0, 2))
+        for w in (win, inner, self.label, self.orig):
+            w.bind("<ButtonRelease-3>", lambda e: self.hide())
+        self.visible = False
+        win.withdraw()
+        win.after(200, lambda: exclude_from_capture(win))
+
+    def show(self, text, orig=None):
+        self.label.config(text=text, font=("Segoe UI", config.FONT[1], "bold"))
+        self.orig.config(text=orig or "")
+        (self.orig.pack(pady=(0, 2)) if orig and config.SHOW_ORIGINAL else self.orig.pack_forget())
+        self.win.update_idletasks()
+        return self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+
+    def move(self, x, y):
+        """Поставить и показать (сначала место, потом показ — иначе окно может мелькнуть в углу)."""
+        w, h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+        self.win.geometry(f"{w}x{h}+{int(x)}+{int(y)}")
+        if not self.visible:
+            self.win.deiconify()
+            self.visible = True
+        self.win.lift()
+
+    def hide(self):
+        if self.visible:
+            self.win.withdraw()
+            self.visible = False
+
+
 class Indicator:
     """Маленький значок поверх игры: автоперевод включён (виден, даже когда все окна перевода скрыты).
     Тащите мышкой — положение запоминается; левый клик — показать/скрыть панель; правый — выключить автоперевод."""

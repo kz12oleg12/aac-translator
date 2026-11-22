@@ -129,6 +129,76 @@ def translate_at_cursor(pos=None):
         _lock.release()
 
 
+# ---------- лёгкий перевод: короткая надпись под мышкой (имя НПС, табличка, вывеска) ----------
+WORD_BOX = (760, 160)
+
+
+def pick_line(lines, cx, cy, max_dist=70):
+    """Надпись под курсором: ближайшая строка; соседние строки той же надписи (табличка в 2 строки) — вместе."""
+    if not lines:
+        return None
+
+    def dist(b):
+        dx = max(b[0] - cx, 0, cx - b[2])
+        dy = max(b[1] - cy, 0, cy - b[3])
+        return (dx * dx + dy * dy) ** 0.5
+    text, box = min(lines, key=lambda t: dist(t[1]))
+    if dist(box) > max_dist:
+        return None
+    for bl in group_blocks(lines):
+        if text in bl["lines"] and len(bl["lines"]) <= 3:
+            return " ".join(bl["lines"]), bl["box"]
+    return text, box
+
+
+def translate_word(pos=None):
+    """Перевести короткую надпись у курсора. Работает в фоновом потоке."""
+    if not _lock.acquire(blocking=False):
+        return
+    try:
+        pos = pos or cursor_pos()
+        if pos is None:
+            return
+        cx, cy = pos
+        sw, sh = screen_size()
+        x, y, w, h = search_box(cx, cy, sw, sh, WORD_BOX)
+        img = capture.mask_out(capture.grab((x, y, w, h)), (x, y, w, h), list(core.own_rects))
+        try:
+            lines = ocr.ocr_boxes(img)
+        except core.ApiError as e:
+            core.log(f"Надпись: {e}", "error")
+            return
+        hit = pick_line(lines, cx - x, cy - y)
+        if hit is None:
+            core.events.put(("word_show", {"text": "Надписи под мышкой не нашёл", "pos": pos, "box": None}))
+            return
+        src, b = hit
+        box = (x + b[0], y + b[1], b[2] - b[0], b[3] - b[1])
+        try:
+            text = translate.translate_short(src)
+        except core.ApiError as e:
+            core.log(f"Надпись: {e}", "error")
+            core.events.put(("word_show", {"text": "❌ не получилось", "pos": pos, "box": box}))
+            return
+        if config.SHOW_OCR_IN_LOG:
+            core.log(f"Надпись: {src} → {text}")
+        core.events.put(("word_show", {"text": text, "orig": src, "pos": pos, "box": box}))
+        history.history_add("Надпись", src, text)
+    finally:
+        _lock.release()
+
+
+def place_word(box, pos, win_w, win_h, sw, sh, gap=6):
+    """Маленькое окно — прямо над надписью (если сверху нет места — под ней)."""
+    if box:
+        x0, y0, bw, bh = box
+        x = x0 + bw // 2 - win_w // 2
+        y = y0 - gap - win_h if y0 - gap - win_h >= 0 else y0 + bh + gap
+    else:
+        x, y = pos[0] - win_w // 2, pos[1] - 40 - win_h
+    return int(max(0, min(sw - win_w, x))), int(max(0, min(sh - win_h, y)))
+
+
 def place(box, pos, win_w, win_h, sw, sh, gap=12):
     """Куда поставить окно перевода: слева от подсказки, если там есть место, иначе справа/под ней."""
     if box:
