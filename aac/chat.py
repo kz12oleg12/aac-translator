@@ -131,7 +131,7 @@ def translate_outgoing(text):
 def _step():
     """Одна проверка области чата (вызывается раз в секунду)."""
     reg = core.chat_region
-    img = capture.grab(reg)
+    img = capture.mask_out(capture.grab(reg), reg, list(core.own_rects))   # панель и окна программы — не чат
     try:
         lines = read_lines(img)
     except core.ApiError as e:

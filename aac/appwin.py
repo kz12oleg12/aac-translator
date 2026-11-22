@@ -244,6 +244,18 @@ class App:
         core.log("Перезапускаю программу…", "ok")
         core.events.put(("quit", None))
 
+    def _update_own_rects(self):
+        """Прямоугольники видимых окон программы (панель, настройки, окна перевода…).
+        Windows обычно сама прячет их от снимков, но не везде это срабатывает — подстраховываемся."""
+        rects = []
+        for w in [self.root] + [c for c in self.root.winfo_children() if isinstance(c, tk.Toplevel)]:
+            try:
+                if w.winfo_ismapped() and w.state() != "withdrawn":
+                    rects.append((w.winfo_rootx(), w.winfo_rooty(), w.winfo_width(), w.winfo_height()))
+            except tk.TclError:
+                pass
+        core.own_rects = rects
+
     # --- игровой чат ---
     def show_chat(self, pairs):
         for prefix, text in pairs:
@@ -634,6 +646,8 @@ class App:
         self._tick = getattr(self, "_tick", 0) + 1
         if self.chat.visible and self.chat_last and time.time() - self.chat_last > config.CHAT_SHOW_TIME:
             self.chat.hide()       # давно не было новых сообщений чата
+        if self._tick % 6 == 0:    # где сейчас наши окна — их закрашиваем на снимках областей
+            self._update_own_rects()
         if self._tick % 10 == 0:   # 2 раза в секунду проверяем, игра ли на переднем плане
             self._check_game_focus()
         if self._tick % 20 == 0:  # раз в секунду обновляем панель (обратный отсчёт пауз моделей)

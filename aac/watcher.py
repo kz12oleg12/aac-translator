@@ -20,7 +20,7 @@ def translate_once(reg, speak=False):
         return
     try:
         core.events.put(("quest", "⏳ Перевожу..."))
-        text, err = translate.safe_translate(capture.grab(reg))
+        text, err = translate.safe_translate(capture.mask_out(capture.grab(reg), reg, list(core.own_rects)))
         if err == "rate":
             err = "Превышен бесплатный лимит запросов. Подождите минуту."
         if err:
@@ -48,7 +48,8 @@ def translate_subs_once():
         return
     try:
         core.events.put(("busy", ("Субтитры", True)))     # «⏳» в заголовке окна субтитров
-        img = capture.mask_out(capture.grab(core.region), core.region, [core.answers_region, core.region2])
+        img = capture.mask_out(capture.grab(core.region), core.region,
+                               [core.answers_region, core.region2] + list(core.own_rects))
         text, err = translate.safe_translate(img, config.PROMPT)
         core.events.put(("busy", ("Субтитры", False)))
         if err == "rate":
@@ -80,7 +81,8 @@ def translate_answers_once():
         return
     try:
         core.events.put(("answers", "⏳ Перевожу ответы..."))
-        text, err = translate.safe_translate(capture.mask_out(capture.grab(core.answers_region), core.answers_region, core.region), _answers_prompt())
+        text, err = translate.safe_translate(capture.mask_out(capture.grab(core.answers_region), core.answers_region,
+                                                       [core.region] + list(core.own_rects)), _answers_prompt())
         if err == "rate":
             err = "лимит запросов — подождите несколько секунд и нажмите ещё раз"
         if err:
@@ -220,6 +222,7 @@ class Watcher:
                 img = capture.grab(reg)
                 others = self.exclude() if self.exclude else None
                 img = capture.mask_out(img, reg, others)
+                img = capture.mask_out(img, reg, list(core.own_rects))   # наши окна (панель и т.п.) — не текст игры
                 self._check_overlap(reg, others)
             except Exception as e:
                 core.log(f"{self.name}: скриншот не удался: {e}", "error")

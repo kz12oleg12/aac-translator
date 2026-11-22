@@ -92,7 +92,7 @@ def translate_at_cursor(pos=None):
         sw, sh = screen_size()
         x, y, w, h = search_box(cx, cy, sw, sh)
         core.events.put(("tooltip_show", {"text": "⏳ Перевожу подсказку…", "pos": pos, "box": None}))
-        img = capture.grab((x, y, w, h))
+        img = capture.mask_out(capture.grab((x, y, w, h)), (x, y, w, h), list(core.own_rects))
         try:
             lines = ocr.ocr_boxes(img)
         except core.ApiError as e:

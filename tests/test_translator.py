@@ -464,6 +464,12 @@ def test_gui_smoke(monkey):
             ok4 = not ind.visible
             cfg.SHOW_INDICATOR = True
             done["indicator"] = ok1 and ok2 and ok3 and ok4
+        if hasattr(app, "_update_own_rects"):   # где наши окна — чтобы не переводить собственную панель
+            app.root.update()
+            app._update_own_rects()
+            pw = app.panel.win
+            want = (pw.winfo_rootx(), pw.winfo_rooty(), pw.winfo_width(), pw.winfo_height())
+            done["own"] = want in T._owner("own_rects").own_rects
         if hasattr(app, "show_chat"):   # окошко чата и «написать в чат»
             app.show_chat([("[World] Ann: ", "привет"), ("Bob: ", "ищу группу")])
             ok_chat = app.chat.visible and "Bob: ищу группу" in app.chat.label.cget("text")
@@ -519,6 +525,7 @@ def test_gui_smoke(monkey):
     app.root.after(300, step)
     app.root.mainloop()
     done.pop("tip", True) or (_ for _ in ()).throw(AssertionError("окно подсказки встало не туда"))
+    done.pop("own", True) or (_ for _ in ()).throw(AssertionError("окна программы не попали в own_rects"))
     done.pop("chat", True) or (_ for _ in ()).throw(AssertionError("окно чата / буфер обмена"))
     done.pop("indicator", True) or (_ for _ in ()).throw(AssertionError("значок автоперевода"))
     done.pop("restart", True) or (_ for _ in ()).throw(AssertionError("перезапуск не сработал"))
