@@ -595,6 +595,14 @@ def test_updater(monkey):
     assert started and started[0][1].endswith("install.py") and started[0][2:4] == ["--update", "--wait-pid"]
     assert any(k == "quit" for k, _ in drain())
     updater.state["installing"] = False
+    # первый запуск после обновления — сообщение «обновлена: 4.5 → 4.6»
+    monkey(T._owner("SETTINGS"), "SETTINGS", {"last_version": "4.5"})
+    monkey(cfg, "VERSION", "4.6")
+    drain()
+    updater.announce_if_updated()
+    assert any("4.5 → 4.6" in p[1] for k, p in drain() if k == "log")
+    updater.announce_if_updated()        # второй раз — уже молчим
+    assert not any("→" in p[1] for k, p in drain() if k == "log")
 
 
 def test_dock_overlays(monkey):

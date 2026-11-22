@@ -146,3 +146,27 @@ def install(info):
 
 def install_async(info):
     threading.Thread(target=install, args=(info,), daemon=True).start()
+
+
+def announce_if_updated():
+    """Первый запуск после обновления: пишем в журнал, с какой версии обновились и что нового."""
+    prev = core.SETTINGS.get("last_version")
+    if prev != config.VERSION:
+        core.save_settings(last_version=config.VERSION)
+        core.SETTINGS["last_version"] = config.VERSION
+    log = os.path.join(config.APP_DIR, "update.log")
+    just_updated = os.path.exists(log) and time.time() - os.path.getmtime(log) < 900
+    if prev and not is_newer(config.VERSION, prev):
+        return
+    if not prev and not just_updated:
+        return            # первая установка, а не обновление
+    notes = []
+    try:
+        import json
+        with open(os.path.join(config.APP_DIR, "version.json"), encoding="utf-8") as f:
+            data = json.load(f)
+        notes = data.get("notes", []) if isinstance(data.get("notes"), list) else [str(data.get("notes", ""))]
+    except Exception:
+        pass
+    core.log(f"✅ Программа обновлена: {prev + ' → ' if prev else 'до версии '}{config.VERSION}" + (". Что нового: " + "; ".join(notes) if notes else ""),
+             "ok")

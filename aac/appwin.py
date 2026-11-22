@@ -53,6 +53,7 @@ class App:
         self.panel.refresh()
 
         core.log(f"AAC Translator v{config.VERSION} запущен", "ok")
+        updater.announce_if_updated()
         if core.region or core.answers_region or core.region2:
             parts = [n for n, r in (("субтитров", core.region), ("реплик 2", core.region2),
                                     ("ответов", core.answers_region)) if r]
