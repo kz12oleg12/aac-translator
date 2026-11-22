@@ -123,6 +123,34 @@ def _ocr_raw(img):
     return out
 
 
+_KEY_NAMES = {"esc", "tab", "shift", "ctrl", "alt", "enter", "space", "spacebar", "del", "lmb", "rmb", "mmb"}
+
+
+def _is_key(tok):
+    t = tok.strip("[](){}<>|:")
+    if not t:
+        return False
+    return (t.lower() in _KEY_NAMES or (len(t) == 1 and (t.isupper() or t.isdigit()))
+            or re.fullmatch(r"F\d{1,2}", t) is not None)
+
+
+def is_key_hints(ln):
+    """Строка подсказок клавиш внизу экрана: «Esc Close  T Track  F Fast Travel  H Destination List».
+    Клавиша + слово с заглавной; таких пар 2 и больше (или одна короткая «F Talk»), без знаков предложения."""
+    if re.search(r"[.!?,;\"«»]", ln):
+        return False
+    toks = ln.split()
+    pairs = 0
+    for a, b in zip(toks, toks[1:]):
+        if _is_key(a) and b[:1].isupper() and not _is_key(b):
+            pairs += 1
+    if pairs >= 2:
+        return True
+    if pairs == 1 and len(toks) <= 3 and _is_key(toks[0]) and toks[0].strip("[](){}<>|:") not in ("I", "A"):
+        return True
+    return False
+
+
 _VOWELS = set("AEIOUYaeiouyАЕЁИОУЫЭЮЯаеёиоуыэюя")
 
 
@@ -148,6 +176,8 @@ def _clean_line(ln, clean):
         return None  # водяной знак Windows (в т.ч. русский, прочитанный как латиница)
     if config.SOURCE_LANG == "en" and _looks_like_garbage(ln):
         return None  # не английский текст (наш же перевод, водяной знак, мусор с фона)
+    if is_key_hints(ln):
+        return None  # подсказки клавиш внизу экрана (карта, инвентарь, «F Talk»)
     # слова интерфейса (Skip, Next…): строка целиком — выбрасываем; в конце строки — отрезаем
     ignore = glossary.ignored_words()
     if glossary.normalize(ln) in ignore:

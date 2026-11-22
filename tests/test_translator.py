@@ -1668,6 +1668,22 @@ def test_word_at_cursor(monkey):
     assert tooltip.place_word((500, 300, 120, 18), (560, 310), 200, 40, 1920, 1080) == (460, 254)
 
 
+def test_key_hints_skipped():
+    """Строка подсказок клавиш (карта, инвентарь) не переводится, обычные реплики — переводятся."""
+    try:
+        from aac.ocr import is_key_hints
+    except ImportError:
+        print("   (в этой версии нет — пропуск)")
+        return
+    for ln in ("Esc Close Zoom In/Out Select T Track I Legend F Fast Travel H Destination List Z My Location",
+               "Esc Close F Replace R Unequip", "F Talk", "Enter Chat", "[T] Track [I] Legend"):
+        assert is_key_hints(ln), ln
+    for ln in ("I Agree with you", "Go to Seaglass Harbor and find T. Rotild.", "Archivist Rotild",
+               "Find Vol. II of the Chronicles of Aurorian Settlement (0/1)", "Silent Crossway",
+               "A Brave New World", "Yes, I'll do it", "Welcome to Seaglass Harbor"):
+        assert not is_key_hints(ln), ln
+
+
 # ---------- запуск ----------
 def main():
     print(f"Проверяю: {ROOT}  ({T.kind}, версия {T.VERSION})\n")
