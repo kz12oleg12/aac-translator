@@ -16,14 +16,16 @@ from . import config, core, glossary, history, ocr, ui_panel
 _mt_cache = {}          # распознанный текст -> перевод (одинаковое не переводим повторно)
 
 
-def _mt_google(text):
+def _mt_google(text, sl=None, tl=None):
     """Бесплатные адреса Google Переводчика по очереди: если один ограничен — пробуем другой."""
     errors = []
     attempts = (
         ("https://translate.googleapis.com/translate_a/single",
-         {"client": "gtx", "sl": config.SOURCE_LANG, "tl": config.TARGET_LANG_CODE, "dt": "t", "q": text}, "single"),
+         {"client": "gtx", "sl": sl or config.SOURCE_LANG, "tl": tl or config.TARGET_LANG_CODE, "dt": "t", "q": text},
+         "single"),
         ("https://clients5.google.com/translate_a/t",
-         {"client": "dict-chrome-ex", "sl": config.SOURCE_LANG, "tl": config.TARGET_LANG_CODE, "q": text}, "t"),
+         {"client": "dict-chrome-ex", "sl": sl or config.SOURCE_LANG, "tl": tl or config.TARGET_LANG_CODE, "q": text},
+         "t"),
     )
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                              "(KHTML, like Gecko) Chrome/130.0 Safari/537.36"}
@@ -57,7 +59,7 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, lik
        "Chrome/130.0 Safari/537.36 Edg/130.0")
 
 
-def _mt_microsoft_edge(text):
+def _mt_microsoft_edge(text, sl=None, tl=None):
     """Способ 1: доступ, которым пользуется встроенный переводчик Edge."""
     global _ms_token
     token, exp = _ms_token
@@ -71,7 +73,8 @@ def _mt_microsoft_edge(text):
         token, exp = r.text.strip(), time.time() + 8 * 60
         _ms_token = (token, exp)
     r = requests.post("https://api.cognitive.microsofttranslator.com/translate",
-                      params={"api-version": "3.0", "from": config.SOURCE_LANG, "to": config.TARGET_LANG_CODE},
+                      params={"api-version": "3.0", "from": sl or config.SOURCE_LANG,
+                              "to": tl or config.TARGET_LANG_CODE},
                       headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
                       json=[{"Text": text}], timeout=config.REQUEST_TIMEOUT)
     if r.status_code == 401:
@@ -83,7 +86,7 @@ def _mt_microsoft_edge(text):
     return r.json()[0]["translations"][0]["text"]
 
 
-def _mt_microsoft_bing(text):
+def _mt_microsoft_bing(text, sl=None, tl=None):
     """Способ 2: как переводит страница bing.com/translator."""
     if time.time() > _bing["exp"]:
         sess = requests.Session()
@@ -100,7 +103,7 @@ def _mt_microsoft_bing(text):
                      exp=time.time() + min(int(aph.group(3)) / 1000, 3000) - 60)
     r = _bing["sess"].post("https://www.bing.com/ttranslatev3",
                            params={"isVertical": "1", "IG": _bing["ig"], "IID": _bing["iid"] + ".1"},
-                           data={"fromLang": config.SOURCE_LANG, "to": config.TARGET_LANG_CODE, "text": text,
+                           data={"fromLang": sl or config.SOURCE_LANG, "to": tl or config.TARGET_LANG_CODE, "text": text,
                                  "token": _bing["token"], "key": _bing["key"]},
                            timeout=config.REQUEST_TIMEOUT)
     if r.status_code == 429:
@@ -113,14 +116,14 @@ def _mt_microsoft_bing(text):
         raise core.ApiError(f"Bing-перевод: код {r.status_code}, ответ {r.text[:120]!r}")
 
 
-def _mt_microsoft(text):
+def _mt_microsoft(text, sl=None, tl=None):
     """Microsoft Переводчик: сначала способ Edge, если не вышло — способ bing.com."""
     errors = []
     for fn in (_mt_microsoft_edge, _mt_microsoft_bing):
         if fn is _mt_microsoft_edge and _bing.get("edge_dead"):
             continue
         try:
-            return fn(text)
+            return fn(text, sl, tl)
         except core.RateLimited:
             raise
         except (core.ApiError, requests.exceptions.RequestException, KeyError, IndexError, ValueError) as e:

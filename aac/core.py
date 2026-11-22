@@ -19,6 +19,8 @@ auto_on = threading.Event()
 region = None  # область субтитров (left, top, width, height)
 answers_region = None  # область вариантов ответа
 heartbeat = 0.0  # когда главный цикл окон последний раз «отметился» (для поиска зависшей копии)
+chat_region = None  # область игрового чата
+chat_auto = True    # переводить чат автоматически (галочка в панели)
 region2 = None  # вторая область реплик (НПС говорят мимоходом в другом месте экрана)
 answers_auto = False   # следить за ответами автоматически (вкл/выкл в системной панели)
 last_subtitle = ""     # последняя переведённая реплика — контекст для перевода ответов
@@ -27,7 +29,7 @@ SETTINGS = {}
 
 # ---------- настройки (запоминаем область) ----------
 def load_settings():
-    global region, answers_region, region2
+    global region, answers_region, region2, chat_region
     try:
         with open(config.SETTINGS_FILE, encoding="utf-8") as f:
             data = json.load(f)
@@ -37,6 +39,8 @@ def load_settings():
             answers_region = tuple(data["answers_region"])
         if data.get("region2"):
             region2 = tuple(data["region2"])
+        if data.get("chat_region"):
+            chat_region = tuple(data["chat_region"])
         return data
     except Exception:
         return {}

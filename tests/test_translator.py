@@ -464,6 +464,15 @@ def test_gui_smoke(monkey):
             ok4 = not ind.visible
             cfg.SHOW_INDICATOR = True
             done["indicator"] = ok1 and ok2 and ok3 and ok4
+        if hasattr(app, "show_chat"):   # окошко чата и «написать в чат»
+            app.show_chat([("[World] Ann: ", "привет"), ("Bob: ", "ищу группу")])
+            ok_chat = app.chat.visible and "Bob: ищу группу" in app.chat.label.cget("text")
+            app.chat_compose()
+            app.compose_var.set("Привет")
+            app.chat_out_ready("Привет", "Hi there")
+            ok_clip = app.root.clipboard_get() == "Hi there" and "Скопировано" in app.compose_info.cget("text")
+            app._close_compose()
+            done["chat"] = ok_chat and ok_clip
         if hasattr(app, "restart"):     # «Перезапустить»: новая копия с --after-pid, эта — закрывается
             started = []
             real = subprocess.Popen
@@ -510,6 +519,7 @@ def test_gui_smoke(monkey):
     app.root.after(300, step)
     app.root.mainloop()
     done.pop("tip", True) or (_ for _ in ()).throw(AssertionError("окно подсказки встало не туда"))
+    done.pop("chat", True) or (_ for _ in ()).throw(AssertionError("окно чата / буфер обмена"))
     done.pop("indicator", True) or (_ for _ in ()).throw(AssertionError("значок автоперевода"))
     done.pop("restart", True) or (_ for _ in ()).throw(AssertionError("перезапуск не сработал"))
     assert done == {"frames": 2, "font": 15}, done
@@ -807,6 +817,51 @@ def test_subs_once(monkey):
     monkey(w.core, "region", None)
     w.translate_subs_once()
     assert any(k == "log" and "выделите область субтитров" in p[1] for k, p in drain())
+
+
+def test_chat(monkey):
+    """Чат: ник и канал не переводятся, только новые строки, перевод пачкой; исходящие рус→англ."""
+    try:
+        from aac import chat
+    except ImportError:
+        print("   (в этой версии нет — пропуск)")
+        return
+    assert chat.split_line("[World] Vanersis: wts iron ore") == ("[World] Vanersis: ", "wts iron ore")
+    assert chat.split_line("Player123 : lfg dungeon") == ("Player123 : ", "lfg dungeon")
+    assert chat.split_line("Server will restart soon") == ("", "Server will restart soon")
+    # перевод пачкой через нейросеть (нумерация), иначе — Google построчно
+    asked = []
+    monkey(chat.translate, "ask_text", lambda p: asked.append(p) or "1. продаю железную руду\n2. ищу группу")
+    assert chat.translate_messages(["wts iron ore", "lfg"]) == ["продаю железную руду", "ищу группу"]
+    assert "exactly 2 lines" in asked[0]
+    monkey(chat.translate, "ask_text", lambda p: None)
+    monkey(chat.mt, "_mt_google", lambda t, sl=None, tl=None: {"wts iron ore\nlfg": "продаю руду\nищу группу",
+                                                              "Привет всем": "Hi all"}[t])
+    assert chat.translate_messages(["wts iron ore", "lfg"]) == ["продаю руду", "ищу группу"]
+    assert chat.translate_outgoing("Привет всем") == "Hi all"
+    # слежение: строки должны устояться; первый раз — только последние 3; дальше — только новые
+    from PIL import Image
+    monkey(chat.core, "chat_region", (0, 0, 10, 10))
+    monkey(chat.capture, "grab", lambda reg: Image.new("RGB", (10, 10)))
+    screen = {"lines": [f"[World] P{i}: message number {i}" for i in range(6)]}
+    monkey(chat, "read_lines", lambda img: list(screen["lines"]))
+    monkey(chat, "_state", {"prev": None, "started": False})
+    monkey(chat, "seen", chat.collections.deque(maxlen=400))
+    monkey(chat, "_seen_set", set())
+    got = []
+    monkey(chat, "translate_messages", lambda msgs, lang=None: got.append(list(msgs)) or [m.upper() for m in msgs])
+    drain()
+    chat._step()                     # первое чтение — ждём, пока устоится
+    assert not got
+    chat._step()
+    assert got == [["message number 3", "message number 4", "message number 5"]], got
+    ev = [p for k, p in drain() if k == "chat"]
+    assert ev[0][0] == ("[World] P3: ", "MESSAGE NUMBER 3")
+    screen["lines"] = screen["lines"][1:] + ["[Faction] Zed: need healer"]   # чат прокрутился
+    chat._step(); chat._step()
+    assert got[-1] == ["need healer"], got
+    chat._step()
+    assert len(got) == 2                                                     # повторно не переводим
 
 
 def test_dock_overlays(monkey):

@@ -9,7 +9,7 @@ import time
 import subprocess
 
 
-from . import limits, updater, tts, appwin, config, core, game, hotkeys, translate, tray, watcher
+from . import chat, limits, updater, tts, appwin, config, core, game, hotkeys, translate, tray, watcher
 
 
 def apply_view_settings():
@@ -53,6 +53,7 @@ def apply_saved_provider():
         config.FALLBACK_PROVIDERS = list(core.SETTINGS["fallback"])
     config.ANSWERS_DOCKED = bool(core.SETTINGS.get("answers_docked", config.ANSWERS_DOCKED))
     core.answers_auto = bool(core.SETTINGS.get("answers_auto", False))
+    core.chat_auto = bool(core.SETTINGS.get("chat_auto", True))
     game.game_exe = core.SETTINGS.get("game_exe")
     config.PAUSE_OUTSIDE_GAME = bool(core.SETTINGS.get("pause_outside_game", True))
     apply_view_settings()
@@ -307,7 +308,8 @@ def main():
     app = appwin.App()
     tts.warm()   # озвучка: прогрев соединения и звука в фоне
     updater.start_periodic()   # есть ли новая версия на GitHub
-    limits.start_deepl_checks()   # сколько символов DeepL осталось (если есть ключ)
+    limits.start_deepl_checks()
+    chat.start()               # перевод игрового чата (если обведена его область)   # сколько символов DeepL осталось (если есть ключ)
     for w in watcher.WATCHERS:
         threading.Thread(target=w.run, daemon=True).start()
 

@@ -49,7 +49,7 @@ class Panel:
             x, y = default
         x = max(0, min(x, sw - config.PANEL_WIDTH))   # панель стала шире — не уезжает за правый край
         self.default_pos = default
-        win.geometry(f"{config.PANEL_WIDTH}x780+{x}+{y}")
+        win.geometry(f"{config.PANEL_WIDTH}x830+{x}+{y}")
 
         # логотип в заголовке (icon_22.png рядом с программой; если файла нет — значок ⚙)
         self._logo = None
@@ -106,6 +106,11 @@ class Panel:
                        bg="#1a1d23", fg="#ccc", selectcolor="#2b3040",
                        activebackground="#1a1d23", activeforeground="#fff", font=("Segoe UI", 9),
                        highlightthickness=0, bd=0).pack(side="left")
+        self.chat_auto_var = tk.BooleanVar(value=core.chat_auto)
+        tk.Checkbutton(row2b, text="Автоперевод чата", variable=self.chat_auto_var, command=self._chat_auto_changed,
+                       bg="#1a1d23", fg="#ccc", selectcolor="#2b3040", activebackground="#1a1d23",
+                       activeforeground="#fff", font=("Segoe UI", 9), highlightthickness=0, bd=0).pack(side="left",
+                                                                                                        padx=(16, 0))
         row3 = tk.Frame(win, bg="#1a1d23")
         row3.pack(fill="x", padx=10, pady=(2, 0))
         self.pause_var = tk.BooleanVar(value=config.PAUSE_OUTSIDE_GAME)
@@ -196,6 +201,12 @@ class Panel:
             game.game_active.set()
         self.refresh()
 
+    def _chat_auto_changed(self):
+        core.chat_auto = bool(self.chat_auto_var.get())
+        core.save_settings(chat_auto=core.chat_auto)
+        core.log("Автоперевод чата " + ("включён" if core.chat_auto else "выключен"), "ok")
+        self.refresh()
+
     def _answers_auto_changed(self):
         core.answers_auto = bool(self.answers_auto_var.get())
         core.save_settings(answers_auto=core.answers_auto)
@@ -242,6 +253,9 @@ class Panel:
         areg = (f"{core.answers_region[2]}×{core.answers_region[3]} (x={core.answers_region[0]}, y={core.answers_region[1]})"
                 + ("  · авто" if core.answers_auto else f"  · по кнопке {hotkeys.K('answers_once')}")
                 if core.answers_region else f"не выбрана ({hotkeys.K('select_answers')})")
+        creg = (f"{core.chat_region[2]}×{core.chat_region[3]} (x={core.chat_region[0]}, y={core.chat_region[1]})"
+                + ("  · авто" if core.chat_auto else "  · выкл")
+                if core.chat_region else f"нет ({hotkeys.K('select_chat')} — обвести окно чата)")
         reg2 = (f"{core.region2[2]}×{core.region2[3]} (x={core.region2[0]}, y={core.region2[1]})"
                 if core.region2 else f"нет ({hotkeys.K('select_subs2')} — если НПС говорят ещё и в другом месте)")
         self.state.config(text=(
@@ -249,6 +263,7 @@ class Panel:
             f"Область субтитров: {reg}\n"
             f"Область реплик 2:  {reg2}\n"
             f"Область ответов:   {areg}\n"
+            f"Область чата:      {creg}\n"
             f"Игра:              {self._game_status()}\n"
             f"Озвучка:           {('вкл · ' + tts.voice_title()) if config.TTS_ENABLED else 'выкл'}\n"
             f"Переводчики:       {' → '.join(PROVIDER_NAMES.get(p, p) for p in translate.provider_chain()) or 'нет ключей!'}\n"

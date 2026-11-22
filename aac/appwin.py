@@ -11,7 +11,7 @@ import threading
 import tkinter as tk
 
 
-from . import config, core, game, hotkeys, tooltip, tray, tts, ui_overlay, ui_panel, ui_windows, updater, watcher
+from . import chat, config, core, game, history, hotkeys, tooltip, tray, tts, ui_overlay, ui_panel, ui_windows, updater, watcher
 
 
 class App:
@@ -43,6 +43,13 @@ class App:
         self.tip.manual = True     # ставится рядом с подсказкой, а не в сохранённое место
         self.tip.hide()
         self.tip_state = None
+        # перевод игрового чата — над областью чата
+        self.chat = ui_overlay.Overlay(tk.Toplevel(self.root), "chat", (20, max(60, self.root.winfo_screenheight() // 2)), config.CHAT_WIDTH,
+                                       title="💬 Чат (правый клик — скрыть)")
+        self.chat.anchor = lambda: core.chat_region
+        self.chat.hide()
+        self.chat_lines = []
+        self.chat_last = 0.0
         self.indicator = ui_overlay.Indicator(tk.Toplevel(self.root))   # «● AAC: перевод вкл»
         self.indicator.update(False)
         if config.ANSWERS_DOCKED:
@@ -108,10 +115,11 @@ class App:
             self.settings_win = ui_windows.SettingsWindow(self)
 
     def toggle_all(self):
-        if self.subs.visible or self.quest.visible or self.answers.visible:
+        if self.subs.visible or self.quest.visible or self.answers.visible or self.chat.visible:
             self.subs.hide()
             self.quest.hide()
             self.answers.hide()
+            self.chat.hide()
         elif self.subs.label.cget("text"):
             self.subs.show(self.subs.label.cget("text"))
 
@@ -236,6 +244,93 @@ class App:
         core.log("Перезапускаю программу…", "ok")
         core.events.put(("quit", None))
 
+    # --- игровой чат ---
+    def show_chat(self, pairs):
+        for prefix, text in pairs:
+            self.chat_lines.append(f"{prefix}{text}")
+        self.chat_lines = self.chat_lines[-config.CHAT_LINES:]
+        self.chat_last = time.time()
+        self.chat.show("\n".join(self.chat_lines))
+
+    def select_chat_region(self):
+        def done(reg):
+            if reg:
+                core.chat_region = reg
+                core.save_settings(chat_region=reg)
+                core.log(f"Область чата сохранена: {reg[2]}×{reg[3]}. Новые сообщения будут переводиться, "
+                         f"пока включён автоперевод ({hotkeys.K('auto')}).", "ok")
+                self.panel.refresh()
+
+        def clear():
+            core.chat_region = None
+            core.save_settings(chat_region=None)
+            self.chat.hide()
+            core.log("Область чата убрана")
+            self.panel.refresh()
+        self.pick_area("Обведите ОКНО ЧАТА игры (только строки сообщений, без вкладок и поля ввода). "
+                       "Правый клик — убрать область.", done, clear)
+
+    def chat_compose(self):
+        """Маленькое поле: пишете по-русски → Enter → английский перевод в буфере обмена."""
+        old = getattr(self, "compose", None)
+        if old is not None:
+            try:
+                old.destroy()
+            except Exception:
+                pass
+        w = self.compose = tk.Toplevel(self.root)
+        w.overrideredirect(True)
+        w.attributes("-topmost", True)
+        w.configure(bg="#1a1d23", highlightthickness=2, highlightbackground="#4d86ff")
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        width = 620
+        w.geometry(f"{width}x86+{(sw - width) // 2}+{sh - 220}")
+        tk.Label(w, text="💬 Напишите по-русски → Enter: английский перевод — в буфер обмена.  Esc — закрыть",
+                 fg="#8cf", bg="#1a1d23", font=("Segoe UI", 9), anchor="w").pack(
+            fill="x", padx=8, pady=(6, 2))
+        self.compose_var = tk.StringVar()
+        e = tk.Entry(w, textvariable=self.compose_var, bg="#2b3040", fg="#fff", insertbackground="#fff",
+                     relief="flat", font=("Segoe UI", 12))
+        e.pack(fill="x", padx=8)
+        self.compose_info = tk.Label(w, text="", fg="#9aa4b2", bg="#1a1d23", font=("Segoe UI", 9), anchor="w")
+        self.compose_info.pack(fill="x", padx=8, pady=(2, 4))
+
+        def send(_e=None):
+            text = self.compose_var.get().strip()
+            if not text:
+                return
+            self.compose_info.config(text="⏳ Перевожу…", fg="#8cf")
+            threading.Thread(target=lambda: core.events.put(("chat_out", (text, chat.translate_outgoing(text)))),
+                             daemon=True).start()
+        e.bind("<Return>", send)
+        e.bind("<Escape>", lambda _e: self._close_compose())
+        w.after(50, lambda: (w.lift(), w.focus_force(), e.focus_set()))
+        ui_overlay.exclude_from_capture(w)
+
+    def _close_compose(self):
+        w = getattr(self, "compose", None)
+        self.compose = None
+        if w is not None:
+            try:
+                w.destroy()
+            except Exception:
+                pass
+
+    def chat_out_ready(self, src, en):
+        if not en:
+            core.log("Чат: не удалось перевести сообщение (нет связи с переводчиками?)", "error")
+            if getattr(self, "compose", None) is not None:
+                self.compose_info.config(text="❌ Не получилось перевести — попробуйте ещё раз", fg="#f88")
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(en)
+        self.root.update()
+        core.log(f"Чат → «{en}» — в буфере обмена, вставьте в чат игры (Ctrl+V)", "ok")
+        history.history_add("Чат (вы)", en, src)
+        if getattr(self, "compose", None) is not None:
+            self.compose_info.config(text=f"✅ Скопировано: {en}   — в игре откройте чат и нажмите Ctrl+V", fg="#6f6")
+            self.compose.after(2500, self._close_compose)
+
     def set_docked(self, on):
         """Ответы и субтитры — одним окном (ответы вплотную под субтитрами) или отдельными окнами."""
         config.ANSWERS_DOCKED = on
@@ -262,6 +357,9 @@ class App:
             if core.answers_region:
                 self.region_frames["answers"] = ui_windows.RegionFrame(self, "Область ОТВЕТОВ", "#d07010", core.answers_region,
                                                             self._regions_changed)
+            if core.chat_region:
+                self.region_frames["chat"] = ui_windows.RegionFrame(self, "Область ЧАТА", "#9050d0", core.chat_region,
+                                                         self._regions_changed)
             if core.region2:
                 self.region_frames["subs2"] = ui_windows.RegionFrame(self, "Область РЕПЛИК 2", "#18a090", core.region2,
                                                           self._regions_changed)
@@ -312,9 +410,12 @@ class App:
         if "subs2" in frames:
             core.region2 = frames["subs2"].rect()
             core.save_settings(region2=core.region2)
+        if "chat" in frames:
+            core.chat_region = frames["chat"].rect()
+            core.save_settings(chat_region=core.chat_region)
         if frames:
             msg = "Области сохранены"
-            regs = [core.region, core.answers_region, core.region2]
+            regs = [core.region, core.answers_region, core.region2, core.chat_region]
             if any(ui_windows.regions_overlap(a, b) for i, a in enumerate(regs) for b in regs[i + 1:]):
                 core.log(msg + ", но некоторые ПЕРЕСЕКАЮТСЯ — общая часть попадёт только в одну из них.", "warn")
             else:
@@ -478,6 +579,14 @@ class App:
                         updater.install_async(info)
                     else:
                         updater.check_async(quiet=False)
+                elif kind == "chat":
+                    self.show_chat(payload)
+                elif kind == "select_chat":
+                    self.select_chat_region()
+                elif kind == "chat_compose":
+                    self.chat_compose()
+                elif kind == "chat_out":
+                    self.chat_out_ready(*payload)
                 elif kind == "flip_gender":
                     from . import voices
                     res = voices.flip_last()
@@ -523,6 +632,8 @@ class App:
         except queue.Empty:
             pass
         self._tick = getattr(self, "_tick", 0) + 1
+        if self.chat.visible and self.chat_last and time.time() - self.chat_last > config.CHAT_SHOW_TIME:
+            self.chat.hide()       # давно не было новых сообщений чата
         if self._tick % 10 == 0:   # 2 раза в секунду проверяем, игра ли на переднем плане
             self._check_game_focus()
         if self._tick % 20 == 0:  # раз в секунду обновляем панель (обратный отсчёт пауз моделей)

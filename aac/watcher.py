@@ -352,14 +352,15 @@ def toggle_auto():
         core.events.put(("subs2_hide", None))
         core.events.put(("answers_hide", None))
     else:
-        if core.region is None and core.answers_region is None and core.region2 is None:
+        if core.region is None and core.answers_region is None and core.region2 is None and core.chat_region is None:
             core.log(f"Сначала выделите область субтитров ({hotkeys.K('select')}) и/или ответов ({hotkeys.K('select_answers')}), "
                 f"потом {hotkeys.K('auto')}.", "warn")
             return
         game.remember_game_window()
         core.auto_on.set()
         parts = [n for n, r in (("субтитры", core.region), ("реплики 2", core.region2),
-                                ("ответы", core.answers_region if core.answers_auto else None)) if r]
+                                ("ответы", core.answers_region if core.answers_auto else None),
+                                ("чат", core.chat_region if core.chat_auto else None)) if r]
         core.log(f"Автоперевод включён: {', '.join(parts)}", "ok")
     core.events.put(("panel", None))
     if tray._tray is not None:  # обновить галочку «Автоперевод» в меню трея
