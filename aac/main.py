@@ -9,7 +9,7 @@ import time
 import subprocess
 
 
-from . import updater, tts, appwin, config, core, game, hotkeys, translate, tray, watcher
+from . import limits, updater, tts, appwin, config, core, game, hotkeys, translate, tray, watcher
 
 
 def apply_view_settings():
@@ -20,6 +20,7 @@ def apply_view_settings():
     config.OVERLAY_ALPHA = float(core.SETTINGS.get("overlay_alpha", config.OVERLAY_ALPHA))
     config.SHOW_ORIGINAL = bool(core.SETTINGS.get("show_original", config.SHOW_ORIGINAL))
     config.SAVE_HISTORY = bool(core.SETTINGS.get("save_history", config.SAVE_HISTORY))
+    config.GLOSSARY_AUTO = bool(core.SETTINGS.get("glossary_auto", config.GLOSSARY_AUTO))
     config.SHOW_INDICATOR = bool(core.SETTINGS.get("show_indicator", config.SHOW_INDICATOR))
     config.SHOW_OCR_IN_LOG = bool(core.SETTINGS.get("show_ocr_in_log", config.SHOW_OCR_IN_LOG))
     config.HIDE_DELAY = float(core.SETTINGS.get("hide_delay", config.HIDE_DELAY))
@@ -306,6 +307,7 @@ def main():
     app = appwin.App()
     tts.warm()   # озвучка: прогрев соединения и звука в фоне
     updater.start_periodic()   # есть ли новая версия на GitHub
+    limits.start_deepl_checks()   # сколько символов DeepL осталось (если есть ключ)
     for w in watcher.WATCHERS:
         threading.Thread(target=w.run, daemon=True).start()
 

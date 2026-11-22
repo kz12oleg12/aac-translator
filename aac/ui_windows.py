@@ -246,6 +246,8 @@ class SettingsWindow:
         check(left, "Сохранять историю переводов в файл (папка history)", self.save)
         self.ocrlog = tk.BooleanVar(value=config.SHOW_OCR_IN_LOG)
         check(left, "Показывать распознанный текст в журнале панели", self.ocrlog)
+        self.gl_auto = tk.BooleanVar(value=config.GLOSSARY_AUTO)
+        check(left, "Пополнять словарь сам (имена, предметы, места)", self.gl_auto)
         self.indicator = tk.BooleanVar(value=config.SHOW_INDICATOR)
         check(left, "Значок «● AAC» поверх игры, пока включён автоперевод", self.indicator)
 
@@ -457,6 +459,8 @@ class SettingsWindow:
         config.SAVE_HISTORY = bool(self.save.get())
         config.SHOW_OCR_IN_LOG = bool(self.ocrlog.get())
         config.SHOW_INDICATOR = bool(self.indicator.get())
+        config.GLOSSARY_AUTO = bool(self.gl_auto.get())
+        core.save_settings(glossary_auto=config.GLOSSARY_AUTO)
         core.save_settings(show_indicator=config.SHOW_INDICATOR)
         config.HIDE_DELAY = float(self.hide_delay.get())
         config.KEEP_UNTIL_NEXT = bool(self.keep.get())

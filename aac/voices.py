@@ -277,8 +277,15 @@ def note_line(translation, orig=None):
         c["seen"] = time.time()
         c["lines"] = c.get("lines", 0) + 1
         _data["last"] = key
+        learn_name = (c.get("en"), c.get("ru")) if c.get("en") and c.get("ru") else None
         need_ai = "ai" not in c and not c.get("gender_manual")
         _save()
+    if learn_name:
+        try:   # имя говорящего → в словарь: переводчик будет писать его всегда одинаково
+            from . import glossary
+            glossary.learn(learn_name[0], learn_name[1], "имя")
+        except Exception:
+            pass
     if need_ai:
         # новый персонаж: спрашиваем нейросеть (с ожиданием до ~3 с — чтобы уже первая реплика была нужным голосом)
         t = threading.Thread(target=_ai_gender, args=(key, en or ru, _line_of(orig or translation)), daemon=True)

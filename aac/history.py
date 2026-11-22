@@ -24,6 +24,11 @@ def history_add(kind, original, translation):
     if not translation:
         return
     entry = (time.strftime("%H:%M:%S"), kind, original or "", translation)
+    try:   # «Клинок рассвета (Dawn Blade)» → в словарь, чтобы дальше переводилось одинаково
+        from . import glossary
+        glossary.learn_from_translation(translation if isinstance(translation, str) else "", kind)
+    except Exception as e:
+        print("glossary:", e)
     translation_history.append(entry)
     del translation_history[:-3000]
     if config.SAVE_HISTORY:

@@ -98,3 +98,74 @@ def open_glossary():
         os.startfile(GLOSSARY_FILE)
     except Exception as e:
         core.log(f"Не удалось открыть словарь: {e}", "error")
+
+
+# ---------- словарь пополняется сам ----------
+AUTO_HEADER = "# ---- добавлено программой автоматически (можно исправить или удалить строку) ----"
+_RU = re.compile(r"^[А-ЯЁа-яё][А-ЯЁа-яё'’\-]*$")
+_TERM = re.compile(r"([^\s()«»\"„“:;,.!?]+(?:[ \t]+[^\s()«»\"„“:;,.!?]+){0,4})[ \t]*\(([A-Za-z][A-Za-z'’\- ]{1,40})\)")
+
+
+def _known(en):
+    low = en.strip().lower()
+    return any(a.lower() == low for a, _ in glossary()) or normalize(en) in _glossary.get("ignore", set())
+
+
+def learn(en, ru, what="название"):
+    """Добавить в словарь «en = ru», если такого ещё нет. True — добавили."""
+    if not config.GLOSSARY_AUTO:
+        return False
+    en, ru = (en or "").strip(" .,:;!?«»\"'"), (ru or "").strip(" .,:;!?«»\"'")
+    if not en or not ru or len(en) > 40 or len(ru) > 50 or en.lower() == ru.lower():
+        return False
+    if not re.fullmatch(r"[A-Za-z][A-Za-z'’\- ]*", en) or not all(_RU.match(w) for w in ru.split()):
+        return False
+    if _known(en):
+        return False
+    try:
+        with open(GLOSSARY_FILE, encoding="utf-8-sig") as f:
+            content = f.read()
+        add = ("" if content.endswith("\n") else "\n")
+        if AUTO_HEADER not in content:
+            add += "\n" + AUTO_HEADER + "\n"
+        add += f"{en} = {ru}\n"
+        with open(GLOSSARY_FILE, "a", encoding="utf-8") as f:
+            f.write(add)
+    except Exception as e:
+        print("glossary learn:", e)
+        return False
+    glossary()   # перечитать (запись подхватится сразу)
+    core.log(f"📖 В словарь ({what}): {en} = {ru}", "ok")
+    return True
+
+
+def terms_in(translation):
+    """Пары «Клинок рассвета (Dawn Blade)» из перевода → [("Dawn Blade", "Клинок рассвета")]."""
+    out = []
+    for m in _TERM.finditer(translation or ""):
+        ru_words, en = m.group(1).split(), m.group(2).strip()
+        if any(ch.isdigit() for ch in m.group(1)):
+            continue
+        k = len(en.split())
+        tail = ru_words[-(k + 1):]
+        caps = [i for i, w in enumerate(tail) if w[:1].isupper()]
+        if not caps:
+            continue                     # название должно начинаться с заглавной
+        # «Возьми Клинок рассвета (Dawn Blade)» → «Клинок рассвета»; «Огненный шар (Fireball)» → целиком
+        start = len(tail) - k if (len(tail) - k) in caps else caps[0]
+        ru = tail[start:]
+        if not (max(1, k - 1) <= len(ru) <= k + 1):
+            continue
+        if all(_RU.match(w) for w in ru):
+            out.append((en, " ".join(ru)))
+    return out
+
+
+def learn_from_translation(translation, kind=""):
+    """Названия берём только из заголовков подсказок и заданий (первая строка): там они в обычной форме
+    («Огненный шар»), а в репликах имена склоняются («к Кевину») — такое в словарь не годится."""
+    if kind not in ("Подсказка", "Задание"):
+        return
+    first = next((ln for ln in (translation or "").splitlines() if ln.strip()), "")
+    for en, ru in terms_in(first):
+        learn(en, ru, "подсказка" if kind == "Подсказка" else "задание")

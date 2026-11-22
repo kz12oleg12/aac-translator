@@ -10,7 +10,7 @@ import time
 import requests
 
 
-from . import capture, config, core
+from . import capture, config, core, limits
 
 
 def call_model(model, img_b64, prompt):
@@ -56,6 +56,7 @@ def ask_gemini(img_b64, prompt):
         if model in dead_models or model_cooldown.get(model, 0) > time.time():
             continue
         r = call_model(model, img_b64, prompt)
+        limits.count_request("gemini")
         if r.status_code == 200:
             break
         print(r.text[:300])
@@ -302,6 +303,7 @@ def _compat_request(name, url, headers, body):
                 time.sleep(max(wait, 1.0))
                 r = requests.post(url, headers=headers, json=body, timeout=config.REQUEST_TIMEOUT)
         _remember_budget(body["model"], r)
+        limits.note_headers(name, r.headers)
         if r.status_code == 200:
             usage = (r.json() or {}).get("usage") or {}
             if usage.get("prompt_tokens"):

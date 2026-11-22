@@ -708,6 +708,46 @@ def test_area_read_aloud(monkey):
     assert not said
 
 
+def test_limits_and_glossary_learning(monkey):
+    """Лимиты переводчиков для панели; словарь пополняется сам из заголовков подсказок и имён."""
+    try:
+        from aac import limits
+    except ImportError:
+        print("   (в этой версии нет — пропуск)")
+        return
+    monkey(limits, "state", {})
+    monkey(limits, "_warned", set())
+    drain()
+    limits.note_headers("groq", {"x-ratelimit-remaining-requests": "14120", "x-ratelimit-limit-requests": "14400",
+                                 "x-ratelimit-remaining-tokens": "7200", "x-ratelimit-limit-tokens": "8000"})
+    limits.count_request("gemini"); limits.count_request("gemini")
+    limits.state["deepl"] = {"used": 60000, "limit": 500000, "t": 0}
+    sm = limits.summary()
+    assert "Groq 14 120/14 400 запр. на сегодня, 7 200/8 000 ток./мин" in sm, sm
+    assert "Gemini 2 запр. сегодня" in sm and "DeepL 12% месяца (440 000 симв. осталось)" in sm, sm
+    limits.note_headers("groq", {"x-ratelimit-remaining-requests": "100", "x-ratelimit-limit-requests": "14400"})
+    assert any("почти кончились" in p[1] for k, p in drain() if k == "log")
+    # словарь
+    g = T._owner("glossary_prompt")
+    if not hasattr(g, "learn"):
+        return
+    monkey(T._owner("GLOSSARY_AUTO"), "GLOSSARY_AUTO", True)
+    open(g.GLOSSARY_FILE, "w", encoding="utf-8").write("Renald = Ренальд\n")
+    g._glossary["mtime"] = None
+    assert g.terms_in("Возьми Клинок рассвета (Dawn Blade)") == [("Dawn Blade", "Клинок рассвета")]
+    assert g.terms_in("Огненный шар (Fireball)") == [("Fireball", "Огненный шар")]
+    assert g.terms_in("Это (Not a name) тест") == []
+    g.learn_from_translation("Огненный шар (Fireball)\nУрон +120", "Подсказка")
+    g.learn_from_translation("Иди к Кевину (Kevin)", "Субтитры")          # из реплик — не берём (падежи)
+    assert not g.learn("Renald", "Реналд")                                # уже есть — не трогаем
+    txt = open(g.GLOSSARY_FILE, encoding="utf-8").read()
+    assert "Fireball = Огненный шар" in txt and "Kevin" not in txt and g.AUTO_HEADER in txt, txt
+    assert ("Fireball", "Огненный шар") in g.glossary()
+    assert any("В словарь" in p[1] for k, p in drain() if k == "log")
+    monkey(T._owner("GLOSSARY_AUTO"), "GLOSSARY_AUTO", False)
+    assert not g.learn("Dawn Blade", "Клинок рассвета")
+
+
 def test_dock_overlays(monkey):
     """Ответы и субтитры одним окном: ответы вплотную под субтитрами, двигаются и тянутся вместе."""
     if not GUI:
@@ -913,6 +953,13 @@ def test_silero(monkey):
         assert sil.number_words(2024) == "две тысячи двадцать четыре"
         assert sil.number_words(1001000) == "один миллион одна тысяча"
         assert sil.number_words(-5) == "минус пять" and sil.number_words(0) == "ноль"
+    if hasattr(sil, "noun_gender"):   # согласование с существительным
+        for src, want in (("У меня 21 монета", "двадцать одна монета"), ("Принеси 2 шкуры", "две шкуры"),
+                          ("Возьми 1 зелье", "одно зелье"), ("Нужно 2 меча", "два меча"),
+                          ("Убей 1 волка", "одного волка"), ("Принеси 1 шкуру", "одну шкуру"),
+                          ("Осталась 1 попытка", "одна попытка"), ("12 монет", "двенадцать монет"),
+                          ("2 старые монеты", "две старые монеты"), ("В 1 году", "один году")):
+            assert want in sil.clean(src), (src, sil.clean(src))
     import contextlib, wave as wv
     calls = []
 

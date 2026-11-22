@@ -9,7 +9,7 @@ import threading
 import tkinter as tk
 
 
-from . import config, core, game, glossary, hotkeys, llm, translate, tts, ui_overlay
+from . import config, core, game, glossary, hotkeys, limits, llm, translate, tts, ui_overlay
 
 
 PROVIDER_LABELS = {  # как переводчики называются в выпадающем списке панели
@@ -49,7 +49,7 @@ class Panel:
             x, y = default
         x = max(0, min(x, sw - config.PANEL_WIDTH))   # панель стала шире — не уезжает за правый край
         self.default_pos = default
-        win.geometry(f"{config.PANEL_WIDTH}x750+{x}+{y}")
+        win.geometry(f"{config.PANEL_WIDTH}x780+{x}+{y}")
 
         # логотип в заголовке (icon_22.png рядом с программой; если файла нет — значок ⚙)
         self._logo = None
@@ -74,7 +74,7 @@ class Panel:
                        fg="#8cf", bg="#1a1d23", font=("Segoe UI", 10, "bold"), anchor="w")
         hdr.pack(side="left", fill="x", expand=True)
         self.state = tk.Label(win, text="", fg="#eee", bg="#1a1d23", font=("Consolas", 10),
-                              justify="left", anchor="w")
+                              justify="left", anchor="w", wraplength=config.PANEL_WIDTH - 24)
         self.state.pack(fill="x", padx=10)
 
         # выбор переводчика — запоминается в настройках
@@ -253,6 +253,7 @@ class Panel:
             f"Озвучка:           {('вкл · ' + tts.voice_title()) if config.TTS_ENABLED else 'выкл'}\n"
             f"Переводчики:       {' → '.join(PROVIDER_NAMES.get(p, p) for p in translate.provider_chain()) or 'нет ключей!'}\n"
             f"Последний ответ:   {core.stats['last']}\n"
+            f"Лимиты:            {limits.summary()}\n"
             + (f"Модели на паузе:   {llm.models_status()}\n" if any(p in translate.provider_chain() for p in ("gemini", "groq")) else "")
             + (f"Потрачено Claude:  ${core.stats['cost']:.4f} за сессию, ${llm.spent_total():.3f} всего"
                + (f" (~${core.stats['cost'] / core.stats['requests'] * 1000:.2f} за 1000 переводов)" if core.stats['requests'] else "")

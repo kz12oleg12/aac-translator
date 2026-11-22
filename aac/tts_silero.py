@@ -235,7 +235,7 @@ def _plural(n, one, few, many):
     return one if n == 1 else few if 2 <= n <= 4 else many
 
 
-def _triple(n, female=False):
+def _triple(n, female=False, neuter=False):
     words = []
     h, rest = divmod(n, 100)
     if h:
@@ -245,18 +245,26 @@ def _triple(n, female=False):
             w = _UNITS[rest]
             if female and rest in (1, 2):
                 w = "одна" if rest == 1 else "две"
+            elif neuter and rest == 1:
+                w = "одно"
             if rest or not h:
                 words.append(w)
     else:
         t, u = divmod(rest, 10)
         words.append(_TENS[t])
         if u:
-            words.append(("одна" if u == 1 else "две") if female and u in (1, 2) else _UNITS[u])
+            if female and u in (1, 2):
+                words.append("одна" if u == 1 else "две")
+            elif neuter and u == 1:
+                words.append("одно")
+            else:
+                words.append(_UNITS[u])
     return words
 
 
-def number_words(n):
-    """1234 → «одна тысяча двести тридцать четыре» (Silero сам цифры не читает)."""
+def number_words(n, gender="m", accusative_animate=False):
+    """1234 → «одна тысяча двести тридцать четыре» (Silero сам цифры не читает).
+    gender: род слова после числа — «двадцать одна монета», «две шкуры», «одно зелье»."""
     if n == 0:
         return "ноль"
     words = []
@@ -272,7 +280,11 @@ def number_words(n):
         if not g:
             continue
         if i == 0:
-            words += _triple(g)
+            words += _triple(g, gender in ("f", "fa"), gender == "n")
+            if gender == "fa" and words and words[-1] == "одна":
+                words[-1] = "одну"
+            if gender == "m" and accusative_animate and words and words[-1] == "один":
+                words[-1] = "одного"
         else:
             one, few, many, female = _SCALES[i - 1]
             words += _triple(g, female) + [_plural(g, one, few, many)]
@@ -291,8 +303,69 @@ def say_numbers(text):
     text = re.sub(r"(\d+)\s*/\s*(\d+)", lambda m: f"{m.group(1)} из {m.group(2)}", text)
     text = re.sub(r"(?:(?<=\s)|^)\+(?=\d)", "плюс ", text)
     text = re.sub(r"(?:(?<=\s)|^)[-−](?=\d)", "минус ", text)
+    text = re.sub(r"(?:([а-яёА-ЯЁ]+)(\s+))?(\d{1,12})(\s+)([а-яёА-ЯЁ]+(?:\s+[а-яёА-ЯЁ]+)?)",
+                  lambda m: (m.group(1) or "") + (m.group(2) or "")
+                  + _num_with_noun(int(m.group(3)), m.group(5), m.group(1))
+                  + m.group(4) + m.group(5), text)
     text = re.sub(r"\d{1,12}", lambda m: number_words(int(m.group(0))), text)
     return text
+
+
+_PREPOSITIONS = {"в", "во", "на", "о", "об", "обо", "при", "по", "к", "ко", "с", "со", "у", "от", "до", "из",
+                 "за", "под", "над", "без", "для", "через", "про"}
+
+
+def _imperative(word):
+    """Похоже на повелительный глагол: «убей», «найди», «принесите», «брось» (но не «осталась»)."""
+    w = (word or "").lower()
+    if not w or w in _PREPOSITIONS or w.endswith(("сь", "ся")):
+        return False
+    return w.endswith(("й", "и", "ь", "те"))
+
+
+def _num_with_noun(n, words, prev):
+    if prev and prev.lower() in _PREPOSITIONS:
+        return number_words(n)       # «в 1 году», «из 2 частей» — падеж не угадываем, читаем как есть
+    g = noun_gender(n, words, prev)
+    w = words.split()[0].lower()
+    animate_acc = (g == "m" and n % 10 == 1 and n % 100 != 11 and _imperative(prev)
+                   and w.endswith(("а", "я")))
+    return number_words(n, g, animate_acc)
+
+
+_ADJ_ENDINGS = ("ые", "ие", "ых", "их", "ый", "ий", "ой", "ая", "яя", "ое", "ее")
+
+
+def noun_gender(n, words, prev=None):
+    """Род слова после числа — по его окончанию (переводчик уже поставил нужную форму):
+    1/21 → «монета» (ж), «зелье» (ср), «меч» (м); 2–4 → «монеты» (ж) / «меча» (м)."""
+    last2, last = n % 100, n % 10
+    if 11 <= last2 <= 19 or last not in (1, 2):
+        return "m"                     # для остальных чисел род не важен
+    ws = [w.lower() for w in words.split()]
+    if last == 1:
+        w = ws[0]
+        if w.endswith(("ую", "юю")) or (not w.endswith(_ADJ_ENDINGS) and w.endswith(("у", "ю"))):
+            return "fa"                # «принеси одну шкуру» (винительный, женский род)
+        verb_before = _imperative(prev)
+        if verb_before and w.endswith(("а", "я")) and not w.endswith(("ая", "яя")):
+            return "m"                 # «убей одного волка»: после глагола «-а» — это мужской род
+        if w.endswith(("ого", "его")):
+            return "m"
+        if w.endswith(("ая", "яя")):
+            return "f"
+        if w.endswith(("ое", "ее")):
+            return "n"
+        if w.endswith(_ADJ_ENDINGS):
+            return "m"
+        if w.endswith(("а", "я")):
+            return "f"
+        if w.endswith(("о", "е", "ё")):
+            return "n"
+        return "m"
+    # 2, 22…: прилагательное («две старые монеты») пропускаем, смотрим на существительное
+    noun = next((w for w in ws if not w.endswith(_ADJ_ENDINGS)), ws[-1])
+    return "f" if noun.endswith(("ы", "и")) else "m"
 
 
 def clean(text):
