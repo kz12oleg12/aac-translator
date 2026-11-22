@@ -21,6 +21,7 @@ def apply_view_settings():
     config.SHOW_ORIGINAL = bool(core.SETTINGS.get("show_original", config.SHOW_ORIGINAL))
     config.SAVE_HISTORY = bool(core.SETTINGS.get("save_history", config.SAVE_HISTORY))
     config.GLOSSARY_AUTO = bool(core.SETTINGS.get("glossary_auto", config.GLOSSARY_AUTO))
+    config.SHOW_ON_STREAM = bool(core.SETTINGS.get("show_on_stream", config.SHOW_ON_STREAM))
     config.CACHE_ENABLED = bool(core.SETTINGS.get("cache_enabled", config.CACHE_ENABLED))
     config.SKIP_SYSTEM = bool(core.SETTINGS.get("skip_system", config.SKIP_SYSTEM))
     config.CHAT_HISTORY = int(core.SETTINGS.get("chat_history", config.CHAT_HISTORY))

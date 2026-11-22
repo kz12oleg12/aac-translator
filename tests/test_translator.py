@@ -1816,6 +1816,15 @@ def test_new_shell(monkey):
         sh.tiles["answers"].toggle.click()
         assert core_m.answers_auto == (not was) and T.load_settings()["answers_auto"] == (not was)
         sh.tiles["answers"].toggle.click()
+        # окна перевода на трансляции: переключатель сохраняется и применяется ко всем окнам перевода
+        from aac import ui_overlay
+        applied = []
+        monkey(ui_overlay, "apply_stream_visibility", lambda: applied.append(1))
+        sh.stream_row.toggle.click()
+        assert T._owner("SHOW_ON_STREAM").SHOW_ON_STREAM is True and T.load_settings()["show_on_stream"] is True
+        assert applied and app.subs.win in ui_overlay.STREAM_WINDOWS and sh.win not in ui_overlay.STREAM_WINDOWS
+        sh.stream_row.toggle.click()
+        assert T._owner("SHOW_ON_STREAM").SHOW_ON_STREAM is False
         sh.show("tr")
         cfg = T._owner("CACHE_ENABLED")
         before = cfg.CACHE_ENABLED

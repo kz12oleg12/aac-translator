@@ -261,6 +261,22 @@ class Shell:
             t.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
             tiles.columnconfigure(i, weight=1, uniform="t")
 
+        def set_stream(v):
+            from . import chat
+            config.SHOW_ON_STREAM = bool(v)
+            core.save_settings(show_on_stream=config.SHOW_ON_STREAM)
+            ui_overlay.apply_stream_visibility()
+            chat._state["cover_mode"] = None      # заново проверить, прячет ли Windows окно чата от снимков
+            core.log("Окна перевода " + ("видны на трансляции и записи экрана" if v else
+                                          "скрыты от трансляции и записи экрана"), "ok")
+        sc_, si = K.card(b, padx=16, pady=2)
+        sc_.pack(fill="x", pady=(12, 0))
+        self.stream_row = K.ToggleRow(si, "Показывать переводы на трансляции",
+                                      "зрители в Discord, OBS и на записи экрана видят субтитры, ответы и подсказки. "
+                                      "Это окно и журнал остаются скрытыми.",
+                                      lambda: config.SHOW_ON_STREAM, set_stream, last=True)
+        self.stream_row.pack(fill="x")
+
         keys = tk.Frame(b, bg=K.BG)
         keys.pack(fill="x", pady=(18, 0))
         top = tk.Frame(keys, bg=K.BG)
@@ -353,6 +369,7 @@ class Shell:
         self.tiles["chat"].set_sub("переводится сам" if core.chat_region else "область не задана")
         for t in self.tiles.values():
             t.sync()
+        self.stream_row.sync()
         for hid, chip in self.home_keys.items():
             chip.config(text=hotkeys.K(hid))
         if self.update_version:

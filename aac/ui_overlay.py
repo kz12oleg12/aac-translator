@@ -13,13 +13,20 @@ from . import config, core
 _exclude_warned = False
 
 
+STREAM_WINDOWS = []   # окна перевода, которые можно показывать на трансляции (субтитры, ответы, подсказки…)
+
+
 def exclude_from_capture(widget):
-    """Окна перевода не попадают на скриншоты — иначе скрипт переводил бы сам себя."""
+    """Окна программы не попадают на снимки экрана и в трансляцию (Discord, OBS).
+    Окна перевода — по настройке «показывать на трансляции»: тогда они видны зрителям, а на своих
+    снимках программа их всё равно закрашивает (own_rects)."""
     global _exclude_warned
     try:
         user32 = ctypes.windll.user32
     except Exception:
         return  # не Windows
+    show = config.SHOW_ON_STREAM and widget in STREAM_WINDOWS
+    affinity = 0x0 if show else 0x11     # WDA_NONE / WDA_EXCLUDEFROMCAPTURE
     ok = False
     handles = []
     try:
@@ -32,14 +39,24 @@ def exclude_from_capture(widget):
         pass
     for hwnd in dict.fromkeys(h for h in handles if h):
         try:
-            if user32.SetWindowDisplayAffinity(hwnd, 0x11):  # WDA_EXCLUDEFROMCAPTURE
+            if user32.SetWindowDisplayAffinity(hwnd, affinity):
                 ok = True
         except Exception:
             pass
-    if not ok and not _exclude_warned:
+    if not ok and not show and not _exclude_warned:
         _exclude_warned = True
         core.log("Не удалось скрыть окна перевода от скриншотов. Следите, чтобы окна перевода "
             "НЕ заходили на области субтитров и ответов (Ctrl+Shift+L — расставить окна).", "warn")
+
+
+def apply_stream_visibility():
+    """Переключили «показывать на трансляции» — применяем ко всем окнам перевода сразу."""
+    for w in list(STREAM_WINDOWS):
+        try:
+            if w.winfo_exists():
+                exclude_from_capture(w)
+        except Exception:
+            pass
 
 
 def release_mouse(widget=None):
@@ -115,6 +132,7 @@ class Overlay:
             # Windows оставляет «захват мыши» за невидимым окном — и программа перестаёт реагировать
             w.bind("<ButtonRelease-3>", lambda e: self.win.after(30, self.hide))
         self.visible = True
+        STREAM_WINDOWS.append(win)
         win.after(200, lambda: exclude_from_capture(win))
 
     # --- склейка окон ---
@@ -411,6 +429,7 @@ class WordTip:
             w.bind("<ButtonRelease-3>", lambda e: self.hide())
         self.visible = False
         win.withdraw()
+        STREAM_WINDOWS.append(win)
         win.after(200, lambda: exclude_from_capture(win))
 
     def show(self, text, orig=None):
