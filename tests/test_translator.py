@@ -486,7 +486,19 @@ def test_gui_smoke(monkey):
                 # предельная высота: старые сообщения уходят, окно не выше предела
                 cfg.CHAT_COVER, cfg.CHAT_HEIGHT = False, 70
                 app.show_chat([(f"P{i}: ", f"сообщение номер {i}") for i in range(8)])
-                ok_style = app.chat._pos()[1] == 70 and len(app.chat_lines) < 9
+                shown = app.chat.label.cget("text")
+                ok_style = app.chat._pos()[1] == 70 and "номер 7" in shown and "номер 0" not in shown
+                if hasattr(app, "_chat_wheel"):     # прокрутка колесом: вверх — старые, вниз — обратно
+                    E = types.SimpleNamespace
+                    for _ in range(5):
+                        app._chat_wheel(E(delta=120))
+                    up = app.chat.label.cget("text")
+                    ok_style = ok_style and "номер 7" not in up and "↓ ещё 5" in up
+                    app.show_chat([("Q: ", "свежее")])           # пришло новое, пока листаем — вид стоит
+                    ok_style = ok_style and app.chat_scroll == 6 and "свежее" not in app.chat.label.cget("text")
+                    for _ in range(10):
+                        app._chat_wheel(E(delta=-120))
+                    ok_style = ok_style and app.chat_scroll == 0 and "свежее" in app.chat.label.cget("text")
                 if hasattr(app, "_chat_height_drag"):      # потянули нижний край — высота 160
                     app._chat_height_drag(160)
                     ok_style = ok_style and cfg.CHAT_HEIGHT == 160 and app.chat._pos()[1] == 160

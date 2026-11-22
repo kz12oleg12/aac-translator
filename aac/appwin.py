@@ -58,8 +58,10 @@ class App:
         self.chat.apply_style()
         self.chat.hide()
         self.chat.win.after(400, self._remember_chat_hwnd)
-        self.chat_lines = []
+        self.chat_lines = []      # все переведённые сообщения (для прокрутки)
+        self.chat_scroll = 0      # на сколько сообщений прокручено вверх (0 — внизу, свежие)
         self.chat_last = 0.0
+        self.chat.wheel_handler = self._chat_wheel
         self.indicator = ui_overlay.Indicator(tk.Toplevel(self.root))   # «● AAC: перевод вкл»
         self.indicator.update(False)
         if config.ANSWERS_DOCKED:
@@ -274,10 +276,19 @@ class App:
     def show_chat(self, pairs):
         for prefix, text in pairs:
             self.chat_lines.append(f"{prefix}{text}")
-        self.chat_lines = self.chat_lines[-config.CHAT_LINES:]
+            if self.chat_scroll:
+                self.chat_scroll += 1      # вы листаете вверх — вид не уезжает из-за новых сообщений
+        self.chat_lines = self.chat_lines[-config.CHAT_HISTORY:]
         self.chat_last = time.time()
-        self.chat.show("\n".join(self.chat_lines))
-        self._trim_chat()    # ограничение высоты: старые сообщения уходят сверху, свежие видны
+        self.chat.show("")
+        self._trim_chat()
+
+    def _chat_wheel(self, e):
+        """Колесо мыши над окном чата — прокрутка истории сообщений."""
+        step = 1 if e.delta > 0 else -1
+        self.chat_scroll = max(0, min(len(self.chat_lines) - 1, self.chat_scroll + step))
+        self.chat_last = time.time()        # пока листаете — окно не прячется
+        self._trim_chat()
 
     def _chat_height_drag(self, h):
         """Тянут нижний край окна чата — это и есть предельная высота (в режиме «поверх чата» — высота области)."""
@@ -289,12 +300,25 @@ class App:
             config.CHAT_HEIGHT = int(h)
         self._trim_chat()
 
-    def _trim_chat(self):
-        self.chat.label.config(text="\n".join(self.chat_lines))
+    def chat_view(self):
+        """Какие сообщения сейчас видны: до текущей прокрутки, сколько помещается по высоте."""
+        end = len(self.chat_lines) - self.chat_scroll
         limit = self.chat.max_height() if self.chat.max_height else None
-        while limit and len(self.chat_lines) > 1 and self.chat.natural_height() > limit:
-            self.chat_lines.pop(0)
-            self.chat.label.config(text="\n".join(self.chat_lines))
+        start = max(0, end - (config.CHAT_LINES if not limit else config.CHAT_HISTORY))
+        view = self.chat_lines[start:end]
+        return view
+
+    def _trim_chat(self):
+        view = self.chat_view()
+        marker = f"↓ ещё {self.chat_scroll} нов. (колесо вниз)" if self.chat_scroll else ""
+
+        def put(v):
+            self.chat.label.config(text="\n".join(v + ([marker] if marker else [])))
+        put(view)
+        limit = self.chat.max_height() if self.chat.max_height else None
+        while limit and len(view) > 1 and self.chat.natural_height() > limit:
+            view = view[1:]                 # сверху убираем то, что не помещается
+            put(view)
         if self.chat.visible:
             self.chat.fit()
 
@@ -319,9 +343,11 @@ class App:
 
     def show_chat_window(self):
         """Вернуть окно чата (после правого клика): последние переводы или подсказку."""
-        self.chat.show("\n".join(self.chat_lines) if self.chat_lines else
-                       "Здесь появятся переводы новых сообщений чата.")
         self.chat_last = time.time()
+        if not self.chat_lines:
+            self.chat.show("Здесь появятся переводы новых сообщений чата.")
+            return
+        self.chat.show("")
         self._trim_chat()
 
     def select_chat_region(self):

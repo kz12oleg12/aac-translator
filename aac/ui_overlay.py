@@ -206,7 +206,11 @@ class Overlay:
         if getattr(self, "vgrip", None) is not None:
             self.vgrip.config(bg=config.GRIP_ACTIVE_COLOR if on else config.GRIP_COLOR)
 
+    wheel_handler = None   # своя реакция на колесо мыши (окно чата — прокрутка)
+
     def _wheel(self, e):
+        if self.wheel_handler is not None:
+            return self.wheel_handler(e)
         if self.leader is not None:
             return self.leader._wheel(e)
         step = 40 if e.delta > 0 else -40
