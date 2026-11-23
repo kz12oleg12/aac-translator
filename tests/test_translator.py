@@ -1831,6 +1831,12 @@ def test_new_shell(monkey):
         sh.tr_rows[0].toggle.click()
         assert cfg.CACHE_ENABLED == (not before) and T.load_settings()["cache_enabled"] == (not before)
         sh.tr_rows[0].toggle.click()
+        # обновление панели (несколько раз в секунду) не пересоздаёт строки — иначе они мигают
+        ids = {pid: str(w["title"]) for pid, w in sh.prov_rows.items()}
+        for _ in range(3):
+            sh.refresh()
+        assert ids == {pid: str(w["title"]) for pid, w in sh.prov_rows.items()}
+        assert all(w["title"].winfo_exists() for w in sh.prov_rows.values())
         sh.show("keys")
         assert sh.key_chips["auto"].cget("text") == T.K("auto")
         # все разделы — внутри окна, прежние окна не открываются

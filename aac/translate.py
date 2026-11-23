@@ -17,7 +17,8 @@ def provider_has_key(name):
     name = OCR_AI.get(name, name)
     keys = {"gemini": config.API_KEY, "claude": config.CLAUDE_API_KEY, "mistral": config.MISTRAL_API_KEY, "groq": config.GROQ_API_KEY,
             "deepl": config.DEEPL_API_KEY}
-    return name in ("ollama", "google", "microsoft") or "ВСТАВЬТЕ" not in keys.get(name, "ВСТАВЬТЕ")
+    key = (keys.get(name) or "").strip()
+    return name in ("ollama", "google", "microsoft") or (bool(key) and "ВСТАВЬТЕ" not in key)
 
 
 def provider_chain():

@@ -544,40 +544,68 @@ class Shell(SectionsMixin):
                 core.log(f"У «{PROVIDER_NAMES.get(p, p)}» нет ключа — он будет пропущен", "warn")
         self.refresh()
 
-    def _refresh_tr(self):
-        for w in self.prov_box.winfo_children():
-            w.destroy()
-        chain = translate.provider_chain()
-        lim = {n.lower(): t for n, _, t in limits.bars()}
-        rows = [("deepl", "DeepL"), ("microsoft", "Microsoft"), ("google", "Google"), ("groq_ocr", "Groq · нейросеть"),
-                ("gemini_ocr", "Gemini · нейросеть"), ("claude_ocr", "Claude · нейросеть, платно")]
-        for i, (pid, name) in enumerate(rows):
+    TR_ROWS = [("deepl", "DeepL"), ("microsoft", "Microsoft"), ("google", "Google"), ("groq_ocr", "Groq · нейросеть"),
+               ("gemini_ocr", "Gemini · нейросеть"), ("claude_ocr", "Claude · нейросеть, платно")]
+
+    def _build_prov_rows(self):
+        """Строки «Все переводчики» создаются один раз; дальше меняется только их текст и цвет (без мигания)."""
+        self.prov_rows = {}
+        for i, (pid, name) in enumerate(self.TR_ROWS):
             r = tk.Frame(self.prov_box, bg=K.CARD)
             r.pack(fill="x")
             body = tk.Frame(r, bg=K.CARD)
             body.pack(fill="x", pady=7)
-            has = translate.provider_has_key(pid)
-            K.Dot(body, K.GREEN if has else K.FAINT, 8).pack(side="left", padx=(0, 12))
+            dot = K.Dot(body, K.FAINT, 8)
+            dot.pack(side="left", padx=(0, 12))
             t = tk.Frame(body, bg=K.CARD)
             t.pack(side="left", fill="x", expand=True)
             top = tk.Frame(t, bg=K.CARD)
             top.pack(anchor="w")
-            K.label(top, name, 10, K.TEXT if has else K.MUTED, "bold").pack(side="left")
-            role = "основной" if chain[:1] == [pid] else ("запасной" if pid in chain[1:] else "")
-            if role:
-                tk.Label(top, text=role, bg=K.ACCENT, fg="#ffffff", font=K.f(8, "bold"), padx=6).pack(
-                    side="left", padx=(8, 0))
-            need_key = pid not in ("microsoft", "google")
-            K.label(t, ("ключ сохранён в Windows" if has else "нет ключа") if need_key else "без ключа", 9,
-                    K.DIM).pack(anchor="w")
-            info = lim.get(name.split(" ")[0].lower(), "без лимита" if not need_key else "")
-            K.label(body, info, 9, K.MUTED).pack(side="right")
-            if i < len(rows) - 1:
+            title = K.label(top, name, 10, K.TEXT, "bold")
+            title.pack(side="left")
+            role = tk.Label(top, text="", bg=K.ACCENT, fg="#ffffff", font=K.f(8, "bold"), padx=6)
+            sub = K.label(t, "", 9, K.DIM)
+            sub.pack(anchor="w")
+            info = K.label(body, "", 9, K.MUTED)
+            info.pack(side="right")
+            if i < len(self.TR_ROWS) - 1:
                 K.separator(r).pack(fill="x")
+            self.prov_rows[pid] = {"dot": dot, "title": title, "role": role, "sub": sub, "info": info, "state": None}
+
+    def _refresh_tr(self):
+        if not hasattr(self, "prov_rows"):
+            self._build_prov_rows()
+        chain = translate.provider_chain()
+        lim = {n.lower(): t for n, _, t in limits.bars()}
+        for pid, name in self.TR_ROWS:
+            w = self.prov_rows[pid]
+            has = translate.provider_has_key(pid)
+            role = "основной" if chain[:1] == [pid] else ("запасной" if pid in chain[1:] else "")
+            need_key = pid not in ("microsoft", "google")
+            sub = ("ключ сохранён в Windows" if has else "нет ключа") if need_key else "без ключа"
+            info = lim.get(name.split(" ")[0].lower(), "без лимита" if not need_key else "")
+            state = (has, role, sub, info)
+            if state == w["state"]:
+                continue                       # ничего не поменялось — не трогаем (иначе мигает)
+            w["state"] = state
+            w["dot"].set(K.GREEN if has else K.FAINT)
+            w["title"].config(fg=K.TEXT if has else K.MUTED)
+            w["sub"].config(text=sub)
+            w["info"].config(text=info)
+            if role:
+                w["role"].config(text=role)
+                if not w["role"].winfo_manager():
+                    w["role"].pack(side="left", padx=(8, 0))
+            elif w["role"].winfo_manager():
+                w["role"].pack_forget()
         for r in self.tr_rows:
             r.sync()
-        self.main_var.set(PROVIDER_LABELS.get(config.PROVIDER, config.PROVIDER))
-        self.fb_var.set(PROVIDER_LABELS.get(config.FALLBACK_PROVIDERS[0], "нет") if config.FALLBACK_PROVIDERS else "нет")
+        main = PROVIDER_LABELS.get(config.PROVIDER, config.PROVIDER)
+        fb = PROVIDER_LABELS.get(config.FALLBACK_PROVIDERS[0], "нет") if config.FALLBACK_PROVIDERS else "нет"
+        if self.main_var.get() != main:
+            self.main_var.set(main)
+        if self.fb_var.get() != fb:
+            self.fb_var.set(fb)
 
     # ---------- Клавиши ----------
     def _build_keys(self):

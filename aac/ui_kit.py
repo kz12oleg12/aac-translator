@@ -124,6 +124,8 @@ class Toggle(_Canvas):
             self.command(self.value)
 
     def set(self, v):
+        if bool(v) == self.value and self.find_all():
+            return                     # без изменений — не перерисовываем (иначе мигает)
         self.value = bool(v)
         self.draw()
 
@@ -138,7 +140,8 @@ class Toggle(_Canvas):
         self.create_oval(x, 3, x + k, 3 + k, fill=knob, outline=knob)
 
     def set_bg(self, bg):
-        self.config(bg=bg)
+        if self["bg"] != bg:
+            self.config(bg=bg)
 
 
 class Bar(_Canvas):
@@ -151,7 +154,10 @@ class Bar(_Canvas):
         self.bind("<Configure>", lambda e: self.draw())
 
     def set(self, frac, color=ACCENT):
-        self.frac, self.color = max(0.0, min(1.0, frac or 0.0)), color
+        frac = max(0.0, min(1.0, frac or 0.0))
+        if (frac, color) == (self.frac, self.color) and self.find_all():
+            return
+        self.frac, self.color = frac, color
         self.draw()
 
     def draw(self):
@@ -171,6 +177,9 @@ class Dot(_Canvas):
         self.set(color)
 
     def set(self, color):
+        if getattr(self, "_color", None) == color:
+            return
+        self._color = color
         self.delete("all")
         self.create_oval(0, 0, self.size - 1, self.size - 1, fill=color, outline=color)
 
@@ -235,6 +244,9 @@ class Tile(_Frame):
 
     def sync(self):
         on = bool(self.get())
+        if getattr(self, "_on", None) == on:
+            return
+        self._on = on
         bg = ACCENT_TINT if on else CARD_OFF
         self.config(bg=bg, highlightbackground=ACCENT_LINE if on else LINE, highlightcolor=ACCENT_LINE if on else LINE)
         for w in self.frames[1:]:
@@ -329,6 +341,8 @@ class Slider(_Canvas):
                 self.command(v, False)
 
     def set(self, v):
+        if v == self.value and self.find_all():
+            return
         self.value = v
         self.draw()
 
