@@ -462,8 +462,8 @@ class Shell(SectionsMixin, GamesMixin):
             pick = K.button(btns, "", lambda e=ev: core.events.put((e, None)), kind="ghost", size=9)
             pick.pack(side="left")
             clear = None
-            if clearable:
-                clear = K.button(btns, "Убрать", lambda a=clearable: self._clear_area(a), kind="danger", size=9)
+            clear = K.button(btns, "Удалить", lambda a=attr, n=name: self._ask_clear_area(a, n), kind="danger",
+                             size=9)
             self.area_cards[attr] = (size, pick, clear, chip, ev)
         mc, mi = K.card(b, padx=14, pady=12)
         mc.pack(fill="x", pady=(4, 0))
@@ -483,15 +483,26 @@ class Shell(SectionsMixin, GamesMixin):
         self.menu_forget = K.button(mb, "Забыть", lambda: (menu.forget(), self.refresh()), kind="danger", size=9)
         return sc
 
+    def _ask_clear_area(self, attr, name):
+        self.ask(f"Удалить область «{name}»?",
+                 f"Программа перестанет читать текст в этом месте экрана (в пресете «{profiles.name()}»). "
+                 "Обвести заново можно в любой момент.", "Удалить", lambda: self._clear_area(attr), no_text="Отмена")
+
     def _clear_area(self, attr):
+        """Удалить область из текущего пресета и спрятать её перевод."""
+        names = {"region": ("Субтитры", "subs_hide"), "region2": ("Реплики 2", "subs2_hide"),
+                 "answers_region": ("Ответы", "answers_hide"), "chat_region": ("Чат", None)}
+        title, hide = names.get(attr, (attr, None))
         setattr(core, attr, None)
         core.save_settings(**{attr: None})
         if attr == "chat_region":
             self.app.chat.hide()
-            core.log("Область чата убрана")
-        else:
-            core.events.put(("subs2_hide", None))
-            core.log("Вторая область реплик убрана")
+        elif hide:
+            core.events.put((hide, None))
+        core.log(f"Область «{title}» удалена", "ok")
+        if core.auto_on.is_set() and not any((core.region, core.region2, core.answers_region, core.chat_region)):
+            core.auto_on.clear()
+            core.log("Областей не осталось — автоперевод выключен")
         self.refresh()
 
     def _refresh_areas(self):

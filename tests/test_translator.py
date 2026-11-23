@@ -2203,6 +2203,17 @@ def test_game_presets(monkey):
                 app.panel._new_not_game()               # «Это не игра» — пресет убран, больше не узнаём
                 assert not app.panel.new_banner.winfo_manager() and "eldenring.exe" in game.not_games()
                 assert prof not in profiles.all_profiles()
+            if hasattr(app.panel, "_ask_clear_area"):     # удалить любую область, с вопросом
+                core_m.region, core_m.answers_region = (1, 2, 3, 4), (5, 6, 7, 8)
+                app.panel.show("areas")
+                app.root.update()
+                app.panel._ask_clear_area("region", "Субтитры")
+                app.root.update()
+                assert core_m.region is not None and app.panel._dialog is not None, "сначала вопрос"
+                app.panel._dialog_yes() if hasattr(app.panel, "_dialog_yes") else app.panel._clear_area("region")
+                assert core_m.region is None and core_m.answers_region == (5, 6, 7, 8)
+                app.panel._clear_area("answers_region")
+                assert core_m.answers_region is None
         finally:
             app.root.destroy()
 
