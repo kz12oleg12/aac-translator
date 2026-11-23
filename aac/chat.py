@@ -210,6 +210,8 @@ def _step():
         return
     for ln in fresh:
         _remember(_key(ln))
+    if core.chat_region != reg:
+        return                      # пока переводили, область чата удалили или обвели заново
     out = [(p, t) for (p, _), t in zip(pairs, tr) if t]
     core.events.put(("chat", out))
     for (p, m), t in zip(pairs, tr):

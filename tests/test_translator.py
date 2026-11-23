@@ -340,6 +340,43 @@ def _fade(monkey, keep):
         assert spoken == ["Да, она в безопасности."], spoken
 
 
+def test_region_deleted_mid_translation(monkey):
+    """Область удалили, пока шёл перевод, — перевод не всплывает на экране после удаления."""
+    T.set("PROVIDER", "google")
+    seq = [img()] * 2 + [img(text="Yes, she's safe.")] * 8 + [img()] * 4
+    it = iter(seq)
+    stop = threading.Event()
+
+    def grab(r):
+        try:
+            return next(it)
+        except StopIteration:
+            stop.set()
+            time.sleep(0.2)
+            return img()
+    region = {"r": (0, 0, 400, 60)}
+    calls = []
+
+    def slow_translate(im, prompt=None):
+        calls.append(1)
+        region["r"] = None                 # пока переводим — область удалили
+        return "Да, она в безопасности.", None
+    for name, v in [("grab", grab), ("ocr_lines", lambda im: ["Yes, she's safe."] if im.getbbox() else []),
+                    ("safe_translate", slow_translate), ("POLL_INTERVAL", 0.02), ("MIN_REQUEST_GAP", 0)]:
+        monkey(T._owner(name), name, v)
+    T.auto_on.set()
+    drain()
+    w = T.Watcher("Субтитры", lambda: region["r"], "text", "subs_hide", None, lambda: T.PROMPT)
+    threading.Thread(target=w.run, daemon=True).start()
+    deadline = time.time() + 3
+    while not calls and time.time() < deadline:
+        time.sleep(0.05)
+    time.sleep(0.3)
+    T.auto_on.clear()
+    assert calls, "перевод должен был начаться"
+    assert not [k for k, _ in drain() if k == "text"], "перевод удалённой области не показываем"
+
+
 def test_history(monkey):
     T.translation_history.clear()
     T.history_add("Субтитры", "Renald\nHello", "Ренальд\nПривет")

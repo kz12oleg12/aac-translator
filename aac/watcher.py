@@ -225,8 +225,12 @@ class Watcher:
                 time.sleep(0.5)   # вы не в игре — ничего не переводим
                 continue
             reg = self.get_region()
+            if reg != getattr(self, "_last_reg", reg):      # область удалили / обвели заново / другая игра
+                prev = sent = shown = None                   # — начинаем с чистого листа
+                self._sent_ocr = self._prev_ocr = None
+            self._last_reg = reg
             if reg is None:
-                time.sleep(1)
+                time.sleep(0.3)
                 continue
             try:
                 img = capture.grab(reg)
@@ -324,6 +328,8 @@ class Watcher:
                 elif text is None:
                     self.hide()   # нейросеть не нашла текста
                     shown = None
+                elif self.get_region() != reg:
+                    pass     # пока переводили, область удалили или обвели заново — этот перевод уже не нужен
                 elif core.auto_on.is_set():
                     if text != shown:
                         orig = history.last_source()
