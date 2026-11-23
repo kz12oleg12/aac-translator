@@ -853,8 +853,8 @@ class GamesMixin:
         tip, ti = K.card(b, bg=K.ACCENT_TINT, border=K.ACCENT_LINE, padx=16, pady=10)
         tip.pack(fill="x", pady=(0, 14))
         K.button(ti, "+ Добавить игру", self._game_add, kind="primary").pack(side="right", padx=(12, 0))
-        K.label(ti, "Запустите игру и нажмите «+ Добавить игру» — или просто включите в игре автоперевод "
-                    f"({hotkeys.K('auto')}), программа предложит создать пресет.",
+        K.label(ti, "Новую игру программа узнаёт сама и заводит ей пресет. Не узнала — запустите игру "
+                    "и нажмите «+ Добавить игру».",
                 10, K.TEXT, bg=K.ACCENT_TINT, wraplength=470).pack(side="left", anchor="w")
         self.games_box = tk.Frame(b, bg=K.BG)
         self.games_box.pack(fill="x")
@@ -939,6 +939,23 @@ class GamesMixin:
             K.button(bottom, "Открепить" if is_locked else "📌 Закрепить",
                      lambda pid=pid, l=is_locked: (profiles.lock(None if l else pid), self._games_render()),
                      kind="ghost", size=9).pack(side="right", padx=(0, 8))
+        from . import game
+        ng = sorted(game.not_games())
+        if ng:      # что вы отметили «не игра» — видно и можно вернуть
+            c, ci = K.card(self.games_box, bg=K.CARD, padx=16, pady=12)
+            c.pack(fill="x", pady=(0, 12))
+            K.label(ci, "Не игры", 11, K.TEXT, "bold").pack(anchor="w")
+            K.label(ci, "Эти программы вы отметили «не игра» — программа их не узнаёт и не переводит в них. "
+                        "Ошиблись — нажмите ✕.", 9, K.DIM, wraplength=600).pack(anchor="w", pady=(2, 8))
+            row = tk.Frame(ci, bg=K.CARD)
+            row.pack(fill="x")
+            for exe in ng:
+                pill = tk.Frame(row, bg=K.SIDEBAR, highlightthickness=1, highlightbackground=K.LINE)
+                pill.pack(side="left", padx=(0, 6))
+                tk.Label(pill, text=exe, bg=K.SIDEBAR, fg=K.TEXT2, font=K.f(9), padx=6, pady=1).pack(side="left")
+                x = tk.Label(pill, text="✕", bg=K.SIDEBAR, fg=K.FAINT, font=K.f(8), cursor="hand2", padx=3)
+                x.pack(side="left")
+                x.bind("<Button-1>", lambda e, exe=exe: (game.unmark_not_game(exe), self._games_render()))
 
     def _game_add(self):
         """«+ Добавить игру»: выбрать из запущенных сейчас программ."""
@@ -948,6 +965,8 @@ class GamesMixin:
             if profiles.for_exe(exe):
                 core.log(f"{exe} уже есть в списке игр — «{profiles.name(profiles.for_exe(exe))}»", "warn")
                 return
+            if exe in game.not_games():
+                game.unmark_not_game(exe)
             game.create_profile_for(exe, profiles._pretty(exe))
             self._games_render()
         self.pick_program("Добавить игру", "Выберите игру из запущенных сейчас программ. Название потом можно "

@@ -2050,6 +2050,12 @@ def test_game_presets(monkey):
     assert game.blocked()
     # «Не игра» — больше не спрашиваем
     assert game.unknown_game() is None, "плеер — в списке «не игр»"
+    if hasattr(game, "unmark_not_game"):    # «не игра» по ошибке — вернуть
+        game.mark_not_game("deadcells.exe")
+        fg[0] = "DeadCells.exe"
+        assert game.unknown_game() is None
+        game.unmark_not_game("deadcells.exe")
+        assert game.unknown_game() == "deadcells.exe" and "deadcells.exe" not in game.not_games()
     fg[0] = "someplayer.exe"
     assert game.unknown_game() == "someplayer.exe"
     game.mark_not_game("someplayer.exe")

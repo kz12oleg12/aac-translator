@@ -121,7 +121,8 @@ class App:
             self._away_hidden = [ov for ov in (self.subs, self.answers) if ov.visible]
             for ov in self._away_hidden:
                 ov.hide()
-            core.log(f"Вы не в игре ({exe}) — пауза")
+            core.log(f"Вы не в игре ({exe}) — пауза" + (
+                ". Её вы отметили «не игра» — вернуть: раздел «Игры», внизу" if exe in game.not_games() else ""))
             self.panel.refresh()
 
     def game_created(self, prof):

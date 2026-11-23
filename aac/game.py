@@ -205,6 +205,23 @@ def nice_title(title, exe):
     return t if 2 <= len(t) <= 40 else profiles._pretty(exe)
 
 
+def explain(exe, pid):
+    """Почему программа не считается игрой — строка для журнала."""
+    p = _path_of(pid) if pid else None
+    if not p:
+        return f"{exe}: не удалось узнать путь к файлу (программа запущена от администратора?)"
+    folder = any(d in p for d in GAME_DIRS)
+    files = has_game_files(p)
+    win = p in windows_games()
+    full = foreground_fullscreen()
+    yn = lambda v: "да" if v else "нет"
+    return (f"{exe} ({p}): папка игр — {yn(folder)}, файлы движка — {yn(files)}, в списке игр Windows — {yn(win)}, "
+            f"на весь экран — {yn(full)}")
+
+
+_explained = set()
+
+
 def detect_new_game(checks_needed=6):
     """Вызывается 2 раза в секунду, без всяких клавиш. Программа без пресета — игра, если она из папки игр
     (Steam, Epic, GOG…) или 3 секунды подряд открыта на весь экран. Возвращает (exe, название) — пора создать пресет."""
@@ -216,6 +233,12 @@ def detect_new_game(checks_needed=6):
     need = 2 if in_game_folder(pid) else (checks_needed if foreground_fullscreen() else None)
     if need is None:
         _seen_new.update(exe=None, n=0)
+        if _seen_new.get("why") != exe:
+            _seen_new.update(why=exe, wn=0)
+        _seen_new["wn"] += 1
+        if _seen_new["wn"] == checks_needed * 2 and exe not in _explained:     # 6 с на экране, а не узнали
+            _explained.add(exe)
+            core.log("Не похоже на игру — " + explain(exe, pid) + ". Если это игра: «Игры» → «+ Добавить игру».")
         return None
     if _seen_new["exe"] != exe:
         _seen_new.update(exe=exe, n=0)
@@ -263,6 +286,7 @@ def running_programs():
 
         def each(hwnd, _):
             try:
+                hwnd = ctypes.c_void_p(hwnd)     # 64-битный адрес окна не влезает в int по умолчанию
                 if not user32.IsWindowVisible(hwnd) or user32.GetWindow(hwnd, 4):   # 4 = GW_OWNER: всплывашки
                     return True
                 n = user32.GetWindowTextLengthW(hwnd)
@@ -349,6 +373,14 @@ def mark_not_game(exe):
     ng = sorted(not_games() | {exe.lower()})
     core.save_settings(not_games=ng)
     core.log(f"{exe} — не игра, больше не спрошу", "ok")
+
+
+def unmark_not_game(exe):
+    ng = sorted(not_games() - {exe.lower()})
+    core.save_settings(not_games=ng)
+    _seen_new.update(exe=None, n=0)
+    _scan["t"] = 0                       # сразу перепроверить открытые окна
+    core.log(f"{exe} убрана из «не игр» — если это игра, программа узнает её через пару секунд", "ok")
 
 
 def unknown_game(exe=None, pid=None):
