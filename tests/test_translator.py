@@ -120,6 +120,10 @@ class R:
             raise ValueError("no json")
         return self._js
 
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
 
 def drain():
     out = []
@@ -1973,6 +1977,29 @@ def test_update_on_startup(monkey):
             assert clicked and app.panel._dialog is None
         finally:
             app.root.destroy()
+
+
+def test_update_etag(monkey):
+    """Частая проверка обновлений: повторный запрос спрашивает «изменилось ли?» (ETag), ответ 304 — без лимита."""
+    from aac import updater
+    sent = []
+
+    def get(url, headers=None, timeout=None):
+        sent.append(dict(headers or {}))
+        if headers and headers.get("If-None-Match") == '"v1"':
+            return R(304, {})
+        r = R(200, {"version": "99.1", "notes": ["x"]})
+        r.headers = {"ETag": '"v1"'}
+        return r
+    monkey(updater.requests, "get", get)
+    updater.state.update(latest=None, etag=None, checking=False)
+    drain()
+    a = updater.check(quiet=True)
+    b = updater.check(quiet=True)
+    assert a["version"] == b["version"] == "99.1"
+    assert "If-None-Match" not in sent[0] and sent[1]["If-None-Match"] == '"v1"'
+    assert sum(1 for k, _ in drain() if k == "update_available") == 1, "второй раз — без нового объявления"
+    updater.state.update(latest=None, etag=None)
 
 
 # ---------- запуск ----------

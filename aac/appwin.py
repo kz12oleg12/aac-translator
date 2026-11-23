@@ -757,13 +757,9 @@ class App:
                         updater.state["announced"] = payload["version"]
                         if config.UPDATE_AUTO:
                             updater.prepare_async(payload)        # скачать в фоне, потом спросить про перезапуск
-                        else:
+                        else:    # без окна-вопроса: полоса «Обновить» на Главной и уведомление Windows
                             tray.notify(f"AAC Translator {payload['version']}",
-                                        "Вышла новая версия — обновить можно в окне программы.")
-                            self.panel.ask(f"Вышла версия {payload['version']}",
-                                           "Обновить сейчас? Программа закроется и через полминуты запустится "
-                                           "снова — уже новой версии.",
-                                           "Обновить", lambda: core.events.put(("update_install", None)))
+                                        "Вышла новая версия — кнопка «Обновить» на Главной.")
                 elif kind == "update_ready":
                     tray.notify(f"AAC Translator {payload['version']}",
                                 "Обновление загружено — нужно перезапустить программу.")

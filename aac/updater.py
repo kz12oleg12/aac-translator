@@ -53,7 +53,16 @@ def check(quiet=True):
     state["checking"] = True
     try:
         url = VERSION_URL.format(repo=config.UPDATE_REPO, branch=config.UPDATE_BRANCH)
-        r = requests.get(url, headers=_headers(raw=True), timeout=15)
+        headers = _headers(raw=True)
+        if state.get("etag") and state.get("latest"):
+            headers["If-None-Match"] = state["etag"]   # «изменилось ли?» — ответ «нет» не тратит лимит GitHub
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code == 304:                      # version.json не менялся с прошлой проверки
+            info = state["latest"]
+            if not quiet:
+                core.log(f"Обновлений нет: у вас последняя версия {config.VERSION}"
+                         if not is_newer(info["version"]) else f"Доступна версия {info['version']}", "ok")
+            return info
         if r.status_code == 404:
             msg = ("Обновления: репозиторий не найден или закрыт. Если он Private — сохраните токен "
                    "только на чтение: setx GITHUB_TOKEN \"...\" и перезапустите программу.")
@@ -63,6 +72,7 @@ def check(quiet=True):
         if r.status_code == 403:
             raise RuntimeError("Обновления: GitHub временно ограничил запросы — проверю позже.")
         r.raise_for_status()
+        state["etag"] = (getattr(r, "headers", None) or {}).get("ETag")
         data = r.json()
         info = {"version": str(data.get("version", "")).lstrip("vV"),
                 "notes": "\n".join(data.get("notes", [])) if isinstance(data.get("notes"), list)
@@ -110,7 +120,7 @@ def startup_check():
 
 
 def start_periodic():
-    """Проверка сразу при запуске и потом каждые config.UPDATE_EVERY_MINUTES минут.
+    """Проверка сразу при запуске и потом раз в минуту (config.UPDATE_EVERY_SECONDS).
     При запуске (вы ещё не в игре) новая версия ставится сама, если включено «обновляться сам»."""
     if not config.UPDATE_CHECK or not config.UPDATE_REPO:
         return
@@ -119,8 +129,10 @@ def start_periodic():
         time.sleep(3)
         startup_check()
         while True:
-            time.sleep(max(5, config.UPDATE_EVERY_MINUTES) * 60)
+            time.sleep(max(30, config.UPDATE_EVERY_SECONDS))
             check(quiet=True)
+            if "ограничил" in str(state.get("error") or ""):
+                time.sleep(15 * 60)                    # GitHub попросил подождать — не настаиваем
     threading.Thread(target=loop, daemon=True).start()
 
 
