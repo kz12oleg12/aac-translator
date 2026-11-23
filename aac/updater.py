@@ -175,7 +175,8 @@ def startup_check():
 
 
 def start_periodic():
-    """Проверка сразу при запуске и потом раз в минуту (config.UPDATE_EVERY_SECONDS).
+    """Проверка при запуске (и кнопкой «Проверить обновления»). Периодическая — только если задан
+    config.UPDATE_EVERY_SECONDS > 0 (по умолчанию выключена: не тратит запросы GitHub).
     Сама программа обновляется только при запуске (если включено), во время работы — лишь кнопка «Обновить».
     При запуске (вы ещё не в игре) новая версия ставится сама, если включено «обновляться сам»."""
     if not config.UPDATE_CHECK or not config.UPDATE_REPO:
@@ -183,7 +184,7 @@ def start_periodic():
 
     def loop():
         time.sleep(3)
-        if startup_check():
+        if startup_check() or config.UPDATE_EVERY_SECONDS <= 0:
             return
         while True:
             time.sleep(max(30, config.UPDATE_EVERY_SECONDS))
