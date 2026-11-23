@@ -163,8 +163,49 @@ class App:
                 self.subs.show(self.subs.label.cget("text"))
             self.show_chat_window()
 
-    def pick_area(self, prompt, on_done, on_clear=None):
-        """Затемняет экран и даёт обвести прямоугольник мышкой."""
+    def _area_target(self):
+        """Для какой игры обводим область — решаем В МОМЕНТ НАЖАТИЯ клавиши, по окну на экране.
+        Игра из списка — её пресет. Незнакомая программа — раз вы обводите в ней область, это игра: пресет сразу.
+        Браузер и «не игры» — отказ. Нажали в панели программы — пресет, выбранный в разделе «Области»."""
+        if game.locked():
+            return core.active_profile
+        exe, pid = game.foreground_exe()
+        if not exe or pid == os.getpid():
+            return core.active_profile
+        prof = profiles.for_exe(exe)
+        if prof:
+            if prof != core.active_profile:
+                profiles.activate(prof)
+            return prof
+        if exe in game.NOT_GAME_EXE or exe in game.not_games():
+            core.log(f"{exe} — не игра: области обводятся в самой игре (или в панели → «Области»)", "warn")
+            return None
+        prof = game.create_profile_for(exe, game.nice_title(game.foreground_title(), exe))
+        self.game_created(prof)
+        return prof
+
+    def pick_area(self, prompt, on_done, on_clear=None, game_area=False):
+        """Затемняет экран и даёт обвести прямоугольник мышкой.
+        game_area — область игры (субтитры, ответы, чат, меню): сохраняется в пресет игры, которая была
+        на экране в момент нажатия клавиши, даже если за время обводки активная игра сменилась."""
+        if game_area:
+            target = self._area_target()
+            if target is None:
+                return
+            prompt = f"«{profiles.name(target)}» — " + prompt[0].lower() + prompt[1:]
+            done0 = on_done
+
+            def on_done(result, target=target):
+                if result and core.active_profile != target and target in profiles.all_profiles():
+                    profiles.activate(target, announce=False)
+                done0(result)
+            if on_clear is not None:
+                clear0 = on_clear
+
+                def on_clear(target=target):
+                    if core.active_profile != target and target in profiles.all_profiles():
+                        profiles.activate(target, announce=False)
+                    clear0()
         was_auto = core.auto_on.is_set()
         core.auto_on.clear()  # пока выделяем — автоперевод на паузе, чтобы не поймать затемнение
         sel = tk.Toplevel(self.root)
@@ -222,7 +263,7 @@ class App:
                 self.panel.refresh()
                 if self.subs.visible:
                     self.subs.fit()  # переезжает к новой области
-        self.pick_area("Обведите область СУБТИТРОВ (для автоперевода).", done)
+        self.pick_area("Обведите область СУБТИТРОВ (для автоперевода).", done, game_area=True)
 
     LAYOUT_SUBS = ("Перевод СУБТИТРОВ\nТащите за текст — положение.\n"
                    "Тяните за зелёный правый край (или колесо мыши) — ширина.")
@@ -400,7 +441,7 @@ class App:
                 self.root.after(200, lambda: threading.Thread(target=menu.learn, args=(reg,), daemon=True).start())
 
         self.pick_area("Меню игры должно быть ОТКРЫТО. Обведите кусочек меню, который всегда одинаковый "
-                       "(заголовок или кнопки). Правый клик — забыть меню.", done, menu.forget)
+                       "(заголовок или кнопки). Правый клик — забыть меню.", done, menu.forget, game_area=True)
 
     def menu_state(self, opened):
         """Меню игры открыли/закрыли: прячем/возвращаем окна перевода."""
@@ -445,7 +486,7 @@ class App:
             core.log("Область чата убрана")
             self.panel.refresh()
         self.pick_area("Обведите ОКНО ЧАТА игры (только строки сообщений, без вкладок и поля ввода). "
-                       "Правый клик — убрать область.", done, clear)
+                       "Правый клик — убрать область.", done, clear, game_area=True)
 
     def chat_compose(self):
         """Маленькое поле: пишете по-русски → Enter → английский перевод в буфере обмена."""
@@ -618,7 +659,7 @@ class App:
             core.events.put(("subs2_hide", None))
             self.panel.refresh()
         self.pick_area("Обведите ВТОРУЮ область реплик (где НПС говорят, когда проходите мимо). "
-                       "Правый клик — убрать её.", done, clear)
+                       "Правый клик — убрать её.", done, clear, game_area=True)
 
     def select_answers_region(self):
         def done(reg):
@@ -629,7 +670,7 @@ class App:
                 self.panel.refresh()
                 if self.answers.visible:
                     self.answers.fit()
-        self.pick_area("Обведите область ВАРИАНТОВ ОТВЕТА (для автоперевода).", done)
+        self.pick_area("Обведите область ВАРИАНТОВ ОТВЕТА (для автоперевода).", done, game_area=True)
 
     def profile_changed(self):
         """Переключились на другую игру: убрать переводы прежней, перечитать её области."""

@@ -2203,6 +2203,32 @@ def test_game_presets(monkey):
                 app.panel._new_not_game()               # «Это не игра» — пресет убран, больше не узнаём
                 assert not app.panel.new_banner.winfo_manager() and "eldenring.exe" in game.not_games()
                 assert prof not in profiles.all_profiles()
+            if hasattr(app, "_area_target"):     # две игры: область — в пресет игры, где нажали клавишу
+                import tkinter as tk
+                w3 = profiles.create("witcher3.exe", "The Witcher 3")
+                fg2 = ["witcher3.exe"]
+                monkey(game, "foreground_exe", lambda: (fg2[0], 4242))
+                monkey(game, "foreground_title", lambda: "Hades")
+                profiles.activate("archeage", announce=False)
+                saved = []
+                app.pick_area("Обведите область СУБТИТРОВ.", lambda r: saved.append((core_m.active_profile, r)),
+                              game_area=True)
+                app.root.update()
+                assert core_m.active_profile == w3, "клавиша в Witcher — сразу его пресет"
+                profiles.activate("archeage", announce=False)      # за время обводки переключились на другую
+                cv = [c for w in app.root.winfo_children() if isinstance(w, tk.Toplevel)
+                      for c in w.winfo_children() if isinstance(c, tk.Canvas) and str(c.cget("cursor")) == "cross"][-1]
+                assert "«The Witcher 3»" in cv.itemcget(cv.find_all()[0], "text")
+                for ev, x, y in (("<ButtonPress-1>", 10, 10), ("<B1-Motion>", 200, 120), ("<ButtonRelease-1>", 200, 120)):
+                    cv.event_generate(ev, x=x, y=y)
+                app.root.update()
+                assert saved and saved[0][0] == w3, saved
+                fg2[0] = "hades.exe"                                 # незнакомая программа + F9 → это игра
+                assert app._area_target() == "hades" and profiles.name("hades") == "Hades"
+                fg2[0] = "chrome.exe"
+                assert app._area_target() is None, "в браузере области не обводим"
+                profiles.delete("hades")
+                profiles.delete(w3)
             if hasattr(app.panel, "_ask_clear_area"):     # удалить любую область, с вопросом
                 core_m.region, core_m.answers_region = (1, 2, 3, 4), (5, 6, 7, 8)
                 app.panel.show("areas")

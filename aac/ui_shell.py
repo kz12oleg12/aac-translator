@@ -434,6 +434,9 @@ class Shell(SectionsMixin, GamesMixin):
     # ---------- Области ----------
     def _build_areas(self):
         sc, b = self._page("Области", "Где программа читает текст на экране. Цвет — как у рамки в режиме расстановки.")
+        self.area_games = tk.Frame(b, bg=K.BG)          # чьи это области: выбор игры
+        self.area_games.pack(fill="x", pady=(0, 12))
+        self._area_games_key = None
         K.button(b, f"Расставить окна и рамки · {hotkeys.K('layout')}", lambda: core.events.put(("layout", None)),
                  kind="primary").pack(anchor="w", pady=(0, 14))
         grid = tk.Frame(b, bg=K.BG)
@@ -505,7 +508,36 @@ class Shell(SectionsMixin, GamesMixin):
             core.log("Областей не осталось — автоперевод выключен")
         self.refresh()
 
+    def _render_area_games(self):
+        """«Области игры: [ArcheAge] [● Dead Cells]» — какую игру сейчас настраиваете; щелчок — другая."""
+        profs = profiles.all_profiles()
+        live = profiles.running()
+        locked = core.SETTINGS.get("profile_lock")
+        key = (tuple(profs), core.active_profile, frozenset(live), locked,
+               tuple(p.get("name", "") for p in profs.values()))
+        if key == self._area_games_key:
+            return
+        self._area_games_key = key
+        for w in self.area_games.winfo_children():
+            w.destroy()
+        row = tk.Frame(self.area_games, bg=K.BG)
+        row.pack(fill="x")
+        K.label(row, "Области игры:", 10, K.DIM).pack(side="left", padx=(0, 8))
+        for pid, p in profs.items():
+            on = pid == core.active_profile
+            txt = ("● " if pid in live else "") + p.get("name", pid)
+            lb = tk.Label(row, text=txt, font=K.f(10, "bold" if on else "normal"), padx=10, pady=3,
+                          bg=K.ACCENT if on else K.SIDEBAR, fg="#ffffff" if on else K.TEXT2,
+                          cursor="arrow" if on or locked else "hand2")
+            lb.pack(side="left", padx=(0, 6))
+            if not on and not locked:
+                lb.bind("<Button-1>", lambda e, pid=pid: profiles.activate(pid))
+        hint = ("📌 пресет закреплён — открепите в «Играх», чтобы выбрать другую" if locked else
+                "● — игра запущена. Клавиши областей (F9…) в игре сами выбирают её пресет.")
+        K.label(self.area_games, hint, 9, K.FAINT).pack(anchor="w", pady=(6, 0))
+
     def _refresh_areas(self):
+        self._render_area_games()
         for attr, (size, pick, clear, chip, ev) in self.area_cards.items():
             reg = getattr(core, attr)
             if reg:
