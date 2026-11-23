@@ -334,13 +334,27 @@ def is_game(exe):
 _blocked_logged = {"exe": None}
 
 
+def no_game():
+    """Программа «ждёт игру»: ни одна игра из списка не запущена — значит, ничего не переводим.
+    (Закреплённый пресет и выключенное «Только игры из списка» — исключения: там игра — любое окно.)"""
+    from . import profiles
+    return config.GAMES_ONLY and not locked() and not profiles.is_running()
+
+
 def blocked():
-    """Ручной перевод по клавише в окне без пресета? True — не переводим (в журнал — один раз на программу)."""
+    """Перевод по клавише сейчас нельзя? Нет запущенной игры или на экране не игра — не переводим
+    (в журнал — один раз на причину)."""
     from . import profiles
     if not config.GAMES_ONLY:
         return False
+    if no_game():
+        if _blocked_logged["exe"] != "<no game>":
+            _blocked_logged["exe"] = "<no game>"
+            core.log("Игра не запущена — ничего не перевожу. Запустите игру, программа подхватит её сама.", "warn")
+        return True
     exe, pid = foreground_exe()
     if exe is None or pid == os.getpid() or profiles.for_exe(exe):
+        _blocked_logged["exe"] = None
         return False
     if locked() and exe not in NOT_GAME_EXE and exe not in not_games():
         return False

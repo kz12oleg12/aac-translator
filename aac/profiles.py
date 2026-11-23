@@ -184,6 +184,7 @@ def bind(pid):
 
 def activate(pid, announce=True):
     """Переключиться на пресет игры pid."""
+    _run_cache["t"] = 0               # список запущенных игр — перепроверить (новый пресет мог только что появиться)
     profs = all_profiles()
     if pid not in profs:
         return

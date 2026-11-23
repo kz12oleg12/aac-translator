@@ -16,6 +16,8 @@ once_lock = threading.Lock()
 
 
 def translate_once(reg, speak=False):
+    if game.blocked():
+        return
     if not once_lock.acquire(blocking=False):
         return
     try:
@@ -219,7 +221,7 @@ class Watcher:
         gone_since = None    # когда текст пропал из области
         while True:
             core.auto_on.wait()
-            if not game.game_active.is_set() or core.in_menu:
+            if not game.game_active.is_set() or core.in_menu or game.no_game():
                 time.sleep(0.5)   # вы не в игре — ничего не переводим
                 continue
             reg = self.get_region()
@@ -378,6 +380,11 @@ def toggle_auto():
     else:
         if game.remember_game_window() == "new":     # новая игра: сначала вопрос про пресет, области — потом
             core.auto_on.set()
+            core.events.put(("panel", None))
+            return
+        if game.no_game():
+            core.log("Игра не запущена — автоперевод не включаю. Запустите игру, программа подхватит её сама.",
+                     "warn")
             core.events.put(("panel", None))
             return
         if core.region is None and core.answers_region is None and core.region2 is None and core.chat_region is None:

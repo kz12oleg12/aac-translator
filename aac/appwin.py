@@ -105,9 +105,13 @@ class App:
                 game.game_active.set()
             return
         exe, pid = game.foreground_exe()
-        if exe is None or pid == os.getpid():
+        if game.no_game():
+            in_game = False                     # игра закрылась (даже если сейчас на экране панель) — пауза
+            exe = "игра не запущена"
+        elif exe is None or pid == os.getpid():
             return  # своё окно (панель) или неизвестно — состояние не меняем
-        in_game = game.is_game(exe)
+        else:
+            in_game = game.is_game(exe)
         if in_game and not game.game_active.is_set():
             game.game_active.set()
             for ov in getattr(self, "_away_hidden", []):
@@ -121,7 +125,8 @@ class App:
             self._away_hidden = [ov for ov in (self.subs, self.answers) if ov.visible]
             for ov in self._away_hidden:
                 ov.hide()
-            core.log(f"Вы не в игре ({exe}) — пауза" + (
+            core.log("Игра закрыта — пауза, жду игру" if exe == "игра не запущена" else
+                     f"Вы не в игре ({exe}) — пауза" + (
                 ". Её вы отметили «не игра» — вернуть: раздел «Игры», внизу" if exe in game.not_games() else ""))
             self.panel.refresh()
 

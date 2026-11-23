@@ -85,6 +85,8 @@ class Target:
 
 T = Target()
 T.set("SETTINGS_FILE", os.path.join(TMP, "settings.json"))
+if hasattr(T._owner("VERSION"), "GAMES_ONLY"):
+    T._owner("VERSION").GAMES_ONLY = False     # тесты — не про игры: «переводить в любой программе»
 T.set("GLOSSARY_FILE", os.path.join(TMP, "glossary.txt"))
 T.set("HISTORY_DIR", os.path.join(TMP, "history"))
 T.set("CACHE_FILE", os.path.join(TMP, "translation_cache.json"))
@@ -2069,6 +2071,20 @@ def test_game_presets(monkey):
     assert game.blocked()
     # «Не игра» — больше не спрашиваем
     assert game.unknown_game() is None, "плеер — в списке «не игр»"
+    if hasattr(game, "no_game"):            # игра не запущена — ничего не переводим, автоперевод не включается
+        monkey(game, "running_programs", lambda: [])
+        profiles._run_cache["t"] = 0
+        fg[0] = "chrome.exe"
+        assert game.no_game() and game.blocked()
+        auto0 = T._owner("auto_on").auto_on
+        auto0.clear()
+        drain()
+        T.toggle_auto()
+        assert not auto0.is_set() and any("Игра не запущена" in p[1] for k, p in drain() if k == "log")
+        monkey(game, "running_programs", lambda: [("witcher3.exe", "The Witcher 3")])
+        profiles._run_cache["t"] = 0
+        assert not game.no_game()
+        profiles._run_cache["t"] = 0
     if hasattr(game, "unmark_not_game"):    # «не игра» по ошибке — вернуть
         game.mark_not_game("deadcells.exe")
         fg[0] = "DeadCells.exe"
