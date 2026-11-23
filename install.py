@@ -65,7 +65,7 @@ def main():
     step("1/4 Копирую файлы")
     TARGET.mkdir(parents=True, exist_ok=True)
     (TARGET / "tests").mkdir(exist_ok=True)
-    for name in ("aac_translator.py", "start_with_console.bat", "README.txt", "icon.ico", "icon_22.png", "logo.svg",
+    for name in ("aac_translator.py", "start_with_console.bat", "README.txt", "icon.ico", "icon_22.png", "icon_32.png", "logo.svg",
                  "install_silero.py", "install_silero.bat"):
         if (HERE / name).exists() and HERE != TARGET:
             shutil.copy2(HERE / name, TARGET / name)
