@@ -438,7 +438,8 @@ def test_settings_not_lost_on_bad_file():
 def test_settings_roundtrip():
     T.save_settings(region=(1, 2, 3, 4), font_size=17)
     data = json.load(open(T.SETTINGS_FILE, encoding="utf-8"))
-    assert data["region"] == [1, 2, 3, 4] and data["font_size"] == 17
+    prof = data["profiles"][T._owner("active_profile").active_profile] if "profiles" in data else data
+    assert prof["region"] == [1, 2, 3, 4] and data["font_size"] == 17   # области — в пресете текущей игры
     T.set("SETTINGS", T.load_settings())
     T.apply_saved_provider()
     assert T.FONT[1] == 17
@@ -1725,8 +1726,11 @@ def test_backup_roundtrip(monkey):
         return
     import zipfile
     d = tempfile.mkdtemp(dir=TMP)
-    paths = {n: os.path.join(d, n) for n in ("s.json", "c.json", "g.txt", "t.json", "m.png")}
+    real = {"s.json": "s.json", "c.json": "characters.json", "g.txt": "glossary.txt", "t.json": "translation_cache.json",
+            "m.png": "menu_ref.png"}
+    paths = {n: os.path.join(d, real[n]) for n in real}
     monkey(T._owner("SETTINGS_FILE"), "SETTINGS_FILE", paths["s.json"])
+    monkey(T._owner("APP_DIR"), "APP_DIR", d)          # файлы пресета ArcheAge — «рядом с программой»
     monkey(voices, "FILE", paths["c.json"])
     monkey(glossary, "GLOSSARY_FILE", paths["g.txt"])
     monkey(tcache, "CACHE_FILE", paths["t.json"])
@@ -1735,15 +1739,21 @@ def test_backup_roundtrip(monkey):
     for n, text in (("s.json", '{"region": [1, 2, 3, 4]}'), ("c.json", '{"renald": {"en": "Renald"}}'),
                     ("g.txt", "Renald = Ренальд\n"), ("t.json", "{}")):
         open(paths[n], "w", encoding="utf-8").write(text)
+    os.makedirs(os.path.join(d, "profiles", "witcher3"))
+    wg = os.path.join(d, "profiles", "witcher3", "glossary.txt")
+    open(wg, "w", encoding="utf-8").write("Geralt = Геральт\n")
     zpath = os.path.join(d, "backup.zip")
     saved = backup.export(zpath)
-    assert set(saved) == {"settings.json", "characters.json", "glossary.txt", "translation_cache.json"}, saved
+    assert set(saved) == {"settings.json", "characters.json", "glossary.txt", "translation_cache.json",
+                          "profiles/witcher3/glossary.txt"}, saved
+    os.remove(wg)
     assert backup.read_manifest(zpath)["files"] == saved
     # всё поменяли / удалили…
     open(paths["s.json"], "w").write('{"region": [9, 9, 9, 9]}')
     os.remove(paths["g.txt"])
     restored, before = backup.restore(zpath)
     assert set(restored) == set(saved)
+    assert open(wg, encoding="utf-8").read() == "Geralt = Геральт\n", "пресеты других игр — тоже в копии"
     assert json.load(open(paths["s.json"]))["region"] == [1, 2, 3, 4]
     assert open(paths["g.txt"], encoding="utf-8").read() == "Renald = Ренальд\n"
     assert os.path.exists(before) and json.loads(zipfile.ZipFile(before).read("settings.json"))["region"] == [9, 9, 9, 9]
@@ -1987,53 +1997,62 @@ def test_update_etag(monkey):
     updater.state.update(latest=None, etag=None)
 
 
-def test_only_archeage(monkey):
-    """«Только ArcheAge»: другая игра — пауза и клавиши не работают; её нельзя «запомнить» вместо ArcheAge."""
-    from aac import game
-    if not hasattr(game, "blocked"):
+def test_game_presets(monkey):
+    """Пресеты игр: у каждой игры свои области, словарь, персонажи; переключение — по окну на экране."""
+    try:
+        from aac import profiles, game, glossary, voices
+    except ImportError:
         print("   (в этой версии нет — пропуск)")
         return
-    cfg = T._owner("ONLY_ARCHEAGE")
-    monkey(cfg, "ONLY_ARCHEAGE", True)
-    T.set("SETTINGS", {})
-    fg = ["ArcheAgeChronicles.exe"]
+    d = tempfile.mkdtemp(dir=TMP)
+    monkey(T._owner("APP_DIR"), "APP_DIR", d)
+    monkey(T._owner("SETTINGS_FILE"), "SETTINGS_FILE", os.path.join(d, "s.json"))
+    cfg = T._owner("GAMES_ONLY")
+    monkey(cfg, "GAMES_ONLY", True)
+    core_m = T._owner("active_profile")
+    monkey(core_m, "active_profile", "archeage")
+    T.set("SETTINGS", {"region": [1, 2, 3, 4]})                 # старые настройки до пресетов
+    open(os.path.join(d, "s.json"), "w").write('{"region": [1, 2, 3, 4]}')
+    T.set("SETTINGS", T.load_settings())
+    profiles.bind("archeage")
+    assert profiles.name() == "ArcheAge Chronicles" and core_m.region == (1, 2, 3, 4), "прежние области — в ArcheAge"
+    glossary.set_entry("Renald", "Ренальд")
+    fg = ["Witcher3.exe"]
     monkey(game, "foreground_exe", lambda: (fg[0].lower(), 4242))
-    monkey(game, "game_exe", None)
-    assert game.is_game("archeagechronicles.exe") and game.is_game("archeagechronicles-win64-shipping.exe")
-    assert not game.blocked()
-    game.remember_game_window()
-    assert game.game_exe == "archeagechronicles.exe"
-    fg[0] = "Witcher3.exe"
+    assert game.blocked(), "у новой игры пресета ещё нет — клавиши не работают"
     drain()
-    assert game.blocked(), "в другой игре клавиши перевода не срабатывают"
-    assert any(k == "log" and "witcher3.exe" in p[1] for k, p in drain())
+    game.remember_game_window()                       # включили автоперевод в новой игре
+    assert core_m.active_profile == "witcher3" and profiles.name() == "Witcher3"
+    assert core_m.region is None, "у новой игры — свои (пустые) области"
+    assert ("profile_changed", "witcher3") in drain()
+    T.save_settings(region=(5, 6, 7, 8))
+    glossary.set_entry("Geralt", "Геральт")
+    assert [e[0] for e in glossary.entries()] == ["Geralt"], "словарь новой игры — свой"
+    assert "the video game Witcher3" in profiles.adapt(T._owner("TEXT_PROMPT").TEXT_PROMPT)
+    assert "ArcheAge" not in profiles.adapt(T._owner("TEXT_PROMPT").TEXT_PROMPT)
+    # вернулись в ArcheAge — её пресет подхватился сам
+    fg[0] = "ArcheAgeChronicles.exe"
+    game.follow_foreground()
+    assert core_m.active_profile == "archeage" and core_m.region == (1, 2, 3, 4)
+    assert "Renald" in [e[0] for e in glossary.entries()] and "Geralt" not in [e[0] for e in glossary.entries()]
+    assert profiles.adapt("MMORPG ArcheAge Chronicles") == "MMORPG ArcheAge Chronicles"
+    fg[0] = "Witcher3.exe"
+    game.follow_foreground()
+    assert core_m.region == (5, 6, 7, 8), "области второй игры сохранились"
+    # браузер — не игра, пресет не создаётся
+    fg[0] = "chrome.exe"
     game.remember_game_window()
-    assert game.game_exe == "archeagechronicles.exe", "чужую игру не запоминаем"
-    # вызов по клавише в чужой игре ничего не делает
-    called = []
-    monkey(T._owner("safe_translate"), "safe_translate", lambda *a, **k: called.append(1) or ("x", None))
-    T.translate_subs_once()
-    assert not called
-    # выключили — как раньше: любая игра, где включили автоперевод
-    monkey(cfg, "ONLY_ARCHEAGE", False)
+    assert set(profiles.all_profiles()) == {"archeage", "witcher3"}
+    assert game.blocked()
+    # переименовать и удалить
+    profiles.rename("witcher3", "The Witcher 3")
+    assert profiles.name("witcher3") == "The Witcher 3"
+    assert profiles.delete("witcher3") and core_m.active_profile == "archeage"
+    assert "witcher3" not in profiles.all_profiles()
+    # «только игры из списка» выключено — любая программа
+    monkey(cfg, "GAMES_ONLY", False)
     assert not game.blocked()
-    game.remember_game_window()
-    assert game.game_exe == "witcher3.exe" and game.is_game("witcher3.exe")
-    if GUI:
-        monkey(cfg, "ONLY_ARCHEAGE", True)
-        app = T.App()
-        try:
-            T._owner("auto_on").auto_on.set()
-            game.game_active.set()
-            app._check_game_focus()
-            assert not game.game_active.is_set(), "на экране не ArcheAge — пауза"
-            fg[0] = "ArcheAgeChronicles.exe"
-            app._check_game_focus()
-            assert game.game_active.is_set()
-        finally:
-            T._owner("auto_on").auto_on.clear()
-            game.game_active.set()
-            app.root.destroy()
+    profiles.bind("archeage")
 
 
 # ---------- запуск ----------

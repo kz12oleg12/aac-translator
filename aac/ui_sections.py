@@ -842,3 +842,77 @@ class SectionsMixin:
     def _refresh_gloss(self):
         self.gl_toggle.set(config.GLOSSARY_AUTO)
         self._gl_render()
+
+
+class GamesMixin:
+    # ---------- Игры (пресеты) ----------
+    def _build_games(self):
+        from . import profiles
+        sc, b = self._page("Игры", "У каждой игры свой пресет: области, образец меню, словарь, персонажи с голосами "
+                                   "и кэш переводов. Программа сама переключается, когда игра на экране.")
+        tip, ti = K.card(b, bg=K.ACCENT_TINT, border=K.ACCENT_LINE, padx=16, pady=10)
+        tip.pack(fill="x", pady=(0, 14))
+        K.label(ti, "Добавить игру: запустите её и включите автоперевод "
+                    f"({hotkeys.K('auto')}) — пресет создастся сам, останется обвести области.",
+                10, K.TEXT, bg=K.ACCENT_TINT, wraplength=620).pack(anchor="w")
+        self.games_box = tk.Frame(b, bg=K.BG)
+        self.games_box.pack(fill="x")
+        self._games_render()
+        return sc
+
+    def _games_render(self):
+        from . import profiles
+        for w in self.games_box.winfo_children():
+            w.destroy()
+        profs = profiles.all_profiles()
+        for pid, p in profs.items():
+            on = pid == core.active_profile
+            c, ci = K.card(self.games_box, bg=K.CARD, border=K.ACCENT_LINE if on else K.BORDER, padx=16, pady=12)
+            c.pack(fill="x", pady=(0, 12))
+            top = tk.Frame(ci, bg=K.CARD)
+            top.pack(fill="x")
+            var = tk.StringVar(value=p.get("name", pid))
+            e = tk.Entry(top, textvariable=var, bg=K.CARD, fg=K.TEXT, insertbackground=K.TEXT, relief="flat",
+                         bd=0, highlightthickness=0, font=K.f(13, "bold"), width=max(8, len(var.get()) + 1))
+            var.trace_add("write", lambda *a, e=e, var=var: e.config(width=max(8, len(var.get()) + 1)))
+            e.pack(side="left")
+            save = lambda ev=None, pid=pid, var=var: (profiles.rename(pid, var.get()), self.refresh())
+            e.bind("<Return>", lambda ev, s=save: (s(), self.win.focus_set()))
+            e.bind("<FocusOut>", save)
+            if on:
+                tk.Label(top, text="сейчас", bg=K.ACCENT, fg="#ffffff", font=K.f(8, "bold"), padx=8).pack(
+                    side="left", padx=(8, 0))
+            K.label(top, "✎ имя можно исправить прямо здесь", 8, K.FAINT).pack(side="right")
+            exes = ", ".join(p.get("exes", [])) or "—"
+            K.label(ci, f"Файл игры: {exes}", 9, K.DIM).pack(anchor="w", pady=(4, 8))
+            regs = tk.Frame(ci, bg=K.CARD)
+            regs.pack(fill="x")
+            for key, title in (("region", "Субтитры"), ("region2", "Реплики 2"), ("answers_region", "Ответы"),
+                               ("chat_region", "Чат"), ("menu_region", "Меню")):
+                has = bool(p.get(key))
+                tk.Label(regs, text=("✓ " if has else "— ") + title, font=K.f(9), padx=8, pady=2,
+                         bg=K.ACCENT_TINT if has else K.SIDEBAR, fg=K.ACCENT_TEXT if has else K.FAINT
+                         ).pack(side="left", padx=(0, 6))
+            chars, gl = profiles.stats(pid)
+            bottom = tk.Frame(ci, bg=K.CARD)
+            bottom.pack(fill="x", pady=(10, 0))
+            K.label(bottom, f"персонажей: {chars} · в словаре: {gl}", 9, K.MUTED).pack(side="left")
+            if len(profs) > 1 and pid != core.DEFAULT_PROFILE:
+                K.button(bottom, "Удалить", lambda pid=pid: self._game_delete(pid), kind="danger", size=9).pack(
+                    side="right")
+            if not on:
+                K.button(bottom, "Переключиться", lambda pid=pid: profiles.activate(pid), kind="ghost",
+                         size=9).pack(side="right", padx=(0, 8))
+            else:
+                K.button(bottom, "Области →", lambda: self.show("areas"), kind="ghost", size=9).pack(
+                    side="right", padx=(0, 8))
+
+    def _game_delete(self, pid):
+        from . import profiles
+        self.ask(f"Удалить пресет «{profiles.name(pid)}»?",
+                 "Пропадут его области; словарь, персонажи и кэш уйдут в папку backups. "
+                 "Сама игра и другие пресеты не затронуты.", "Удалить",
+                 lambda: (profiles.delete(pid), self._games_render(), self.refresh()))
+
+    def _refresh_games(self):
+        pass

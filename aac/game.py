@@ -16,7 +16,12 @@ game_exe = None                # имя .exe игры — запоминаетс
 game_active = threading.Event()
 game_active.set()
 NOT_GAME_EXE = {"python.exe", "pythonw.exe", "explorer.exe", "py.exe", "pyw.exe", "cmd.exe",
-                "windowsterminal.exe", "searchhost.exe", "shellexperiencehost.exe", "startmenuexperiencehost.exe"}
+                "windowsterminal.exe", "searchhost.exe", "shellexperiencehost.exe", "startmenuexperiencehost.exe",
+                # браузеры, мессенджеры, лаунчеры — не игры (для них пресет не создаётся)
+                "chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "browser.exe", "brave.exe", "vivaldi.exe",
+                "discord.exe", "telegram.exe", "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe",
+                "obs64.exe", "code.exe", "notepad.exe", "notepad++.exe", "claude.exe", "taskmgr.exe",
+                "applicationframehost.exe", "lockapp.exe", "textinputhost.exe"}
 
 
 def foreground_exe():
@@ -48,9 +53,10 @@ def is_archeage(exe):
 
 
 def is_game(exe):
-    """Это окно игры? В режиме «только ArcheAge» — только ArcheAge Chronicles, иначе — запомненная игра."""
-    if config.ONLY_ARCHEAGE:
-        return is_archeage(exe)
+    """Это окно игры? Режим «только игры из списка» — игра, для которой есть пресет; иначе — запомненная."""
+    from . import profiles
+    if config.GAMES_ONLY:
+        return profiles.for_exe(exe) is not None
     return exe == game_exe
 
 
@@ -58,30 +64,49 @@ _blocked_logged = {"exe": None}
 
 
 def blocked():
-    """Ручной перевод по клавише в чужом окне? True — не переводим (в журнал — один раз на программу)."""
-    if not config.ONLY_ARCHEAGE:
+    """Ручной перевод по клавише в окне без пресета? True — не переводим (в журнал — один раз на программу)."""
+    from . import profiles
+    if not config.GAMES_ONLY:
         return False
     exe, pid = foreground_exe()
-    if exe is None or pid == os.getpid() or is_archeage(exe):
+    if exe is None or pid == os.getpid() or profiles.for_exe(exe):
         return False
     if _blocked_logged["exe"] != exe:
         _blocked_logged["exe"] = exe
-        core.log(f"Сейчас на экране {exe}, а не ArcheAge — переводчик работает только в ArcheAge Chronicles "
-                 "(выключить можно на Главной: «Только ArcheAge Chronicles»).", "warn")
+        core.log(f"Для {exe} нет пресета — переводчик работает только в играх из списка. Чтобы добавить эту "
+                 "игру, включите в ней автоперевод (клавиша автоперевода) или выключите «Только игры из списка».",
+                 "warn")
     return True
 
 
+def follow_foreground():
+    """Игра из списка на экране — переключиться на её пресет (области, словарь, персонажи, кэш)."""
+    from . import profiles
+    exe, pid = foreground_exe()
+    if not exe or pid == os.getpid():
+        return
+    prof = profiles.for_exe(exe)
+    if prof and prof != core.active_profile:
+        profiles.activate(prof)
+
+
 def remember_game_window():
-    """Вызывается при включении автоперевода: активное сейчас окно — это игра."""
+    """Вызывается при включении автоперевода: активное сейчас окно — это игра.
+    Новая игра (нет пресета) — создаём для неё пресет и переключаемся."""
     global game_exe
+    from . import profiles
     exe, pid = foreground_exe()
     if not exe or pid == os.getpid() or exe in NOT_GAME_EXE:
+        if exe in NOT_GAME_EXE and config.GAMES_ONLY and pid != os.getpid():
+            core.log(f"{exe} — не игра. Включите автоперевод, когда на экране игра.", "warn")
         return
-    if config.ONLY_ARCHEAGE and not is_archeage(exe):
-        core.log(f"Сейчас на экране {exe}, а не ArcheAge — автоперевод включится, когда вы вернётесь "
-                 "в ArcheAge Chronicles.", "warn")
-        return
+    prof = profiles.for_exe(exe)
+    if prof is None:
+        prof = profiles.create(exe)
+        core.log(f"🎮 Новая игра: {exe} — создан пресет «{profiles.name(prof)}». У неё свои области, словарь "
+                 "и персонажи: обведите субтитры (F9) и ответы.", "ok")
+    if prof != core.active_profile:
+        profiles.activate(prof)
     if exe != game_exe:
         game_exe = exe
         core.save_settings(game_exe=exe)
-        core.log(f"Запомнил окно игры: {exe}", "ok")

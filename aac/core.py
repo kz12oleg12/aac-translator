@@ -32,24 +32,44 @@ SETTINGS = {}
 
 
 # ---------- настройки (запоминаем область) ----------
-def load_settings():
+PROFILE_KEYS = ("region", "region2", "answers_region", "chat_region", "menu_region")   # у каждой игры свои
+DEFAULT_PROFILE = "archeage"
+active_profile = DEFAULT_PROFILE
+
+
+def default_profiles(data=None):
+    """Первый пресет — ArcheAge Chronicles; области берутся из прежних (общих) настроек."""
+    data = data or {}
+    p = {"name": "ArcheAge Chronicles", "exes": ["archeagechronicles.exe"], "match": "archeage",
+         "desc": "the MMORPG ArcheAge Chronicles"}
+    for k in PROFILE_KEYS:
+        if data.get(k):
+            p[k] = data[k]
+    return {DEFAULT_PROFILE: p}
+
+
+def apply_profile_regions(prof):
     global region, answers_region, region2, chat_region, menu_region
+    region = tuple(prof["region"]) if prof.get("region") else None
+    answers_region = tuple(prof["answers_region"]) if prof.get("answers_region") else None
+    region2 = tuple(prof["region2"]) if prof.get("region2") else None
+    chat_region = tuple(prof["chat_region"]) if prof.get("chat_region") else None
+    menu_region = tuple(prof["menu_region"]) if prof.get("menu_region") else None
+
+
+def load_settings():
+    global active_profile
     try:
         with open(config.SETTINGS_FILE, encoding="utf-8") as f:
             data = json.load(f)
-        if data.get("region"):
-            region = tuple(data["region"])
-        if data.get("answers_region"):
-            answers_region = tuple(data["answers_region"])
-        if data.get("region2"):
-            region2 = tuple(data["region2"])
-        if data.get("chat_region"):
-            chat_region = tuple(data["chat_region"])
-        if data.get("menu_region"):
-            menu_region = tuple(data["menu_region"])
-        return data
     except Exception:
         return {}
+    if not isinstance(data.get("profiles"), dict) or not data["profiles"]:
+        data["profiles"] = default_profiles(data)       # переход на пресеты: всё прежнее — в пресет ArcheAge
+    active_profile = data.get("active_profile") if data.get("active_profile") in data["profiles"] else \
+        next(iter(data["profiles"]))
+    apply_profile_regions(data["profiles"][active_profile])
+    return data
 
 
 _settings_lock = threading.Lock()
@@ -70,6 +90,15 @@ def save_settings(**kw):
         if not isinstance(data, dict):
             # файл повреждён/недописан — берём то, что загружено в программу, а не пустоту
             data = dict(SETTINGS) if isinstance(SETTINGS, dict) else {}
+        prof_kw = {k: kw.pop(k) for k in list(kw) if k in PROFILE_KEYS}
+        if prof_kw:    # области — в пресет текущей игры
+            profiles = data.get("profiles") if isinstance(data.get("profiles"), dict) else None
+            if not profiles:
+                profiles = (SETTINGS.get("profiles") if isinstance(SETTINGS, dict) else None) or default_profiles(data)
+            prof = profiles.setdefault(active_profile, {"name": active_profile, "exes": []})
+            for k, v in prof_kw.items():
+                prof[k] = list(v) if isinstance(v, tuple) else v
+            kw["profiles"] = profiles
         data.update(kw)
         if isinstance(SETTINGS, dict):
             SETTINGS.update(kw)

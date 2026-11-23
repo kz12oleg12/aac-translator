@@ -8,9 +8,9 @@ import threading
 import time
 import tkinter as tk
 
-from . import config, core, game, glossary, hotkeys, limits, menu, tcache, translate, tts, ui_overlay
+from . import config, core, game, glossary, hotkeys, limits, menu, profiles, tcache, translate, tts, ui_overlay
 from . import ui_kit as K
-from .ui_sections import SectionsMixin
+from .ui_sections import GamesMixin, SectionsMixin
 from .ui_panel import LOG_COLORS, PROVIDER_LABELS, PROVIDER_NAMES
 
 W, H = 960, 720
@@ -18,7 +18,8 @@ SIDE_W = 220
 LOG_W = 380
 
 NAV = [  # (группа, [(id, название)])
-    ("Перевод", [("home", "Главная"), ("areas", "Области"), ("tr", "Переводчики"), ("win", "Окна перевода")]),
+    ("Перевод", [("home", "Главная"), ("games", "Игры"), ("areas", "Области"), ("tr", "Переводчики"),
+                 ("win", "Окна перевода")]),
     ("Озвучка", [("voice", "Голос и интонация"), ("chars", "Персонажи")]),
     ("Данные", [("hist", "История"), ("gloss", "Словарь"), ("keys", "Клавиши"), ("backup", "Резервная копия")]),
 ]
@@ -31,7 +32,7 @@ KEY_GROUPS = [
 HOME_KEYS = ["auto", "tooltip", "once", "repeat"]
 
 
-class Shell(SectionsMixin):
+class Shell(SectionsMixin, GamesMixin):
     def __init__(self, app, win):
         self.app, self.win = app, win
         win.overrideredirect(True)
@@ -82,9 +83,15 @@ class Shell(SectionsMixin):
                 self._logo = None
         if self._logo:
             tk.Label(head, image=self._logo, bg=K.SIDEBAR).pack(side="left", padx=(0, 10))
-        title = K.label(head, "AAC Translator", 13, K.TEXT, "bold")
-        title.pack(side="left")
-        for w in (head, title):        # окно без рамки — тащим за заголовок
+        tbox = tk.Frame(head, bg=K.SIDEBAR)
+        tbox.pack(side="left")
+        title = K.label(tbox, "AAC Translator", 13, K.TEXT, "bold")
+        title.pack(anchor="w")
+        self.game_lbl = K.label(tbox, "", 9, K.ACCENT_TEXT)
+        self.game_lbl.config(cursor="hand2")
+        self.game_lbl.bind("<Button-1>", lambda e: self.show("games"))
+        self.game_lbl.pack(anchor="w")
+        for w in (head, title, tbox):        # окно без рамки — тащим за заголовок
             w.bind("<ButtonPress-1>", self._start_move)
             w.bind("<B1-Motion>", self._move)
             w.bind("<ButtonRelease-1>", self._end_move)
@@ -140,7 +147,7 @@ class Shell(SectionsMixin):
             lab.config(bg=bg, fg=K.TEXT if on else K.MUTED)
 
     # ---------- переключение разделов ----------
-    HEAVY = ("chars", "gloss", "hist")    # длинные списки — пересобираются при открытии, а не на каждое событие
+    HEAVY = ("chars", "gloss", "hist", "games")    # длинные списки — пересобираются при открытии, а не на каждое событие
 
     def show(self, sid):
         if self.current == sid:
@@ -164,6 +171,8 @@ class Shell(SectionsMixin):
             self._gl_render()
         elif sid == "hist":
             self._hist_render()
+        elif sid == "games":
+            self._games_render()
 
     def _current_scroll(self):
         sc = self.sections.get(self.current)
@@ -295,16 +304,16 @@ class Shell(SectionsMixin):
                                       lambda: config.SHOW_ON_STREAM, set_stream)
 
         def set_only(v):
-            config.ONLY_ARCHEAGE = bool(v)
-            core.save_settings(only_archeage=config.ONLY_ARCHEAGE)
+            config.GAMES_ONLY = bool(v)
+            core.save_settings(games_only=config.GAMES_ONLY)
             if not v:
                 game.game_active.set()
-            core.log("Перевод " + ("только в ArcheAge Chronicles" if v else "в любой игре, где включён автоперевод"),
-                     "ok")
-        self.only_row = K.ToggleRow(si, "Только ArcheAge Chronicles",
-                                    "в других играх и программах перевод на паузе, клавиши перевода не срабатывают — "
-                                    "персонажи, словарь и кэш не смешиваются с чужими.",
-                                    lambda: config.ONLY_ARCHEAGE, set_only)
+            core.log("Перевод " + ("только в играх из списка (раздел «Игры»)" if v else
+                                   "в любой программе, где включён автоперевод"), "ok")
+        self.only_row = K.ToggleRow(si, "Только игры из списка",
+                                    "в других программах перевод на паузе. Новая игра добавляется сама, когда вы "
+                                    "включаете в ней автоперевод, — со своими областями, словарём и персонажами.",
+                                    lambda: config.GAMES_ONLY, set_only)
         self.only_row.pack(fill="x")
         self.stream_row.pack(fill="x")
         self.upd_row.pack(fill="x")
@@ -341,7 +350,7 @@ class Shell(SectionsMixin):
             title, color, btn = "Автоперевод выключен", K.FAINT, f"Включить · {hotkeys.K('auto')}"
         elif paused:
             title = ("Пауза — открыто меню игры" if core.in_menu else
-                     "Пауза — на экране не ArcheAge" if config.ONLY_ARCHEAGE else "Пауза — игра не на экране")
+                     "Пауза — на экране не игра из списка" if config.GAMES_ONLY else "Пауза — игра не на экране")
             color, btn = K.AMBER, f"Выключить · {hotkeys.K('auto')}"
         else:
             title = "Перевожу…" if self.busy else "Перевожу игру"
@@ -352,8 +361,8 @@ class Shell(SectionsMixin):
         parts = []
         if not core.region:
             parts.append(f"Обведите субтитры: {hotkeys.K('select')}")
-        elif game.game_exe:
-            parts.append(f"Игра: {game.game_exe}")
+        else:
+            parts.append(f"Игра: {profiles.name()}")
         if core.stats["last"] and core.stats["last"] != "—":
             parts.append(f"последний перевод: {core.stats['last']}")
         self.hero_sub.config(text=" · ".join(parts) or "Включите автоперевод, находясь в игре")
@@ -769,6 +778,9 @@ class Shell(SectionsMixin):
 
     # ---------- то, что вызывает остальная программа ----------
     def refresh(self):
+        g = f"🎮 {profiles.name()}"
+        if self.game_lbl.cget("text") != g:
+            self.game_lbl.config(text=g)
         if self.current in self.HEAVY:
             return
         fn = getattr(self, f"_refresh_{self.current}", None)
@@ -841,6 +853,15 @@ class Shell(SectionsMixin):
         d.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 3}")
         d.after(200, lambda: ui_overlay.exclude_from_capture(d))
         return d
+
+    def profile_changed(self):
+        """Другая игра: разделы со своими данными (персонажи, словарь, игры) собрать заново."""
+        for sid in ("chars", "gloss", "games"):
+            if sid in self.sections and sid != self.current:
+                self.sections.pop(sid).destroy()
+        if self.current in ("chars", "gloss", "games", "hist"):
+            self._rebuild(self.current)
+        self.refresh()
 
     def sync_vars(self):
         self.refresh()

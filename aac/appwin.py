@@ -94,7 +94,8 @@ class App:
         self.root.after(50, self._poll)
 
     def _check_game_focus(self):
-        watch = config.ONLY_ARCHEAGE or (config.PAUSE_OUTSIDE_GAME and game.game_exe)
+        game.follow_foreground()          # игра из списка на экране — её пресет
+        watch = config.GAMES_ONLY or (config.PAUSE_OUTSIDE_GAME and game.game_exe)
         if not (watch and core.auto_on.is_set()):
             if not game.game_active.is_set():
                 game.game_active.set()
@@ -116,8 +117,7 @@ class App:
             self._away_hidden = [ov for ov in (self.subs, self.answers) if ov.visible]
             for ov in self._away_hidden:
                 ov.hide()
-            core.log(f"Вы не в игре ({exe}) — пауза" + (" (переводчик работает только в ArcheAge)"
-                                                        if config.ONLY_ARCHEAGE else ""))
+            core.log(f"Вы не в игре ({exe}) — пауза")
             self.panel.refresh()
 
     def open_history(self):
@@ -615,6 +615,18 @@ class App:
                     self.answers.fit()
         self.pick_area("Обведите область ВАРИАНТОВ ОТВЕТА (для автоперевода).", done)
 
+    def profile_changed(self):
+        """Переключились на другую игру: убрать переводы прежней, перечитать её области."""
+        for ov in (self.subs, self.answers, self.quest):
+            ov.hide()
+        self.subs.clear_history()
+        lines = getattr(self, "chat_lines", None)
+        if lines is not None:
+            lines.clear()
+        self.chat.hide()
+        self.panel.profile_changed()
+        tray.update()
+
     def repeat_line(self):
         """Клавиша «повторить реплику»: последняя реплика снова на экране и звучит заново."""
         if not core.last_line:
@@ -680,6 +692,8 @@ class App:
                     self.subs.push(payload)
                 elif kind == "repeat_line":
                     self.repeat_line()
+                elif kind == "profile_changed":
+                    self.profile_changed()
                 elif kind == "quest":
                     self.quest.show(payload)
                 elif kind == "busy":

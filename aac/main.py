@@ -9,7 +9,7 @@ import time
 import subprocess
 
 
-from . import chat, limits, menu, updater, tts, appwin, config, core, game, hotkeys, translate, tray, watcher
+from . import chat, limits, menu, profiles, updater, tts, appwin, config, core, game, hotkeys, translate, tray, watcher
 
 
 def apply_view_settings():
@@ -21,7 +21,7 @@ def apply_view_settings():
     config.SHOW_ORIGINAL = bool(core.SETTINGS.get("show_original", config.SHOW_ORIGINAL))
     config.SAVE_HISTORY = bool(core.SETTINGS.get("save_history", config.SAVE_HISTORY))
     config.GLOSSARY_AUTO = bool(core.SETTINGS.get("glossary_auto", config.GLOSSARY_AUTO))
-    config.ONLY_ARCHEAGE = bool(core.SETTINGS.get("only_archeage", config.ONLY_ARCHEAGE))
+    config.GAMES_ONLY = bool(core.SETTINGS.get("games_only", core.SETTINGS.get("only_archeage", config.GAMES_ONLY)))
     config.UPDATE_AUTO = bool(core.SETTINGS.get("update_auto", config.UPDATE_AUTO))
     config.SHOW_ON_STREAM = bool(core.SETTINGS.get("show_on_stream", config.SHOW_ON_STREAM))
     config.CACHE_ENABLED = bool(core.SETTINGS.get("cache_enabled", config.CACHE_ENABLED))
@@ -296,6 +296,9 @@ def main():
         print("Переводчик уже запущен — показал его панель.")
         return
     core.SETTINGS = core.load_settings()
+    if "profiles" not in core.SETTINGS or not core.SETTINGS.get("active_profile"):
+        core.save_settings(profiles=profiles.all_profiles(), active_profile=core.active_profile)
+    profiles.bind(core.active_profile)          # файлы пресета текущей игры: словарь, персонажи, кэш, меню
     apply_saved_provider()
     if not translate.provider_chain():
         try:

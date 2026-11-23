@@ -13,7 +13,17 @@ import requests
 from . import capture, config, core, limits
 
 
+def _for_game(prompt):
+    """Название текущей игры в подсказке (подсказки написаны для ArcheAge — для другой игры подменяем)."""
+    try:
+        from . import profiles
+        return profiles.adapt(prompt) if isinstance(prompt, str) else prompt
+    except Exception:
+        return prompt
+
+
 def call_model(model, img_b64, prompt):
+    prompt = _for_game(prompt)
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {
         "contents": [{
@@ -49,6 +59,7 @@ def models_status():
 
 
 def ask_gemini(img_b64, prompt):
+    prompt = _for_game(prompt)
     t0 = time.time()
     core.stats["requests"] += 1
     seen = {}  # код ответа -> (модель, текст), чтобы в конце показать главную причину
@@ -103,6 +114,7 @@ def ask_gemini(img_b64, prompt):
 
 
 def ask_ollama(img, prompt):
+    prompt = _for_game(prompt)
     img_b64 = capture.encode(img, config.OLLAMA_IMAGE_SIDE)
     core.stats["requests"] += 1
     body = {
@@ -139,6 +151,7 @@ def ask_ollama(img, prompt):
 
 
 def ask_claude(img_b64, prompt):
+    prompt = _for_game(prompt)
     core.stats["requests"] += 1
     body = {
         "model": config.CLAUDE_MODEL,
@@ -314,6 +327,7 @@ def _compat_request(name, url, headers, body):
 
 
 def ask_openai_compat(name, img, prompt):
+    prompt = _for_game(prompt)
     img_b64 = capture.encode(img, config.COMPAT_IMAGE_SIDE) if img is not None else None
     url, key, models = OPENAI_COMPAT[name][0], OPENAI_COMPAT[name][1](), OPENAI_COMPAT[name][2]()
     if img_b64 is None and name == "groq":
