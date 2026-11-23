@@ -710,12 +710,31 @@ def test_updater(monkey):
     monkey(updater.os, "environ", {})
     drain()
     info = updater.check()
-    # без токена — не API (у него лимит 60 запросов в час), а обычные адреса файлов GitHub
-    assert calls[0][0].startswith("https://raw.githubusercontent.com/user/aac-translator/main/version.json"), calls
+    assert calls[0][0] == "https://api.github.com/repos/user/aac-translator/contents/version.json?ref=main", calls
     assert "Authorization" not in calls[0][1]
     assert info["version"] == "4.6" and info["notes"] == "голоса\nчат"
     assert info["asset_url"] == "https://codeload.github.com/user/aac-translator/zip/refs/heads/main"
     assert [p for k, p in drain() if k == "update_available"][0]["version"] == "4.6"
+    # GitHub ограничил API (60 в час без токена) — сразу берём обычный адрес файла и до сброса лимита API не трогаем
+    calls.clear()
+    updater.state.update(latest=None, etag_api=None, etag_raw=None)
+    monkey(updater.core, "SETTINGS", {})
+
+    def limited(url, headers=None, timeout=None, **k):
+        calls.append((url, headers))
+        if "api.github.com" in url:
+            r = Resp(403, {})
+            r.headers = {"X-RateLimit-Reset": str(int(time.time()) + 600)}
+            return r
+        return Resp(200, ver)
+    monkey(updater.requests, "get", limited)
+    assert updater.check()["version"] == "4.6"
+    assert [u.split("/")[2] for u, _ in calls] == ["api.github.com", "raw.githubusercontent.com"]
+    calls.clear()
+    updater.check()
+    assert [u.split("/")[2] for u, _ in calls] == ["raw.githubusercontent.com"], "пока лимит — API не трогаем"
+    updater.state["api_blocked_until"] = 0
+    monkey(updater.requests, "get", lambda url, headers=None, timeout=None, **k: calls.append((url, headers)) or Resp(200, ver))
     # закрытый репозиторий: токен в заголовке
     monkey(updater.os, "environ", {"GITHUB_TOKEN": "tok"})
     calls.clear()

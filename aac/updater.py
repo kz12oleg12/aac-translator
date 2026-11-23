@@ -22,16 +22,19 @@ import requests
 
 from . import config, core
 
-# без токена — обычные адреса файлов GitHub: у них нет лимита «60 запросов в час», как у API
-RAW_VERSION_URL = "https://raw.githubusercontent.com/{repo}/{branch}/version.json?t={ts}"
-RAW_ZIP_URL = "https://codeload.github.com/{repo}/zip/refs/heads/{branch}"
-# с токеном (закрытый репозиторий) — API: с токеном лимит 5000 в час
+# Основной способ — API GitHub: сразу видит новую версию. Ответ «не изменилось» (304) лимит не тратит,
+# а ETag хранится в настройках — перезапуски тоже его не тратят. Если GitHub всё же ограничил запросы
+# (без токена — 60 в час) — до снятия ограничения смотрим обычный адрес файла (там кэш до 5 минут, но лимита нет).
 VERSION_URL = "https://api.github.com/repos/{repo}/contents/version.json?ref={branch}"
-ZIP_URL = "https://api.github.com/repos/{repo}/zipball/{branch}"
+RAW_VERSION_URL = "https://raw.githubusercontent.com/{repo}/{branch}/version.json"
+ZIP_URL = "https://api.github.com/repos/{repo}/zipball/{branch}"            # с токеном (закрытый репозиторий)
+RAW_ZIP_URL = "https://codeload.github.com/{repo}/zip/refs/heads/{branch}"  # без токена — без лимита
 
 
 def _use_api():
     return bool(os.environ.get("GITHUB_TOKEN", "").strip())
+
+
 state = {"latest": None, "checking": False, "installing": False, "error": None}
 
 
@@ -54,20 +57,45 @@ def _headers(raw=False):
     return h
 
 
+def _restore_cache():
+    if state.get("latest") is None:
+        c = core.SETTINGS.get("update_cache") or {}
+        if isinstance(c, dict) and c.get("latest"):
+            state.update(latest=c["latest"], etag_api=c.get("etag_api"), etag_raw=c.get("etag_raw"))
+
+
+def _request():
+    """GET version.json. Возвращает (ответ, "api" | "raw")."""
+    _restore_cache()
+    repo, branch = config.UPDATE_REPO, config.UPDATE_BRANCH
+    sources = ["api"] if _use_api() else (["api", "raw"] if time.time() >= state.get("api_blocked_until", 0)
+                                          else ["raw"])
+    r = None
+    for src in sources:
+        url = (VERSION_URL if src == "api" else RAW_VERSION_URL).format(repo=repo, branch=branch)
+        headers = _headers(raw=True)
+        if state.get("etag_" + src) and state.get("latest"):
+            headers["If-None-Match"] = state["etag_" + src]   # «изменилось ли?» — ответ «нет» лимит не тратит
+        r = requests.get(url, headers=headers, timeout=15)
+        if src == "api" and r.status_code in (403, 429) and not _use_api():
+            h = getattr(r, "headers", None) or {}
+            try:
+                until = float(h.get("X-RateLimit-Reset") or 0)
+            except ValueError:
+                until = 0
+            state["api_blocked_until"] = until if until > time.time() else time.time() + 3600
+            continue                      # лимит API — сразу смотрим обычный адрес файла
+        return r, src
+    return r, sources[-1]
+
+
 def check(quiet=True):
     """Узнать последнюю версию. Возвращает dict(version, notes, asset_url, size) или None."""
     if not config.UPDATE_REPO or state["checking"]:
         return None
     state["checking"] = True
     try:
-        if _use_api():
-            url = VERSION_URL.format(repo=config.UPDATE_REPO, branch=config.UPDATE_BRANCH)
-        else:   # ?t= — свежий файл, а не копия из кэша GitHub (она живёт до 5 минут)
-            url = RAW_VERSION_URL.format(repo=config.UPDATE_REPO, branch=config.UPDATE_BRANCH, ts=int(time.time()))
-        headers = _headers(raw=True)
-        if state.get("etag") and state.get("latest"):
-            headers["If-None-Match"] = state["etag"]   # «изменилось ли?» — ответ «нет» не тратит лимит GitHub
-        r = requests.get(url, headers=headers, timeout=15)
+        r, src = _request()
         if r.status_code == 304:                      # version.json не менялся с прошлой проверки
             info = state["latest"]
             if not quiet:
@@ -83,7 +111,7 @@ def check(quiet=True):
         if r.status_code in (403, 429):
             raise RuntimeError("Обновления: GitHub временно ограничил запросы — проверю позже.")
         r.raise_for_status()
-        state["etag"] = (getattr(r, "headers", None) or {}).get("ETag")
+        state["etag_" + src] = (getattr(r, "headers", None) or {}).get("ETag")
         data = r.json()
         info = {"version": str(data.get("version", "")).lstrip("vV"),
                 "notes": "\n".join(data.get("notes", [])) if isinstance(data.get("notes"), list)
@@ -94,6 +122,11 @@ def check(quiet=True):
         if not info["version"]:
             raise RuntimeError("Обновления: в version.json нет номера версии.")
         state["latest"], state["error"] = info, None
+        try:        # запомнить — после перезапуска первый запрос тоже будет «изменилось ли?», а не полный
+            core.save_settings(update_cache={"etag_api": state.get("etag_api"), "etag_raw": state.get("etag_raw"),
+                                             "latest": info})
+        except Exception:
+            pass
         if is_newer(info["version"]):
             core.events.put(("update_available", info))
         elif not quiet:
