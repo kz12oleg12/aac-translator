@@ -694,6 +694,8 @@ class App:
                     self.repeat_line()
                 elif kind == "profile_changed":
                     self.profile_changed()
+                elif kind == "game_new":
+                    self.panel.ask_new_game(payload)
                 elif kind == "quest":
                     self.quest.show(payload)
                 elif kind == "busy":

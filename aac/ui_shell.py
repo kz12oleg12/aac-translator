@@ -813,8 +813,9 @@ class Shell(SectionsMixin, GamesMixin):
             self.update_btn.pack(fill="x", pady=(0, 6), before=self.check_btn)
         self.refresh()
 
-    def ask(self, title, text, yes_text, on_yes, no_text="Позже"):
-        """Вопрос в стиле программы поверх игры (не забирает фокус у игры). Один вопрос за раз."""
+    def ask(self, title, text, yes_text, on_yes, no_text="Позже", on_no=None, entry=None):
+        """Вопрос в стиле программы поверх игры (не забирает фокус у игры). Один вопрос за раз.
+        entry — начальный текст поля ввода; тогда on_yes получает введённый текст."""
         old = getattr(self, "_dialog", None)
         if old is not None:
             try:
@@ -831,7 +832,12 @@ class Shell(SectionsMixin, GamesMixin):
         inner = tk.Frame(box, bg=K.CARD)
         inner.pack(fill="both", expand=True, padx=22, pady=18)
         K.label(inner, title, 13, K.TEXT, "bold").pack(anchor="w")
-        K.label(inner, text, 10, K.MUTED, wraplength=380).pack(anchor="w", pady=(6, 16))
+        K.label(inner, text, 10, K.MUTED, wraplength=380).pack(anchor="w", pady=(6, 12 if entry is not None else 16))
+        var = tk.StringVar(value=entry or "")
+        if entry is not None:
+            e = K.entry(inner, var, width=34)
+            e.pack(fill="x", pady=(0, 16), ipady=3)
+            e.bind("<Return>", lambda ev: yes())
         btns = tk.Frame(inner, bg=K.CARD)
         btns.pack(fill="x")
 
@@ -843,16 +849,39 @@ class Shell(SectionsMixin, GamesMixin):
             self._dialog = None
 
         def yes():
+            value = var.get()
             close()
-            on_yes()
+            on_yes(value) if entry is not None else on_yes()
+
+        def no():
+            close()
+            if on_no:
+                on_no()
         K.button(btns, yes_text, yes, kind="primary").pack(side="right")
-        K.button(btns, no_text, close, kind="ghost").pack(side="right", padx=(0, 8))
+        K.button(btns, no_text, no, kind="ghost").pack(side="right", padx=(0, 8))
         d.update_idletasks()
         w, h = d.winfo_reqwidth(), d.winfo_reqheight()
         sw, sh = d.winfo_screenwidth(), d.winfo_screenheight()
         d.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 3}")
         d.after(200, lambda: ui_overlay.exclude_from_capture(d))
         return d
+
+    def ask_new_game(self, exe):
+        """«Новая игра: … — создать пресет?» (только по вашей клавише автоперевода, не при Alt+Tab)."""
+        if getattr(self, "_asking_exe", None) == exe and getattr(self, "_dialog", None) is not None:
+            return
+        self._asking_exe = exe
+
+        def create(title):
+            self._asking_exe = None
+            game.create_profile_for(exe, title.strip() or None)
+
+        def not_game():
+            self._asking_exe = None
+            game.mark_not_game(exe)
+        self.ask(f"Новая игра: {exe}",
+                 "Создать для неё пресет? У игры будут свои области, словарь и персонажи. Название можно исправить:",
+                 "Создать", create, no_text="Не игра", on_no=not_game, entry=profiles._pretty(exe))
 
     def profile_changed(self):
         """Другая игра: разделы со своими данными (персонажи, словарь, игры) собрать заново."""

@@ -74,8 +74,7 @@ def blocked():
     if _blocked_logged["exe"] != exe:
         _blocked_logged["exe"] = exe
         core.log(f"Для {exe} нет пресета — переводчик работает только в играх из списка. Чтобы добавить эту "
-                 "игру, включите в ней автоперевод (клавиша автоперевода) или выключите «Только игры из списка».",
-                 "warn")
+                 "игру, нажмите в ней клавишу автоперевода — программа предложит создать пресет.", "warn")
     return True
 
 
@@ -90,23 +89,60 @@ def follow_foreground():
         profiles.activate(prof)
 
 
+def not_games():
+    """Программы, про которые вы сказали «не игра» (в окне «Новая игра»)."""
+    return set(core.SETTINGS.get("not_games", []))
+
+
+def mark_not_game(exe):
+    ng = sorted(not_games() | {exe.lower()})
+    core.save_settings(not_games=ng)
+    core.log(f"{exe} — не игра, больше не спрошу", "ok")
+
+
+def unknown_game(exe=None, pid=None):
+    """На экране программа, похожая на игру, но без пресета? Возвращает её exe или None."""
+    from . import profiles
+    if exe is None:
+        exe, pid = foreground_exe()
+    if not exe or pid == os.getpid() or exe in NOT_GAME_EXE or exe in not_games():
+        return None
+    return None if profiles.for_exe(exe) else exe
+
+
 def remember_game_window():
     """Вызывается при включении автоперевода: активное сейчас окно — это игра.
-    Новая игра (нет пресета) — создаём для неё пресет и переключаемся."""
+    Игра из списка — включаем её пресет. Новая игра — спрашиваем, создать ли пресет (окно «Новая игра»).
+    Возвращает "new", если показан вопрос про новую игру."""
     global game_exe
     from . import profiles
     exe, pid = foreground_exe()
-    if not exe or pid == os.getpid() or exe in NOT_GAME_EXE:
-        if exe in NOT_GAME_EXE and config.GAMES_ONLY and pid != os.getpid():
+    if not exe or pid == os.getpid():
+        return None
+    if exe in NOT_GAME_EXE or exe in not_games():
+        if config.GAMES_ONLY:
             core.log(f"{exe} — не игра. Включите автоперевод, когда на экране игра.", "warn")
-        return
+        return None
     prof = profiles.for_exe(exe)
     if prof is None:
-        prof = profiles.create(exe)
-        core.log(f"🎮 Новая игра: {exe} — создан пресет «{profiles.name(prof)}». У неё свои области, словарь "
-                 "и персонажи: обведите субтитры (F9) и ответы.", "ok")
+        core.events.put(("game_new", exe))      # окно: «Новая игра … — создать пресет?»
+        return "new"
     if prof != core.active_profile:
         profiles.activate(prof)
     if exe != game_exe:
         game_exe = exe
         core.save_settings(game_exe=exe)
+    return None
+
+
+def create_profile_for(exe, title=None):
+    """Ответ «Создать» в окне «Новая игра»."""
+    global game_exe
+    from . import profiles
+    prof = profiles.for_exe(exe) or profiles.create(exe, title)
+    profiles.activate(prof, announce=False)
+    game_exe = exe
+    core.save_settings(game_exe=exe)
+    core.log(f"🎮 Новая игра: «{profiles.name(prof)}» — пресет создан. У неё свои области, словарь и персонажи: "
+             "обведите субтитры (F9) и ответы.", "ok")
+    return prof

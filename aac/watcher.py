@@ -365,6 +365,9 @@ WATCHERS = [
 
 
 def toggle_auto():
+    if core.auto_on.is_set() and game.unknown_game():
+        game.remember_game_window()      # перевод уже включён, а на экране новая игра — предложить пресет,
+        return                           # а не выключать перевод
     if core.auto_on.is_set():
         core.auto_on.clear()
         core.log("Автоперевод выключен")
@@ -373,11 +376,14 @@ def toggle_auto():
         core.events.put(("subs2_hide", None))
         core.events.put(("answers_hide", None))
     else:
+        if game.remember_game_window() == "new":     # новая игра: сначала вопрос про пресет, области — потом
+            core.auto_on.set()
+            core.events.put(("panel", None))
+            return
         if core.region is None and core.answers_region is None and core.region2 is None and core.chat_region is None:
             core.log(f"Сначала выделите область субтитров ({hotkeys.K('select')}) и/или ответов ({hotkeys.K('select_answers')}), "
                 f"потом {hotkeys.K('auto')}.", "warn")
             return
-        game.remember_game_window()
         core.auto_on.set()
         parts = [n for n, r in (("субтитры", core.region), ("реплики 2", core.region2),
                                 ("ответы", core.answers_region if core.answers_auto else None),

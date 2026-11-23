@@ -2021,7 +2021,9 @@ def test_game_presets(monkey):
     monkey(game, "foreground_exe", lambda: (fg[0].lower(), 4242))
     assert game.blocked(), "у новой игры пресета ещё нет — клавиши не работают"
     drain()
-    game.remember_game_window()                       # включили автоперевод в новой игре
+    assert game.remember_game_window() == "new"       # включили автоперевод в новой игре — сначала вопрос
+    assert ("game_new", "witcher3.exe") in drain() and set(profiles.all_profiles()) == {"archeage"}
+    game.create_profile_for("witcher3.exe", "Witcher3")   # ответ «Создать»
     assert core_m.active_profile == "witcher3" and profiles.name() == "Witcher3"
     assert core_m.region is None, "у новой игры — свои (пустые) области"
     assert ("profile_changed", "witcher3") in drain()
@@ -2039,11 +2041,25 @@ def test_game_presets(monkey):
     fg[0] = "Witcher3.exe"
     game.follow_foreground()
     assert core_m.region == (5, 6, 7, 8), "области второй игры сохранились"
-    # браузер — не игра, пресет не создаётся
+    # браузер — не игра, вопроса нет
     fg[0] = "chrome.exe"
+    drain()
     game.remember_game_window()
-    assert set(profiles.all_profiles()) == {"archeage", "witcher3"}
+    assert not any(k == "game_new" for k, _ in drain()) and set(profiles.all_profiles()) == {"archeage", "witcher3"}
     assert game.blocked()
+    # «Не игра» — больше не спрашиваем
+    fg[0] = "vlc.exe"
+    assert game.unknown_game() == "vlc.exe"
+    game.mark_not_game("vlc.exe")
+    assert game.unknown_game() is None and game.remember_game_window() is None
+    # перевод уже включён, а на экране новая игра: клавиша не выключает перевод, а предлагает пресет
+    fg[0] = "Skyrim.exe"
+    auto = T._owner("auto_on").auto_on
+    auto.set()
+    drain()
+    T.toggle_auto()
+    assert auto.is_set() and ("game_new", "skyrim.exe") in drain()
+    auto.clear()
     # переименовать и удалить
     profiles.rename("witcher3", "The Witcher 3")
     assert profiles.name("witcher3") == "The Witcher 3"

@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "11.0"
+VERSION = "11.1"
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # папка программы (настройки, словарь, история, иконки)
 
 # ===================== НАСТРОЙКИ =====================
