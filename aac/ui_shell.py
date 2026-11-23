@@ -285,9 +285,9 @@ class Shell(SectionsMixin):
         def set_auto_upd(v):
             config.UPDATE_AUTO = bool(v)
             core.save_settings(update_auto=config.UPDATE_AUTO)
-        self.upd_row = K.ToggleRow(si, "Обновлять автоматически",
-                                   "новая версия скачивается в фоне, потом программа спросит, можно ли перезапуститься. "
-                                   "Выключено — на Главной появится кнопка «Обновить».",
+        self.upd_row = K.ToggleRow(si, "Обновлять автоматически при запуске",
+                                   "есть новая версия, когда вы запускаете программу, — поставится сразу, ещё до игры. "
+                                   "Пока программа работает, она сама не обновляется: только кнопка «Обновить».",
                                    lambda: config.UPDATE_AUTO, set_auto_upd, last=True)
         self.stream_row = K.ToggleRow(si, "Показывать переводы на трансляции",
                                       "зрители в Discord, OBS и на записи экрана видят субтитры, ответы и подсказки. "

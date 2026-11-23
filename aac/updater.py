@@ -104,14 +104,24 @@ def check_async(quiet=True):
 
 
 def startup_check():
-    """Проверка при запуске. Сама ничего не ставит: новая версия → спросить (или скачать в фоне и спросить)."""
-    st = staged()
-    if st:                    # скачано раньше, а перезапуск отложили — спросить снова
-        core.events.put(("update_ready", st))
-        return False
+    """Проверка при запуске. Включено «обновлять автоматически» и есть новая версия — ставим сразу
+    (программа только что запущена, вы ещё не в игре). Во время работы сама не обновляется."""
+    if core.SETTINGS.get("staged_update"):
+        core.save_settings(staged_update=None)        # след старого способа (9.7–9.9) — больше не нужен
+    old = os.path.join(config.APP_DIR, "update_ready")
+    if os.path.isdir(old):
+        import shutil
+        shutil.rmtree(old, ignore_errors=True)
     info = check(quiet=True)
     if info and is_newer(info["version"]):
-        return False          # check() уже отправил update_available — дальше решает окно программы
+        if config.UPDATE_AUTO:
+            state["auto_installing"] = True
+            core.log(f"Нашлась новая версия {info['version']} — обновляюсь при запуске, программа перезапустится…",
+                     "ok")
+            time.sleep(2)
+            core.events.put(("update_install", None))
+            return True
+        return False
     if info:
         core.log(f"Обновления проверены: у вас последняя версия {config.VERSION}")
     elif state.get("error"):
@@ -121,13 +131,15 @@ def startup_check():
 
 def start_periodic():
     """Проверка сразу при запуске и потом раз в минуту (config.UPDATE_EVERY_SECONDS).
+    Сама программа обновляется только при запуске (если включено), во время работы — лишь кнопка «Обновить».
     При запуске (вы ещё не в игре) новая версия ставится сама, если включено «обновляться сам»."""
     if not config.UPDATE_CHECK or not config.UPDATE_REPO:
         return
 
     def loop():
         time.sleep(3)
-        startup_check()
+        if startup_check():
+            return
         while True:
             time.sleep(max(30, config.UPDATE_EVERY_SECONDS))
             check(quiet=True)
@@ -178,66 +190,6 @@ def install(info):
 
 def install_async(info):
     threading.Thread(target=install, args=(info,), daemon=True).start()
-
-
-# ---------- «обновлять автоматически»: скачать заранее, поставить при перезапуске ----------
-STAGE_DIR = os.path.join(config.APP_DIR, "update_ready")
-
-
-def staged():
-    """Скачанное заранее обновление {"version", "folder"} или None."""
-    st = core.SETTINGS.get("staged_update")
-    if not st or not is_newer(str(st.get("version", ""))):
-        return None
-    if not os.path.exists(os.path.join(st.get("folder", ""), "install.py")):
-        return None
-    return st
-
-
-def prepare(info):
-    """Скачать новую версию в фоне (ничего не меняя в программе) и спросить про перезапуск."""
-    if state.get("preparing") or state["installing"]:
-        return
-    st = staged()
-    if st and st["version"] == info["version"]:
-        core.events.put(("update_ready", st))
-        return
-    state["preparing"] = True
-    try:
-        import shutil
-        shutil.rmtree(STAGE_DIR, ignore_errors=True)
-        os.makedirs(STAGE_DIR, exist_ok=True)
-        core.log(f"Скачиваю версию {info['version']} в фоне…")
-        folder = download(info, STAGE_DIR)
-        st = {"version": info["version"], "folder": folder}
-        core.save_settings(staged_update=st)
-        core.SETTINGS["staged_update"] = st
-        core.log(f"Версия {info['version']} скачана — установится при перезапуске программы.", "ok")
-        core.events.put(("update_ready", st))
-    except Exception as e:
-        core.log(f"Не удалось скачать обновление: {e} — попробую позже", "warn")
-    finally:
-        state["preparing"] = False
-
-
-def prepare_async(info):
-    threading.Thread(target=prepare, args=(info,), daemon=True).start()
-
-
-def apply_staged():
-    """Поставить скачанное обновление: запустить установщик и закрыть программу (он запустит её снова)."""
-    st = staged()
-    if not st:
-        return False
-    state["installing"] = True
-    py = sys.executable
-    flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0
-    subprocess.Popen([py, os.path.join(st["folder"], "install.py"), "--update", "--wait-pid", str(os.getpid())],
-                     cwd=st["folder"], creationflags=flags, close_fds=True)
-    core.save_settings(staged_update=None)
-    core.log(f"Устанавливаю версию {st['version']} — программа перезапустится сама.", "ok")
-    core.events.put(("quit", None))
-    return True
 
 
 def announce_if_updated():

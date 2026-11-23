@@ -1923,42 +1923,27 @@ def test_new_shell(monkey):
 
 
 def test_update_on_startup(monkey):
-    """Без спроса не ставит: при запуске — только проверка; скачанное заранее — спросить про перезапуск."""
+    """Сама программа обновляется только при запуске и только если включено «обновлять автоматически»."""
     from aac import updater
-    if not hasattr(updater, "prepare"):
+    if not hasattr(updater, "startup_check"):
         print("   (в этой версии нет — пропуск)")
         return
     monkey(updater.time, "sleep", lambda s: None)
     T.set("SETTINGS", {})
+    cfg = T._owner("UPDATE_AUTO")
     newer = {"version": "99.0", "notes": "", "asset_url": "x"}
     monkey(updater, "check", lambda quiet=True: newer)
+    monkey(cfg, "UPDATE_AUTO", False)
     drain()
-    updater.startup_check()
+    assert updater.startup_check() is False
     assert ("update_install", None) not in drain(), "без согласия ничего не ставится"
+    monkey(cfg, "UPDATE_AUTO", True)
+    assert updater.startup_check() is True
+    assert ("update_install", None) in drain(), "включено — ставится при запуске"
+    updater.state["auto_installing"] = False
     monkey(updater, "check", lambda quiet=True: {"version": T._owner("VERSION").VERSION, "notes": ""})
-    updater.startup_check()
+    assert updater.startup_check() is False
     assert any(k == "log" and "последняя версия" in p[1] for k, p in drain())
-    # «обновлять автоматически»: скачать в фоне → спросить про перезапуск
-    stage = tempfile.mkdtemp(dir=TMP)
-
-    def fake_download(info, dest):
-        open(os.path.join(dest, "install.py"), "w").close()
-        return dest
-    monkey(updater, "download", fake_download)
-    monkey(updater, "STAGE_DIR", stage)
-    updater.prepare(newer)
-    ev = [p for k, p in drain() if k == "update_ready"]
-    assert ev and ev[0]["version"] == "99.0" and updater.staged()
-    # отложили — при следующем запуске спросит снова
-    updater.startup_check()
-    assert any(k == "update_ready" for k, _ in drain())
-    # согласились — запускается установщик, программа закрывается
-    started = []
-    monkey(updater.subprocess, "Popen", lambda *a, **k: started.append(a[0]))
-    assert updater.apply_staged() is True
-    assert started and started[0][-3:] == ["--update", "--wait-pid", str(os.getpid())]
-    assert ("quit", None) in drain()
-    updater.state["installing"] = False
     if GUI:
         app = T.App()
         try:
