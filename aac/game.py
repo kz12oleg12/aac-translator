@@ -226,6 +226,34 @@ def detect_new_game(checks_needed=6):
     return exe, nice_title(foreground_title(), exe)
 
 
+window_pids = {}      # exe → pid процесса с окном (заполняет running_programs)
+_scan = {"t": 0.0}
+
+
+def scan_running(every=3.0):
+    """Раз в 3 с смотрим ВСЕ открытые окна, а не только активное: игра могла быть запущена раньше программы
+    и сейчас стоять за её панелью. Новая игра (по папке/файлам/списку Windows) → (exe, название) для пресета.
+    Если пресет на «последней» игре, а запущена другая знакомая игра — переключиться на неё."""
+    import time
+    from . import profiles
+    now = time.time()
+    if now - _scan["t"] < every or locked():
+        return None
+    _scan["t"] = now
+    progs = running_programs()
+    known = [profiles.for_exe(exe) for exe, _ in progs]
+    if core.active_profile not in known:
+        others = [p for p in known if p]
+        if others:
+            profiles.activate(others[0])
+    for exe, title in progs:
+        if profiles.for_exe(exe) or exe in not_games() or exe in NOT_GAME_EXE:
+            continue
+        if in_game_folder(window_pids.get(exe)):
+            return exe, nice_title(title, exe)
+    return None
+
+
 def running_programs():
     """[(exe, заголовок окна)] — программы с видимыми окнами (кроме этой и «не игр»), для «+ Добавить игру»."""
     out = {}
@@ -249,6 +277,7 @@ def running_programs():
                 exe = _exe_of(pid.value)
                 if exe and exe not in NOT_GAME_EXE and exe not in out:
                     out[exe] = buf.value
+                    window_pids[exe] = pid.value
             except Exception:
                 pass
             return True

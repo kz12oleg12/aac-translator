@@ -95,7 +95,7 @@ class App:
 
     def _check_game_focus(self):
         game.follow_foreground()          # игра из списка на экране — её пресет (всегда, без клавиш)
-        new = game.detect_new_game()      # новая игра (папка Steam/Epic… или весь экран) — пресет создаётся сам
+        new = game.detect_new_game() or game.scan_running()   # новая игра: на экране или в фоне — пресет сам
         if new:
             prof = game.create_profile_for(*new)
             self.game_created(prof)

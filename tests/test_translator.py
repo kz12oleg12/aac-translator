@@ -2088,6 +2088,19 @@ def test_game_presets(monkey):
         folder[0] = False
         assert game.nice_title("Cyberpunk 2077 (C) 2020 by CD Projekt RED", "cyberpunk2077.exe") == "Cyberpunk2077"
         assert game.nice_title("Hollow Knight - v1.5.78", "hollow_knight.exe") == "Hollow Knight"
+    if hasattr(game, "scan_running"):      # игра запущена раньше программы и стоит за панелью — всё равно узнаём
+        monkey(game, "running_programs", lambda: [("deadcells.exe", "Dead Cells"), ("telegram.exe", "Telegram")])
+        monkey(game, "in_game_folder", lambda pid: True)
+        game.window_pids.update({"deadcells.exe": 1, "telegram.exe": 2})
+        game._scan["t"] = 0
+        assert game.scan_running() == ("deadcells.exe", "Dead Cells")
+        assert game.scan_running() is None, "не чаще раза в 3 секунды"
+        prof = game.create_profile_for("deadcells.exe", "Dead Cells")
+        monkey(game, "running_programs", lambda: [("witcher3.exe", "The Witcher 3")])
+        game._scan["t"] = 0
+        assert game.scan_running() is None and core_m.active_profile == "witcher3", "последняя не запущена — к запущенной"
+        assert profiles.delete(prof)
+        monkey(game, "in_game_folder", lambda pid: False)
     if hasattr(game, "has_game_files"):     # игра не из Steam и в окне — узнаём по файлам движка рядом с .exe
         g = tempfile.mkdtemp(dir=TMP)
         os.makedirs(os.path.join(g, "Dead Cells"))
