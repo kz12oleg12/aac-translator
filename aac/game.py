@@ -60,10 +60,81 @@ def _exe_of(pid):
     return os.path.basename(p) if p else None
 
 
+# файлы, которые лежат рядом с .exe только у игр: магазины (Steam, GOG, Epic) и игровые движки
+GAME_FILES = ("steam_api.dll", "steam_api64.dll", "steam_appid.txt", "galaxy.dll", "galaxy64.dll",
+              "eossdk-win64-shipping.dll", "eossdk-win32-shipping.dll", "unityplayer.dll", "gameassembly.dll",
+              "libhl.dll", "data.win", "fmod.dll", "fmod64.dll", "fmodstudio.dll", "fmodstudio64.dll",
+              "fmodex.dll", "fmodex64.dll", "bink2w64.dll", "binkw32.dll", "binkw64.dll",
+              "physx3_x64.dll", "physxcommon_64.dll", "renpy.exe", "uplay_r1_loader64.dll", "mono-2.0-bdwgc.dll")
+_files_cache = {}
+
+
+def has_game_files(path):
+    """Рядом с .exe (или на 2 папки выше — у Unreal он в Binaries/Win64) лежат файлы движка или магазина?"""
+    if not path:
+        return False
+    if path in _files_cache:
+        return _files_cache[path]
+    name = os.path.basename(path).lower()
+    found = name.endswith("-shipping.exe")
+    d = os.path.dirname(path)
+    for _ in range(3):
+        if found or not d:
+            break
+        try:
+            names = {n.lower() for n in os.listdir(d)}
+        except OSError:
+            break
+        found = any(f in names for f in GAME_FILES) or ("engine" in names and any(n.endswith(".uproject") or
+                                                                                   n == "binaries" for n in names))
+        parent = os.path.dirname(d)
+        d = parent if parent != d else None
+    _files_cache[path] = found
+    return found
+
+
+def windows_games():
+    """Пути .exe, которые Windows (Xbox Game Bar) сама считает играми — из реестра GameConfigStore."""
+    out = set()
+    try:
+        import winreg
+        root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"System\GameConfigStore\Children")
+    except Exception:
+        return out
+    try:
+        i = 0
+        while True:
+            try:
+                sub = winreg.EnumKey(root, i)
+            except OSError:
+                break
+            i += 1
+            try:
+                with winreg.OpenKey(root, sub) as k:
+                    v, _ = winreg.QueryValueEx(k, "MatchedExeFullPath")
+                    if v:
+                        out.add(str(v).lower())
+            except OSError:
+                pass
+    finally:
+        winreg.CloseKey(root)
+    return out
+
+
+_wg_cache = {"t": 0.0, "set": set()}
+
+
 def in_game_folder(pid):
-    """Программа установлена в папку игр (Steam, Epic, GOG, Xbox, Riot…)?"""
+    """Похоже на игру по файлам: папка игр (Steam, Epic, GOG…), файлы движка рядом или Windows знает её как игру."""
     p = _path_of(pid) if pid else None
-    return bool(p) and any(d in p for d in GAME_DIRS)
+    if not p:
+        return False
+    if any(d in p for d in GAME_DIRS) or has_game_files(p):
+        return True
+    import time
+    if time.time() - _wg_cache["t"] > 30:
+        _wg_cache.update(t=time.time(), set=windows_games())
+    return p in _wg_cache["set"]
 
 
 def foreground_title():

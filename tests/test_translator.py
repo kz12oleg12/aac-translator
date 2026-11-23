@@ -2088,6 +2088,18 @@ def test_game_presets(monkey):
         folder[0] = False
         assert game.nice_title("Cyberpunk 2077 (C) 2020 by CD Projekt RED", "cyberpunk2077.exe") == "Cyberpunk2077"
         assert game.nice_title("Hollow Knight - v1.5.78", "hollow_knight.exe") == "Hollow Knight"
+    if hasattr(game, "has_game_files"):     # игра не из Steam и в окне — узнаём по файлам движка рядом с .exe
+        g = tempfile.mkdtemp(dir=TMP)
+        os.makedirs(os.path.join(g, "Dead Cells"))
+        for n in ("deadcells.exe", "libhl.dll", "res.pak"):
+            open(os.path.join(g, "Dead Cells", n), "w").close()
+        assert game.has_game_files(os.path.join(g, "Dead Cells", "deadcells.exe"))
+        os.makedirs(os.path.join(g, "Stray", "Hk_project", "Binaries", "Win64"))
+        os.makedirs(os.path.join(g, "Stray", "Engine"))
+        assert game.has_game_files(os.path.join(g, "Stray", "Hk_project", "Binaries", "Win64", "Stray-Win64-Shipping.exe"))
+        os.makedirs(os.path.join(g, "Tools", "Editor", "bin"))
+        open(os.path.join(g, "Tools", "Editor", "bin", "editor.exe"), "w").close()
+        assert not game.has_game_files(os.path.join(g, "Tools", "Editor", "bin", "editor.exe")), "обычная программа"
     # ещё файл игры (лаунчер / защита от читов / новое имя после обновления)
     assert profiles.add_exe("witcher3", "start_protected_game.exe")
     assert profiles.for_exe("START_PROTECTED_GAME.exe") == "witcher3"
