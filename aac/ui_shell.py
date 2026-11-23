@@ -285,10 +285,9 @@ class Shell(SectionsMixin):
         def set_auto_upd(v):
             config.UPDATE_AUTO = bool(v)
             core.save_settings(update_auto=config.UPDATE_AUTO)
-        self.upd_row = K.ToggleRow(si, "Обновляться сам при запуске",
-                                   "нашлась новая версия при запуске — поставится сразу, ещё до игры. Во время игры "
-                                   f"программа проверяет обновления каждые {config.UPDATE_EVERY_MINUTES} минут и "
-                                   "только предлагает обновиться.",
+        self.upd_row = K.ToggleRow(si, "Обновлять автоматически",
+                                   "новая версия скачивается в фоне, потом программа спросит, можно ли перезапуститься. "
+                                   "Выключено — сначала спросит, обновлять ли.",
                                    lambda: config.UPDATE_AUTO, set_auto_upd, last=True)
         self.stream_row = K.ToggleRow(si, "Показывать переводы на трансляции",
                                       "зрители в Discord, OBS и на записи экрана видят субтитры, ответы и подсказки. "
@@ -786,6 +785,47 @@ class Shell(SectionsMixin):
         if not self.update_btn.winfo_manager():
             self.update_btn.pack(fill="x", pady=(0, 6), before=self.check_btn)
         self.refresh()
+
+    def ask(self, title, text, yes_text, on_yes, no_text="Позже"):
+        """Вопрос в стиле программы поверх игры (не забирает фокус у игры). Один вопрос за раз."""
+        old = getattr(self, "_dialog", None)
+        if old is not None:
+            try:
+                old.destroy()
+            except tk.TclError:
+                pass
+        d = tk.Toplevel(self.win.master)
+        self._dialog = d
+        d.overrideredirect(True)
+        d.attributes("-topmost", True)
+        d.configure(bg=K.ACCENT_LINE)
+        box = tk.Frame(d, bg=K.CARD)
+        box.pack(fill="both", expand=True, padx=1, pady=1)
+        inner = tk.Frame(box, bg=K.CARD)
+        inner.pack(fill="both", expand=True, padx=22, pady=18)
+        K.label(inner, title, 13, K.TEXT, "bold").pack(anchor="w")
+        K.label(inner, text, 10, K.MUTED, wraplength=380).pack(anchor="w", pady=(6, 16))
+        btns = tk.Frame(inner, bg=K.CARD)
+        btns.pack(fill="x")
+
+        def close():
+            try:
+                d.destroy()
+            except tk.TclError:
+                pass
+            self._dialog = None
+
+        def yes():
+            close()
+            on_yes()
+        K.button(btns, yes_text, yes, kind="primary").pack(side="right")
+        K.button(btns, no_text, close, kind="ghost").pack(side="right", padx=(0, 8))
+        d.update_idletasks()
+        w, h = d.winfo_reqwidth(), d.winfo_reqheight()
+        sw, sh = d.winfo_screenwidth(), d.winfo_screenheight()
+        d.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 3}")
+        d.after(200, lambda: ui_overlay.exclude_from_capture(d))
+        return d
 
     def sync_vars(self):
         self.refresh()

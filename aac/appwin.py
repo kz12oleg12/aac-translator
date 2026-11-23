@@ -753,11 +753,27 @@ class App:
                              ". Кнопка «⬇ Обновить» в панели или в меню значка.", "ok")
                     self.panel.show_update(payload["version"])
                     tray.update()
-                    if updater.state.get("announced") != payload["version"]:   # уведомление — один раз на версию
+                    if updater.state.get("announced") != payload["version"]:   # один раз на версию
                         updater.state["announced"] = payload["version"]
-                        tray.notify(f"AAC Translator {payload['version']}",
-                                    "Вышла новая версия. Обновить — кнопка в окне программы или в меню значка.")
+                        if config.UPDATE_AUTO:
+                            updater.prepare_async(payload)        # скачать в фоне, потом спросить про перезапуск
+                        else:
+                            tray.notify(f"AAC Translator {payload['version']}",
+                                        "Вышла новая версия — обновить можно в окне программы.")
+                            self.panel.ask(f"Вышла версия {payload['version']}",
+                                           "Обновить сейчас? Программа закроется и через полминуты запустится "
+                                           "снова — уже новой версии.",
+                                           "Обновить", lambda: core.events.put(("update_install", None)))
+                elif kind == "update_ready":
+                    tray.notify(f"AAC Translator {payload['version']}",
+                                "Обновление загружено — нужно перезапустить программу.")
+                    self.panel.ask(f"Обновление {payload['version']} загружено",
+                                   "Чтобы оно установилось, нужно перезапустить программу. Перезапустить сейчас? "
+                                   "Если позже — спрошу ещё раз при следующем запуске.",
+                                   "Перезапустить", updater.apply_staged)
                 elif kind == "update_install":
+                    if updater.staged() and updater.apply_staged():
+                        continue
                     info = updater.state.get("latest")
                     if info and updater.is_newer(info["version"]):
                         updater.install_async(info)
