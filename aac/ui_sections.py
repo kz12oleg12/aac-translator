@@ -852,9 +852,10 @@ class GamesMixin:
                                    "и кэш переводов. Программа сама переключается, когда игра на экране.")
         tip, ti = K.card(b, bg=K.ACCENT_TINT, border=K.ACCENT_LINE, padx=16, pady=10)
         tip.pack(fill="x", pady=(0, 14))
-        K.label(ti, "Добавить игру: запустите её и включите автоперевод "
-                    f"({hotkeys.K('auto')}) — пресет создастся сам, останется обвести области.",
-                10, K.TEXT, bg=K.ACCENT_TINT, wraplength=620).pack(anchor="w")
+        K.button(ti, "+ Добавить игру", self._game_add, kind="primary").pack(side="right", padx=(12, 0))
+        K.label(ti, "Запустите игру и нажмите «+ Добавить игру» — или просто включите в игре автоперевод "
+                    f"({hotkeys.K('auto')}), программа предложит создать пресет.",
+                10, K.TEXT, bg=K.ACCENT_TINT, wraplength=470).pack(side="left", anchor="w")
         self.games_box = tk.Frame(b, bg=K.BG)
         self.games_box.pack(fill="x")
         self._games_render()
@@ -882,9 +883,26 @@ class GamesMixin:
             if on:
                 tk.Label(top, text="сейчас", bg=K.ACCENT, fg="#ffffff", font=K.f(8, "bold"), padx=8).pack(
                     side="left", padx=(8, 0))
+            if core.SETTINGS.get("profile_lock") == pid:
+                tk.Label(top, text="📌 закреплён", bg=K.AMBER, fg="#141413", font=K.f(8, "bold"), padx=8).pack(
+                    side="left", padx=(6, 0))
             K.label(top, "✎ имя можно исправить прямо здесь", 8, K.FAINT).pack(side="right")
-            exes = ", ".join(p.get("exes", [])) or "—"
-            K.label(ci, f"Файл игры: {exes}", 9, K.DIM).pack(anchor="w", pady=(4, 8))
+            files = tk.Frame(ci, bg=K.CARD)
+            files.pack(fill="x", pady=(6, 8))
+            K.label(files, "Файлы игры:", 9, K.DIM).pack(side="left", padx=(0, 6))
+            exes = p.get("exes", [])
+            for exe in exes:
+                pill = tk.Frame(files, bg=K.SIDEBAR, highlightthickness=1, highlightbackground=K.LINE)
+                pill.pack(side="left", padx=(0, 6))
+                tk.Label(pill, text=exe, bg=K.SIDEBAR, fg=K.TEXT2, font=K.f(9), padx=6, pady=1).pack(side="left")
+                if len(exes) > 1 or p.get("match"):
+                    x = tk.Label(pill, text="✕", bg=K.SIDEBAR, fg=K.FAINT, font=K.f(8), cursor="hand2", padx=3)
+                    x.pack(side="left")
+                    x.bind("<Button-1>", lambda e, pid=pid, exe=exe: (profiles.remove_exe(pid, exe),
+                                                                       self._games_render()))
+            add = tk.Label(files, text="+ ещё файл", bg=K.CARD, fg=K.ACCENT_TEXT, font=K.f(9), cursor="hand2")
+            add.pack(side="left", padx=(2, 0))
+            add.bind("<Button-1>", lambda e, pid=pid: self._game_add_exe(pid))
             regs = tk.Frame(ci, bg=K.CARD)
             regs.pack(fill="x")
             for key, title in (("region", "Субтитры"), ("region2", "Реплики 2"), ("answers_region", "Ответы"),
@@ -906,6 +924,30 @@ class GamesMixin:
             else:
                 K.button(bottom, "Области →", lambda: self.show("areas"), kind="ghost", size=9).pack(
                     side="right", padx=(0, 8))
+            is_locked = core.SETTINGS.get("profile_lock") == pid
+            K.button(bottom, "Открепить" if is_locked else "📌 Закрепить",
+                     lambda pid=pid, l=is_locked: (profiles.lock(None if l else pid), self._games_render()),
+                     kind="ghost", size=9).pack(side="right", padx=(0, 8))
+
+    def _game_add(self):
+        """«+ Добавить игру»: выбрать из запущенных сейчас программ."""
+        from . import game, profiles
+
+        def pick(exe):
+            if profiles.for_exe(exe):
+                core.log(f"{exe} уже есть в списке игр — «{profiles.name(profiles.for_exe(exe))}»", "warn")
+                return
+            game.create_profile_for(exe, profiles._pretty(exe))
+            self._games_render()
+        self.pick_program("Добавить игру", "Выберите игру из запущенных сейчас программ. Название потом можно "
+                                           "исправить прямо в карточке.", pick, hide_known=True)
+
+    def _game_add_exe(self, pid):
+        from . import profiles
+        self.pick_program(f"Ещё файл для «{profiles.name(pid)}»",
+                          "Пригодится, если игра запускается через лаунчер или защиту от читов, или файл игры "
+                          "переименовали после обновления. Выберите его из запущенных программ:",
+                          lambda exe: (profiles.add_exe(pid, exe), self._games_render()))
 
     def _game_delete(self, pid):
         from . import profiles

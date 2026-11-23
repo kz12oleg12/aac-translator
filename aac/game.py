@@ -24,37 +24,82 @@ NOT_GAME_EXE = {"python.exe", "pythonw.exe", "explorer.exe", "py.exe", "pyw.exe"
                 "applicationframehost.exe", "lockapp.exe", "textinputhost.exe"}
 
 
+def _exe_of(pid):
+    kernel32 = ctypes.windll.kernel32
+    h = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return None
+    try:
+        buf = ctypes.create_unicode_buffer(1024)
+        size = ctypes.c_ulong(1024)
+        if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+            return os.path.basename(buf.value).lower()
+    finally:
+        kernel32.CloseHandle(h)
+    return None
+
+
 def foreground_exe():
     """(имя .exe активного окна, pid) или (None, None)."""
     try:
-        user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
         hwnd = user32.GetForegroundWindow()
         if not hwnd:
             return None, None
         pid = ctypes.c_ulong()
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        h = kernel32.OpenProcess(0x1000, False, pid.value)  # PROCESS_QUERY_LIMITED_INFORMATION
-        if not h:
-            return None, pid.value
-        try:
-            buf = ctypes.create_unicode_buffer(1024)
-            size = ctypes.c_ulong(1024)
-            if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
-                return os.path.basename(buf.value).lower(), pid.value
-        finally:
-            kernel32.CloseHandle(h)
-        return None, pid.value
+        return _exe_of(pid.value), pid.value
     except Exception:
         return None, None
+
+
+def running_programs():
+    """[(exe, заголовок окна)] — программы с видимыми окнами (кроме этой и «не игр»), для «+ Добавить игру»."""
+    out = {}
+    try:
+        user32 = ctypes.windll.user32
+        proto = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+        def each(hwnd, _):
+            try:
+                if not user32.IsWindowVisible(hwnd) or user32.GetWindow(hwnd, 4):   # 4 = GW_OWNER: всплывашки
+                    return True
+                n = user32.GetWindowTextLengthW(hwnd)
+                if n <= 0:
+                    return True
+                buf = ctypes.create_unicode_buffer(n + 1)
+                user32.GetWindowTextW(hwnd, buf, n + 1)
+                pid = ctypes.c_ulong()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value == os.getpid():
+                    return True
+                exe = _exe_of(pid.value)
+                if exe and exe not in NOT_GAME_EXE and exe not in out:
+                    out[exe] = buf.value
+            except Exception:
+                pass
+            return True
+        user32.EnumWindows(proto(each), 0)
+    except Exception:
+        return []
+    return sorted(out.items(), key=lambda kv: kv[1].lower())
 
 
 def is_archeage(exe):
     return bool(exe) and "archeage" in exe.lower()
 
 
+def locked():
+    """Пресет закреплён: программа не переключается сама и считает игрой любое окно (стриминг, эмулятор)."""
+    from . import core as _c
+    return bool(_c.SETTINGS.get("profile_lock"))
+
+
 def is_game(exe):
     """Это окно игры? Режим «только игры из списка» — игра, для которой есть пресет; иначе — запомненная."""
     from . import profiles
+    if locked():
+        return bool(exe) and exe not in NOT_GAME_EXE and exe not in not_games()
     if config.GAMES_ONLY:
         return profiles.for_exe(exe) is not None
     return exe == game_exe
@@ -71,6 +116,8 @@ def blocked():
     exe, pid = foreground_exe()
     if exe is None or pid == os.getpid() or profiles.for_exe(exe):
         return False
+    if locked() and exe not in NOT_GAME_EXE and exe not in not_games():
+        return False
     if _blocked_logged["exe"] != exe:
         _blocked_logged["exe"] = exe
         core.log(f"Для {exe} нет пресета — переводчик работает только в играх из списка. Чтобы добавить эту "
@@ -81,6 +128,8 @@ def blocked():
 def follow_foreground():
     """Игра из списка на экране — переключиться на её пресет (области, словарь, персонажи, кэш)."""
     from . import profiles
+    if locked():
+        return
     exe, pid = foreground_exe()
     if not exe or pid == os.getpid():
         return
@@ -105,7 +154,7 @@ def unknown_game(exe=None, pid=None):
     from . import profiles
     if exe is None:
         exe, pid = foreground_exe()
-    if not exe or pid == os.getpid() or exe in NOT_GAME_EXE or exe in not_games():
+    if locked() or not exe or pid == os.getpid() or exe in NOT_GAME_EXE or exe in not_games():
         return None
     return None if profiles.for_exe(exe) else exe
 
@@ -123,6 +172,8 @@ def remember_game_window():
         if config.GAMES_ONLY:
             core.log(f"{exe} — не игра. Включите автоперевод, когда на экране игра.", "warn")
         return None
+    if locked():
+        return None                              # пресет закреплён — ничего не переключаем и не спрашиваем
     prof = profiles.for_exe(exe)
     if prof is None:
         core.events.put(("game_new", exe))      # окно: «Новая игра … — создать пресет?»

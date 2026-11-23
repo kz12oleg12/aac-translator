@@ -778,7 +778,7 @@ class Shell(SectionsMixin, GamesMixin):
 
     # ---------- то, что вызывает остальная программа ----------
     def refresh(self):
-        g = f"🎮 {profiles.name()}"
+        g = ("📌 " if core.SETTINGS.get("profile_lock") else "🎮 ") + profiles.name()
         if self.game_lbl.cget("text") != g:
             self.game_lbl.config(text=g)
         if self.current in self.HEAVY:
@@ -864,6 +864,61 @@ class Shell(SectionsMixin, GamesMixin):
         sw, sh = d.winfo_screenwidth(), d.winfo_screenheight()
         d.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 3}")
         d.after(200, lambda: ui_overlay.exclude_from_capture(d))
+        return d
+
+    def pick_program(self, title, text, on_pick, hide_known=False):
+        """Окно со списком запущенных программ (кнопки). Не забирает фокус у игры."""
+        from . import game
+        progs = [(e, t) for e, t in game.running_programs() if not (hide_known and profiles.for_exe(e))]
+        old = getattr(self, "_dialog", None)
+        if old is not None:
+            try:
+                old.destroy()
+            except tk.TclError:
+                pass
+        d = tk.Toplevel(self.win.master)
+        self._dialog = d
+        d.overrideredirect(True)
+        d.attributes("-topmost", True)
+        d.configure(bg=K.ACCENT_LINE)
+        box = tk.Frame(d, bg=K.CARD)
+        box.pack(fill="both", expand=True, padx=1, pady=1)
+        inner = tk.Frame(box, bg=K.CARD)
+        inner.pack(fill="both", expand=True, padx=22, pady=18)
+        K.label(inner, title, 13, K.TEXT, "bold").pack(anchor="w")
+        K.label(inner, text, 10, K.MUTED, wraplength=420).pack(anchor="w", pady=(6, 12))
+
+        def close():
+            try:
+                d.destroy()
+            except tk.TclError:
+                pass
+            self._dialog = None
+        lst = tk.Frame(inner, bg=K.CARD)
+        lst.pack(fill="x")
+        if not progs:
+            K.label(lst, "Не нашёл открытых программ. Запустите игру и откройте этот список снова.", 10,
+                    K.AMBER, wraplength=420).pack(anchor="w", pady=(0, 8))
+        for exe, wtitle in progs[:14]:
+            row = tk.Frame(lst, bg=K.SIDEBAR, cursor="hand2", highlightthickness=1, highlightbackground=K.LINE)
+            row.pack(fill="x", pady=2)
+            a = K.label(row, exe, 10, K.TEXT, "bold", bg=K.SIDEBAR)
+            a.pack(anchor="w", padx=10, pady=(4, 0))
+            b_ = K.label(row, wtitle[:60], 9, K.DIM, bg=K.SIDEBAR)
+            b_.pack(anchor="w", padx=10, pady=(0, 4))
+            for w in (row, a, b_):
+                w.bind("<Button-1>", lambda e, x=exe: (close(), on_pick(x)))
+                w.bind("<Enter>", lambda e, r=row: r.config(highlightbackground=K.ACCENT_LINE))
+                w.bind("<Leave>", lambda e, r=row: r.config(highlightbackground=K.LINE))
+        btns = tk.Frame(inner, bg=K.CARD)
+        btns.pack(fill="x", pady=(12, 0))
+        K.button(btns, "Отмена", close, kind="ghost").pack(side="right")
+        d.update_idletasks()
+        w, h = d.winfo_reqwidth(), d.winfo_reqheight()
+        sw, sh = d.winfo_screenwidth(), d.winfo_screenheight()
+        d.geometry(f"{w}x{h}+{(sw - w) // 2}+{max(20, (sh - h) // 3)}")
+        d.after(200, lambda: ui_overlay.exclude_from_capture(d))
+        self._pick_rows = lst
         return d
 
     def ask_new_game(self, exe):

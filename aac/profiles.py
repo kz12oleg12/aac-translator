@@ -84,6 +84,45 @@ def create(exe, title=None):
     return pid
 
 
+def add_exe(pid, exe):
+    """Ещё один файл игры (лаунчер, защита от читов, новое имя после обновления)."""
+    profs = all_profiles()
+    exe = exe.lower()
+    if pid not in profs:
+        return False
+    owner = for_exe(exe)
+    if owner and owner != pid:
+        core.log(f"{exe} уже относится к игре «{name(owner)}»", "warn")
+        return False
+    if exe not in profs[pid].setdefault("exes", []):
+        profs[pid]["exes"].append(exe)
+        core.save_settings(profiles=profs)
+        core.log(f"🎮 «{name(pid)}»: добавлен файл {exe}", "ok")
+    return True
+
+
+def remove_exe(pid, exe):
+    profs = all_profiles()
+    p = profs.get(pid)
+    if not p or exe not in p.get("exes", []) or (len(p["exes"]) < 2 and not p.get("match")):
+        return False      # последний файл игры не убираем — иначе пресет не узнает игру
+    p["exes"].remove(exe)
+    core.save_settings(profiles=profs)
+    return True
+
+
+def lock(pid):
+    """Закрепить пресет (None — открепить)."""
+    if pid:
+        activate(pid, announce=False)
+        core.log(f"📌 Пресет «{name(pid)}» закреплён: программа не переключается сама и переводит в любом окне "
+                 "(кроме браузеров и «не игр»).", "ok")
+    else:
+        core.log("Пресет откреплён — снова переключаюсь по игре на экране", "ok")
+    core.save_settings(profile_lock=pid or None)
+    core.events.put(("panel", None))
+
+
 def rename(pid, title):
     title = title.strip()
     profs = all_profiles()
@@ -107,6 +146,8 @@ def delete(pid):
     profs = all_profiles()
     profs.pop(pid, None)
     core.save_settings(profiles=profs)
+    if core.SETTINGS.get("profile_lock") == pid:
+        core.save_settings(profile_lock=None)
     if pid != core.DEFAULT_PROFILE:
         src = folder(pid)
         if os.path.isdir(src):

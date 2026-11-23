@@ -2060,6 +2060,25 @@ def test_game_presets(monkey):
     T.toggle_auto()
     assert auto.is_set() and ("game_new", "skyrim.exe") in drain()
     auto.clear()
+    # ещё файл игры (лаунчер / защита от читов / новое имя после обновления)
+    assert profiles.add_exe("witcher3", "start_protected_game.exe")
+    assert profiles.for_exe("START_PROTECTED_GAME.exe") == "witcher3"
+    assert not profiles.add_exe("archeage", "witcher3.exe"), "файл чужой игры не перехватываем"
+    assert profiles.remove_exe("witcher3", "start_protected_game.exe")
+    assert not profiles.remove_exe("witcher3", "witcher3.exe"), "последний файл игры не убирается"
+    # закрепить пресет: не переключаемся сами и переводим в любом окне (кроме браузеров)
+    profiles.lock("witcher3")
+    fg[0] = "GeForceNOW.exe"
+    assert game.is_game("geforcenow.exe") and not game.blocked() and game.unknown_game() is None
+    fg[0] = "ArcheAgeChronicles.exe"
+    game.follow_foreground()
+    assert core_m.active_profile == "witcher3", "закреплённый пресет не меняется"
+    assert not game.is_game("chrome.exe")
+    profiles.lock(None)
+    game.follow_foreground()
+    assert core_m.active_profile == "archeage"
+    fg[0] = "Witcher3.exe"
+    game.follow_foreground()
     # переименовать и удалить
     profiles.rename("witcher3", "The Witcher 3")
     assert profiles.name("witcher3") == "The Witcher 3"
@@ -2069,6 +2088,19 @@ def test_game_presets(monkey):
     monkey(cfg, "GAMES_ONLY", False)
     assert not game.blocked()
     profiles.bind("archeage")
+    if GUI:     # окно «+ Добавить игру»: список запущенных программ, щелчок — выбор
+        monkey(game, "running_programs", lambda: [("eldenring.exe", "ELDEN RING"), ("notepad.exe", "x")])
+        app = T.App()
+        try:
+            got = []
+            d = app.panel.pick_program("Добавить игру", "текст", got.append)
+            app.root.update()
+            first = app.panel._pick_rows.winfo_children()[0]
+            first.event_generate("<Button-1>")
+            app.root.update()
+            assert got == ["eldenring.exe"] and app.panel._dialog is None
+        finally:
+            app.root.destroy()
 
 
 # ---------- запуск ----------
