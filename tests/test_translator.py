@@ -710,16 +710,17 @@ def test_updater(monkey):
     monkey(updater.os, "environ", {})
     drain()
     info = updater.check()
-    assert calls[0][0] == "https://api.github.com/repos/user/aac-translator/contents/version.json?ref=main", calls
+    # без токена — не API (у него лимит 60 запросов в час), а обычные адреса файлов GitHub
+    assert calls[0][0].startswith("https://raw.githubusercontent.com/user/aac-translator/main/version.json"), calls
     assert "Authorization" not in calls[0][1]
     assert info["version"] == "4.6" and info["notes"] == "голоса\nчат"
-    assert info["asset_url"] == "https://api.github.com/repos/user/aac-translator/zipball/main"
+    assert info["asset_url"] == "https://codeload.github.com/user/aac-translator/zip/refs/heads/main"
     assert [p for k, p in drain() if k == "update_available"][0]["version"] == "4.6"
     # закрытый репозиторий: токен в заголовке
     monkey(updater.os, "environ", {"GITHUB_TOKEN": "tok"})
     calls.clear()
     updater.check()
-    assert calls[0][1]["Authorization"] == "Bearer tok"
+    assert calls[0][1]["Authorization"] == "Bearer tok" and calls[0][0].startswith("https://api.github.com/")
     # та же версия — кнопку не показываем
     monkey(cfg, "VERSION", "4.6")
     drain()

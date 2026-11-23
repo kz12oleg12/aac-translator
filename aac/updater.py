@@ -22,8 +22,16 @@ import requests
 
 from . import config, core
 
+# без токена — обычные адреса файлов GitHub: у них нет лимита «60 запросов в час», как у API
+RAW_VERSION_URL = "https://raw.githubusercontent.com/{repo}/{branch}/version.json?t={ts}"
+RAW_ZIP_URL = "https://codeload.github.com/{repo}/zip/refs/heads/{branch}"
+# с токеном (закрытый репозиторий) — API: с токеном лимит 5000 в час
 VERSION_URL = "https://api.github.com/repos/{repo}/contents/version.json?ref={branch}"
 ZIP_URL = "https://api.github.com/repos/{repo}/zipball/{branch}"
+
+
+def _use_api():
+    return bool(os.environ.get("GITHUB_TOKEN", "").strip())
 state = {"latest": None, "checking": False, "installing": False, "error": None}
 
 
@@ -52,7 +60,10 @@ def check(quiet=True):
         return None
     state["checking"] = True
     try:
-        url = VERSION_URL.format(repo=config.UPDATE_REPO, branch=config.UPDATE_BRANCH)
+        if _use_api():
+            url = VERSION_URL.format(repo=config.UPDATE_REPO, branch=config.UPDATE_BRANCH)
+        else:   # ?t= — свежий файл, а не копия из кэша GitHub (она живёт до 5 минут)
+            url = RAW_VERSION_URL.format(repo=config.UPDATE_REPO, branch=config.UPDATE_BRANCH, ts=int(time.time()))
         headers = _headers(raw=True)
         if state.get("etag") and state.get("latest"):
             headers["If-None-Match"] = state["etag"]   # «изменилось ли?» — ответ «нет» не тратит лимит GitHub
@@ -69,7 +80,7 @@ def check(quiet=True):
             raise RuntimeError(msg)
         if r.status_code == 401:
             raise RuntimeError("Обновления: токен GITHUB_TOKEN не подходит или истёк — сделайте новый.")
-        if r.status_code == 403:
+        if r.status_code in (403, 429):
             raise RuntimeError("Обновления: GitHub временно ограничил запросы — проверю позже.")
         r.raise_for_status()
         state["etag"] = (getattr(r, "headers", None) or {}).get("ETag")
@@ -77,7 +88,8 @@ def check(quiet=True):
         info = {"version": str(data.get("version", "")).lstrip("vV"),
                 "notes": "\n".join(data.get("notes", [])) if isinstance(data.get("notes"), list)
                 else str(data.get("notes", "")).strip(),
-                "asset_url": ZIP_URL.format(repo=config.UPDATE_REPO, branch=config.UPDATE_BRANCH),
+                "asset_url": (ZIP_URL if _use_api() else RAW_ZIP_URL).format(repo=config.UPDATE_REPO,
+                                                                             branch=config.UPDATE_BRANCH),
                 "api_asset": False}
         if not info["version"]:
             raise RuntimeError("Обновления: в version.json нет номера версии.")
