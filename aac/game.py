@@ -9,7 +9,7 @@ import os
 import threading
 
 
-from . import core
+from . import config, core
 
 
 game_exe = None                # имя .exe игры — запоминается, когда вы включаете автоперевод из игры
@@ -43,11 +43,45 @@ def foreground_exe():
         return None, None
 
 
+def is_archeage(exe):
+    return bool(exe) and "archeage" in exe.lower()
+
+
+def is_game(exe):
+    """Это окно игры? В режиме «только ArcheAge» — только ArcheAge Chronicles, иначе — запомненная игра."""
+    if config.ONLY_ARCHEAGE:
+        return is_archeage(exe)
+    return exe == game_exe
+
+
+_blocked_logged = {"exe": None}
+
+
+def blocked():
+    """Ручной перевод по клавише в чужом окне? True — не переводим (в журнал — один раз на программу)."""
+    if not config.ONLY_ARCHEAGE:
+        return False
+    exe, pid = foreground_exe()
+    if exe is None or pid == os.getpid() or is_archeage(exe):
+        return False
+    if _blocked_logged["exe"] != exe:
+        _blocked_logged["exe"] = exe
+        core.log(f"Сейчас на экране {exe}, а не ArcheAge — переводчик работает только в ArcheAge Chronicles "
+                 "(выключить можно на Главной: «Только ArcheAge Chronicles»).", "warn")
+    return True
+
+
 def remember_game_window():
     """Вызывается при включении автоперевода: активное сейчас окно — это игра."""
     global game_exe
     exe, pid = foreground_exe()
-    if exe and pid != os.getpid() and exe not in NOT_GAME_EXE and exe != game_exe:
+    if not exe or pid == os.getpid() or exe in NOT_GAME_EXE:
+        return
+    if config.ONLY_ARCHEAGE and not is_archeage(exe):
+        core.log(f"Сейчас на экране {exe}, а не ArcheAge — автоперевод включится, когда вы вернётесь "
+                 "в ArcheAge Chronicles.", "warn")
+        return
+    if exe != game_exe:
         game_exe = exe
         core.save_settings(game_exe=exe)
         core.log(f"Запомнил окно игры: {exe}", "ok")

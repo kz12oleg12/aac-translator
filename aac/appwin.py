@@ -94,14 +94,15 @@ class App:
         self.root.after(50, self._poll)
 
     def _check_game_focus(self):
-        if not (config.PAUSE_OUTSIDE_GAME and game.game_exe and core.auto_on.is_set()):
+        watch = config.ONLY_ARCHEAGE or (config.PAUSE_OUTSIDE_GAME and game.game_exe)
+        if not (watch and core.auto_on.is_set()):
             if not game.game_active.is_set():
                 game.game_active.set()
             return
         exe, pid = game.foreground_exe()
         if exe is None or pid == os.getpid():
             return  # своё окно (панель) или неизвестно — состояние не меняем
-        in_game = exe == game.game_exe
+        in_game = game.is_game(exe)
         if in_game and not game.game_active.is_set():
             game.game_active.set()
             for ov in getattr(self, "_away_hidden", []):
@@ -115,7 +116,8 @@ class App:
             self._away_hidden = [ov for ov in (self.subs, self.answers) if ov.visible]
             for ov in self._away_hidden:
                 ov.hide()
-            core.log(f"Вы не в игре ({exe}) — пауза")
+            core.log(f"Вы не в игре ({exe}) — пауза" + (" (переводчик работает только в ArcheAge)"
+                                                        if config.ONLY_ARCHEAGE else ""))
             self.panel.refresh()
 
     def open_history(self):

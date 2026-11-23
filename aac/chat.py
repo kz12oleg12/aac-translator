@@ -221,6 +221,8 @@ _once_lock = threading.Lock()
 
 def translate_chat_once():
     """Клавиша «перевести чат»: прочитать чат сейчас и перевести новые сообщения (без автоперевода)."""
+    if game.blocked():
+        return
     if core.chat_region is None:
         core.log("Сначала обведите окно чата (клавиша «область чата»).", "warn")
         return

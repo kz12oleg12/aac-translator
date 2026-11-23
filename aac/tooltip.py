@@ -8,7 +8,7 @@ import ctypes
 import threading
 import time
 
-from . import capture, config, core, history, ocr, translate
+from . import capture, config, core, game, history, ocr, translate
 
 _lock = threading.Lock()
 
@@ -106,6 +106,8 @@ def choose(lines, cx, cy):
 
 def translate_smart(pos=None):
     """Одна кнопка: подсказка предмета → большой перевод рядом; имя/табличка/надпись на карте → маленькая плашка."""
+    if game.blocked():
+        return
     if not _lock.acquire(blocking=False):
         return
     try:

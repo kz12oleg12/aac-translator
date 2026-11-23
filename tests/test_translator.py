@@ -2002,6 +2002,55 @@ def test_update_etag(monkey):
     updater.state.update(latest=None, etag=None)
 
 
+def test_only_archeage(monkey):
+    """«Только ArcheAge»: другая игра — пауза и клавиши не работают; её нельзя «запомнить» вместо ArcheAge."""
+    from aac import game
+    if not hasattr(game, "blocked"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    cfg = T._owner("ONLY_ARCHEAGE")
+    monkey(cfg, "ONLY_ARCHEAGE", True)
+    T.set("SETTINGS", {})
+    fg = ["ArcheAgeChronicles.exe"]
+    monkey(game, "foreground_exe", lambda: (fg[0].lower(), 4242))
+    monkey(game, "game_exe", None)
+    assert game.is_game("archeagechronicles.exe") and game.is_game("archeagechronicles-win64-shipping.exe")
+    assert not game.blocked()
+    game.remember_game_window()
+    assert game.game_exe == "archeagechronicles.exe"
+    fg[0] = "Witcher3.exe"
+    drain()
+    assert game.blocked(), "в другой игре клавиши перевода не срабатывают"
+    assert any(k == "log" and "witcher3.exe" in p[1] for k, p in drain())
+    game.remember_game_window()
+    assert game.game_exe == "archeagechronicles.exe", "чужую игру не запоминаем"
+    # вызов по клавише в чужой игре ничего не делает
+    called = []
+    monkey(T._owner("safe_translate"), "safe_translate", lambda *a, **k: called.append(1) or ("x", None))
+    T.translate_subs_once()
+    assert not called
+    # выключили — как раньше: любая игра, где включили автоперевод
+    monkey(cfg, "ONLY_ARCHEAGE", False)
+    assert not game.blocked()
+    game.remember_game_window()
+    assert game.game_exe == "witcher3.exe" and game.is_game("witcher3.exe")
+    if GUI:
+        monkey(cfg, "ONLY_ARCHEAGE", True)
+        app = T.App()
+        try:
+            T._owner("auto_on").auto_on.set()
+            game.game_active.set()
+            app._check_game_focus()
+            assert not game.game_active.is_set(), "на экране не ArcheAge — пауза"
+            fg[0] = "ArcheAgeChronicles.exe"
+            app._check_game_focus()
+            assert game.game_active.is_set()
+        finally:
+            T._owner("auto_on").auto_on.clear()
+            game.game_active.set()
+            app.root.destroy()
+
+
 # ---------- запуск ----------
 def main():
     print(f"Проверяю: {ROOT}  ({T.kind}, версия {T.VERSION})\n")

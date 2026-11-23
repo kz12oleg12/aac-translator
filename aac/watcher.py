@@ -42,6 +42,8 @@ subs_once_lock = threading.Lock()
 
 def translate_subs_once():
     """Перевести субтитры один раз — по сохранённой области, без обводки мышкой и без автоперевода."""
+    if game.blocked():
+        return
     if core.region is None:
         core.log(f"Сначала выделите область субтитров ({hotkeys.K('select')}).", "warn")
         return
@@ -77,6 +79,8 @@ answers_once_lock = threading.Lock()
 
 def translate_answers_once():
     """Перевести варианты ответа один раз — по сохранённой области, без обводки мышкой."""
+    if game.blocked():
+        return
     if core.answers_region is None:
         core.log(f"Сначала выделите область ответов ({hotkeys.K('select_answers')}).", "warn")
         return

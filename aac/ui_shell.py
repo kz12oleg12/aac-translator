@@ -293,6 +293,19 @@ class Shell(SectionsMixin):
                                       "зрители в Discord, OBS и на записи экрана видят субтитры, ответы и подсказки. "
                                       "Это окно и журнал остаются скрытыми.",
                                       lambda: config.SHOW_ON_STREAM, set_stream)
+
+        def set_only(v):
+            config.ONLY_ARCHEAGE = bool(v)
+            core.save_settings(only_archeage=config.ONLY_ARCHEAGE)
+            if not v:
+                game.game_active.set()
+            core.log("Перевод " + ("только в ArcheAge Chronicles" if v else "в любой игре, где включён автоперевод"),
+                     "ok")
+        self.only_row = K.ToggleRow(si, "Только ArcheAge Chronicles",
+                                    "в других играх и программах перевод на паузе, клавиши перевода не срабатывают — "
+                                    "персонажи, словарь и кэш не смешиваются с чужими.",
+                                    lambda: config.ONLY_ARCHEAGE, set_only)
+        self.only_row.pack(fill="x")
         self.stream_row.pack(fill="x")
         self.upd_row.pack(fill="x")
 
@@ -323,11 +336,12 @@ class Shell(SectionsMixin):
 
     def _refresh_home(self):
         on = core.auto_on.is_set()
-        paused = on and (core.in_menu or (config.PAUSE_OUTSIDE_GAME and not game.game_active.is_set()))
+        paused = on and (core.in_menu or not game.game_active.is_set())
         if not on:
             title, color, btn = "Автоперевод выключен", K.FAINT, f"Включить · {hotkeys.K('auto')}"
         elif paused:
-            title = "Пауза — открыто меню игры" if core.in_menu else "Пауза — игра не на экране"
+            title = ("Пауза — открыто меню игры" if core.in_menu else
+                     "Пауза — на экране не ArcheAge" if config.ONLY_ARCHEAGE else "Пауза — игра не на экране")
             color, btn = K.AMBER, f"Выключить · {hotkeys.K('auto')}"
         else:
             title = "Перевожу…" if self.busy else "Перевожу игру"
@@ -390,6 +404,7 @@ class Shell(SectionsMixin):
             t.sync()
         self.stream_row.sync()
         self.upd_row.sync()
+        self.only_row.sync()
         for hid, chip in self.home_keys.items():
             chip.config(text=hotkeys.K(hid))
         if self.update_version:
