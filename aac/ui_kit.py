@@ -257,29 +257,196 @@ def select(parent, var, options, command=None, width=28):
 
 
 class Scroll(_Frame):
-    """Прокручиваемая область (колесо мыши), если раздел не влезает по высоте."""
+    """Прокручиваемая область. Колесо мыши обрабатывает общий «маршрутизатор» окна (install_wheel)."""
 
     def __init__(self, parent, bg=BG):
         super().__init__(parent, bg=bg)
-        self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
+        self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0, yscrollincrement=24)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.body = tk.Frame(self.canvas, bg=bg)
         self._win = self.canvas.create_window(0, 0, window=self.body, anchor="nw")
-        self.body.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self._win, width=e.width))
-        for w in (self.canvas, self.body):
-            w.bind("<Enter>", lambda e: self._bind(True))
-            w.bind("<Leave>", lambda e: self._bind(False))
+        self.body.bind("<Configure>", lambda e: self._region())
+        self.canvas.bind("<Configure>", lambda e: (self.canvas.itemconfigure(self._win, width=e.width),
+                                                   self._region()))
 
-    def _bind(self, on):
-        if on:
-            self.canvas.bind_all("<MouseWheel>", self._wheel)
-        else:
-            self.canvas.unbind_all("<MouseWheel>")
+    def _region(self):
+        h = max(self.body.winfo_reqheight(), self.canvas.winfo_height())
+        self.canvas.configure(scrollregion=(0, 0, self.canvas.winfo_width(), h))
 
-    def _wheel(self, e):
-        if self.body.winfo_height() > self.canvas.winfo_height():
-            self.canvas.yview_scroll(-1 if e.delta > 0 else 1, "units")
+    def wheel(self, delta):
+        if self.body.winfo_reqheight() <= self.canvas.winfo_height():
+            self.canvas.yview_moveto(0)
+            return
+        steps = -3 if delta > 0 else 3
+        self.canvas.yview_scroll(steps, "units")
 
     def top(self):
         self.canvas.yview_moveto(0)
+
+
+def install_wheel(toplevel, current_scroll):
+    """Колесо мыши для всего окна: прокручивает раздел под курсором, где бы курсор ни был
+    (над карточкой, плиткой, кнопкой). Списки (Text) крутятся сами."""
+    def handler(e):
+        try:
+            w = toplevel.winfo_containing(e.x_root, e.y_root)
+        except Exception:
+            return
+        if w is None or not str(w).startswith(str(toplevel)):
+            return
+        if w.winfo_class() in ("Text", "Listbox"):
+            return
+        sc = current_scroll()
+        if sc is not None and str(w).startswith(str(sc)):
+            sc.wheel(e.delta)
+    toplevel.bind_all("<MouseWheel>", handler, add="+")
+
+
+class Slider(_Canvas):
+    """Ползунок: дорожка, заполнение синим, белая ручка. Значение справа от подписи (рисует владелец)."""
+
+    def __init__(self, parent, lo, hi, step, value, command=None, width=300):
+        super().__init__(parent, width=width, height=22, bg=parent["bg"], highlightthickness=0, bd=0,
+                         cursor="hand2")
+        self.lo, self.hi, self.step = lo, hi, step
+        self.value = value
+        self.command = command
+        self.bind("<Button-1>", self._at)
+        self.bind("<B1-Motion>", self._at)
+        self.bind("<ButtonRelease-1>", lambda e: self.command and self.command(self.value, True))
+        self.bind("<Configure>", lambda e: self.draw())
+        self.draw()
+
+    def _at(self, e):
+        w = max(1, self.winfo_width() - 16)
+        frac = min(1.0, max(0.0, (e.x - 8) / w))
+        v = self.lo + frac * (self.hi - self.lo)
+        v = round(round(v / self.step) * self.step, 4)
+        if v != self.value:
+            self.value = v
+            self.draw()
+            if self.command:
+                self.command(v, False)
+
+    def set(self, v):
+        self.value = v
+        self.draw()
+
+    def draw(self):
+        self.delete("all")
+        w = max(int(self["width"]) if self.winfo_width() < 2 else self.winfo_width(), 40)
+        frac = (self.value - self.lo) / (self.hi - self.lo) if self.hi != self.lo else 0
+        x = 8 + frac * (w - 16)
+        _round_rect(self, 8, 8, w - 8, 14, 3, fill=LINE, outline=LINE)
+        if x > 9:
+            _round_rect(self, 8, 8, x, 14, 3, fill=ACCENT, outline=ACCENT)
+        self.create_oval(x - 8, 3, x + 8, 19, fill="#ffffff", outline="#ffffff")
+
+
+class SliderRow(_Frame):
+    """Подпись + значение справа + ползунок под ними."""
+
+    def __init__(self, parent, title, lo, hi, step, get, set_, fmt=lambda v: f"{v:g}"):
+        super().__init__(parent, bg=parent["bg"])
+        self.get, self.fmt = get, fmt
+        top = tk.Frame(self, bg=self["bg"])
+        top.pack(fill="x")
+        label(top, title, 10, TEXT2).pack(side="left")
+        self.val = label(top, fmt(get()), 10, ACCENT_TEXT, "bold")
+        self.val.pack(side="right")
+
+        def changed(v, final):
+            self.val.config(text=fmt(v))
+            set_(v, final)
+        self.slider = Slider(self, lo, hi, step, get(), changed)
+        self.slider.pack(fill="x", pady=(4, 0))
+
+    def sync(self):
+        self.slider.set(self.get())
+        self.val.config(text=self.fmt(self.get()))
+
+
+class Segmented(_Frame):
+    """Переключатель вариантов (как вкладки): [(ключ, название, пояснение)]."""
+
+    def __init__(self, parent, options, get, set_):
+        super().__init__(parent, bg=SIDEBAR, highlightthickness=1, highlightbackground=BORDER)
+        self.get, self.set_ = get, set_
+        self.items = {}
+        for i, (key, title, sub) in enumerate(options):
+            cell = tk.Frame(self, bg=SIDEBAR, cursor="hand2")
+            cell.grid(row=0, column=i, sticky="nsew", padx=3, pady=3)
+            self.columnconfigure(i, weight=1, uniform="s")
+            t = tk.Label(cell, text=title, font=f(10, "bold"), bg=SIDEBAR, cursor="hand2")
+            t.pack(pady=(6, 0))
+            s_ = tk.Label(cell, text=sub, font=f(8), bg=SIDEBAR, cursor="hand2")
+            s_.pack(pady=(0, 6))
+            for w in (cell, t, s_):
+                w.bind("<Button-1>", lambda e, k=key: self._pick(k))
+            self.items[key] = (cell, t, s_)
+        self.sync()
+
+    def _pick(self, key):
+        self.set_(key)
+        self.sync()
+
+    def sync(self):
+        cur = self.get()
+        for key, (cell, t, s_) in self.items.items():
+            on = key == cur
+            bg = ACCENT if on else SIDEBAR
+            cell.config(bg=bg)
+            t.config(bg=bg, fg="#ffffff" if on else MUTED)
+            s_.config(bg=bg, fg="#dfe1ff" if on else FAINT)
+
+
+def set_options(om, var, names, command=None):
+    """Заменить пункты выпадающего списка."""
+    menu = om["menu"]
+    menu.delete(0, "end")
+    for n in names:
+        menu.add_command(label=n, command=lambda v=n: (var.set(v), command and command()))
+
+
+def entry(parent, var, placeholder="", width=24):
+    """Поле ввода в стиле приложения (с подсказкой, пока пусто)."""
+    e = tk.Entry(parent, textvariable=var, bg=SIDEBAR, fg=TEXT, insertbackground=TEXT, relief="flat", bd=6,
+                 highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACCENT, font=f(10), width=width)
+    if placeholder:
+        def show_ph(_e=None):
+            if not var.get():
+                e.config(fg=FAINT)
+                e.insert(0, placeholder)
+                e._ph = True
+
+        def hide_ph(_e=None):
+            if getattr(e, "_ph", False):
+                e.delete(0, "end")
+                e.config(fg=TEXT)
+                e._ph = False
+        e._ph = False
+        e.bind("<FocusIn>", hide_ph)
+        e.bind("<FocusOut>", show_ph)
+        e.value = lambda: "" if getattr(e, "_ph", False) else var.get()
+        show_ph()
+    else:
+        e.value = var.get
+    return e
+
+
+def chip(parent, text, on, command):
+    """Кнопка-фильтр (таблетка)."""
+    b = tk.Label(parent, text=text, font=f(9), padx=10, pady=3, cursor="hand2",
+                 bg=ACCENT if on else CARD, fg="#ffffff" if on else TEXT2,
+                 highlightthickness=1, highlightbackground=ACCENT if on else BORDER)
+    b.bind("<Button-1>", lambda e: command())
+    return b
+
+
+class Avatar(_Canvas):
+    """Кружок с первой буквой имени (цвет — по полу)."""
+
+    def __init__(self, parent, letter, color, size=32):
+        super().__init__(parent, width=size, height=size, bg=parent["bg"], highlightthickness=0, bd=0)
+        self.create_oval(0, 0, size - 1, size - 1, fill=color, outline=color)
+        self.create_text(size // 2, size // 2, text=letter.upper()[:1], fill="#141413", font=f(11, "bold"))

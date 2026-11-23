@@ -10,6 +10,7 @@ import tkinter as tk
 
 from . import config, core, game, glossary, hotkeys, limits, menu, tcache, translate, tts, ui_overlay
 from . import ui_kit as K
+from .ui_sections import SectionsMixin
 from .ui_panel import LOG_COLORS, PROVIDER_LABELS, PROVIDER_NAMES
 
 W, H = 960, 720
@@ -17,9 +18,9 @@ SIDE_W = 220
 LOG_W = 380
 
 NAV = [  # (группа, [(id, название)])
-    ("Перевод", [("home", "Главная"), ("areas", "Области"), ("tr", "Переводчики"), ("win", "Окна перевода ↗")]),
-    ("Озвучка", [("voice", "Голос и интонация ↗"), ("chars", "Персонажи ↗")]),
-    ("Данные", [("hist", "История ↗"), ("gloss", "Словарь ↗"), ("keys", "Клавиши"), ("backup", "Резервная копия")]),
+    ("Перевод", [("home", "Главная"), ("areas", "Области"), ("tr", "Переводчики"), ("win", "Окна перевода")]),
+    ("Озвучка", [("voice", "Голос и интонация"), ("chars", "Персонажи")]),
+    ("Данные", [("hist", "История"), ("gloss", "Словарь"), ("keys", "Клавиши"), ("backup", "Резервная копия")]),
 ]
 KEY_GROUPS = [
     ("Перевод", ["auto", "subs_once", "answers_once", "once", "once_tts", "tooltip", "repeat"]),
@@ -30,7 +31,7 @@ KEY_GROUPS = [
 HOME_KEYS = ["auto", "tooltip", "once", "repeat"]
 
 
-class Shell:
+class Shell(SectionsMixin):
     def __init__(self, app, win):
         self.app, self.win = app, win
         win.overrideredirect(True)
@@ -59,6 +60,7 @@ class Shell:
         self.content = tk.Frame(win, bg=K.BG)
         self.content.pack(side="left", fill="both", expand=True)
         self.show("home")
+        K.install_wheel(win, self._current_scroll)     # колесо мыши — где бы ни был курсор в разделе
         win.after(200, lambda: ui_overlay.exclude_from_capture(win))
 
     # ---------- боковая колонка ----------
@@ -138,17 +140,12 @@ class Shell:
             lab.config(bg=bg, fg=K.TEXT if on else K.MUTED)
 
     # ---------- переключение разделов ----------
+    HEAVY = ("chars", "gloss", "hist")    # длинные списки — пересобираются при открытии, а не на каждое событие
+
     def show(self, sid):
-        external = {"win": lambda: core.events.put(("settings_open", None)),
-                    "voice": lambda: core.events.put(("settings_open", None)),
-                    "hist": lambda: core.events.put(("history_open", None)),
-                    "gloss": glossary.open_glossary,
-                    "chars": self._open_characters}
-        if sid in external:      # ещё не перенесено в новый вид — открываем прежнее окно
-            external[sid]()
-            return
         if self.current == sid:
             self.refresh()
+            self._on_show(sid)
             return
         if self.current in self.sections:
             self.sections[self.current].pack_forget()
@@ -158,6 +155,19 @@ class Shell:
         self.sections[sid].pack(fill="both", expand=True)
         self._mark(sid)
         self.refresh()
+        self._on_show(sid)
+
+    def _on_show(self, sid):
+        if sid == "chars":
+            self._chars_render()
+        elif sid == "gloss":
+            self._gl_render()
+        elif sid == "hist":
+            self._hist_render()
+
+    def _current_scroll(self):
+        sc = self.sections.get(self.current)
+        return sc if isinstance(sc, K.Scroll) else None
 
     def _open_characters(self):
         from . import ui_windows
@@ -706,6 +716,8 @@ class Shell:
 
     # ---------- то, что вызывает остальная программа ----------
     def refresh(self):
+        if self.current in self.HEAVY:
+            return
         fn = getattr(self, f"_refresh_{self.current}", None)
         if fn:
             try:

@@ -700,6 +700,7 @@ class App:
                     hw = getattr(self, "history_win", None)
                     if hw and hw.alive():
                         hw.add(payload)
+                    self.panel.history_new(payload)
                 elif kind == "history_open":
                     self.open_history()
                 elif kind == "settings_open":
@@ -812,6 +813,7 @@ class App:
                     sw = getattr(self, "settings_win", None)
                     if sw and sw.alive():
                         sw.fill_voices(payload)
+                    self.panel.fill_voices(payload)
                 elif kind == "quit":
                     self._closing = True
                     tts.shutdown()

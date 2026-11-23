@@ -169,3 +169,93 @@ def learn_from_translation(translation, kind=""):
     first = next((ln for ln in (translation or "").splitlines() if ln.strip()), "")
     for en, ru in terms_in(first):
         learn(en, ru, "подсказка" if kind == "Подсказка" else "задание")
+
+
+# ---------- правка словаря из программы (раздел «Словарь») ----------
+def _read_lines():
+    glossary()            # создаст файл из шаблона, если его нет
+    with open(GLOSSARY_FILE, encoding="utf-8-sig") as f:
+        return f.read().splitlines()
+
+
+def _write_lines(lines):
+    tmp = GLOSSARY_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines).rstrip("\n") + "\n")
+    os.replace(tmp, GLOSSARY_FILE)
+    _glossary["mtime"] = None     # перечитать (без записи «словарь обновлён» в журнал — правку сделали вы)
+    _glossary["loaded"] = False
+    glossary()
+
+
+def _entry_of(line):
+    s = line.strip()
+    if not s or s.startswith("#") or s.startswith("-") or "=" not in s:
+        return None
+    a, b = (x.strip() for x in s.split("=", 1))
+    return (a, b) if a and b else None
+
+
+def entries():
+    """[(оригинал, перевод, добавлено_программой)] в порядке файла."""
+    out, auto = [], False
+    for line in _read_lines():
+        if line.strip() == AUTO_HEADER:
+            auto = True
+            continue
+        e = _entry_of(line)
+        if e:
+            out.append((e[0], e[1], auto))
+    return out
+
+
+def set_entry(en, ru):
+    """Добавить или исправить запись. Новая — в «ручную» часть (до записей, добавленных программой)."""
+    en, ru = en.strip(), ru.strip()
+    if not en or not ru or "=" in en:
+        return False
+    lines = _read_lines()
+    for i, line in enumerate(lines):
+        e = _entry_of(line)
+        if e and e[0].lower() == en.lower():
+            lines[i] = f"{en} = {ru}"
+            _write_lines(lines)
+            return True
+    pos = next((i for i, line in enumerate(lines) if line.strip() == AUTO_HEADER), None)
+    if pos is None:
+        lines.append(f"{en} = {ru}")
+    else:
+        while pos > 0 and not lines[pos - 1].strip():
+            pos -= 1
+        lines.insert(pos, f"{en} = {ru}")
+    _write_lines(lines)
+    return True
+
+
+def remove_entry(en):
+    lines = [line for line in _read_lines() if not ((e := _entry_of(line)) and e[0].lower() == en.lower())]
+    _write_lines(lines)
+
+
+def ignore_entries():
+    """[(слово, встроенное)] — что не переводится: свои строки «- слово» и встроенные слова интерфейса."""
+    own = [line.strip()[1:].strip() for line in _read_lines()
+           if line.strip().startswith("-") and len(line.strip()) > 1]
+    builtin = [w for w in config.IGNORE_UI_WORDS if normalize(w) not in {normalize(o) for o in own}]
+    return [(w, False) for w in own] + [(w, True) for w in builtin]
+
+
+def add_ignore(word):
+    word = word.strip()
+    if not word or normalize(word) in {normalize(w) for w, _ in ignore_entries()}:
+        return False
+    lines = _read_lines()
+    lines.append(f"- {word}")
+    _write_lines(lines)
+    return True
+
+
+def remove_ignore(word):
+    lines = [line for line in _read_lines()
+             if not (line.strip().startswith("-") and normalize(line.strip()[1:]) == normalize(word))]
+    _write_lines(lines)

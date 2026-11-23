@@ -1833,9 +1833,63 @@ def test_new_shell(monkey):
         sh.tr_rows[0].toggle.click()
         sh.show("keys")
         assert sh.key_chips["auto"].cget("text") == T.K("auto")
+        # все разделы — внутри окна, прежние окна не открываются
         drain()
-        sh.show("hist")          # ещё не перенесено — открывает прежнее окно
-        assert any(k == "history_open" for k, _ in drain()) and sh.current == "keys"
+        for sid in ("win", "voice", "chars", "hist", "gloss"):
+            sh.show(sid)
+            app.root.update()
+            assert sh.current == sid, sid
+        assert not any(k in ("history_open", "settings_open") for k, _ in drain())
+        # окна перевода: ползунок шрифта меняет настройку и сохраняет её на отпускании
+        sh.show("win")
+        cfg_f = T._owner("FONT")
+        sh.win_sliders[0].slider.command(18, True)
+        assert cfg_f.FONT[1] == 18 and T.load_settings()["font_size"] == 18
+        sh.win_sliders[0].slider.command(13, True)
+        # словарь из программы: добавить, исправить, удалить
+        from aac import glossary as G
+        monkey(G, "GLOSSARY_FILE", os.path.join(tempfile.mkdtemp(dir=TMP), "g.txt"))
+        sh.show("gloss")
+        sh._gl_edit("Rotild", "Ротильд")
+        sh._gl_add()
+        assert ("Rotild", "Ротильд", False) in G.entries()
+        sh._gl_edit("Rotild", "Ротилд")
+        sh._gl_add()
+        assert ("Rotild", "Ротилд", False) in G.entries() and len([e for e in G.entries() if e[0] == "Rotild"]) == 1
+        G.remove_entry("Rotild")
+        assert not any(e[0] == "Rotild" for e in G.entries())
+        assert G.add_ignore("Loot all") and ("Loot all", False) in G.ignore_entries()
+        G.remove_ignore("Loot all")
+        # персонажи: пол переключается
+        from aac import voices as V
+        monkey(V, "FILE", os.path.join(tempfile.mkdtemp(dir=TMP), "c.json"))
+        with V._lock:
+            V._data["loaded"] = False
+        V._load()
+        V._data["chars"]["vida"] = {"en": "Vida", "ru": "Вида", "f": 2, "seen": 1}
+        sh.show("chars")
+        V.set_manual("vida", gender_value="m")
+        sh._chars_render()
+        assert V.gender(dict(V.all_chars())["vida"]) == "m"
+        # история: новый перевод дописывается в открытый раздел
+        sh.show("hist")
+        e = ("12:00:00", "Субтитры", "Hello", "Привет, путник")
+        T._owner("translation_history").translation_history.append(e)
+        sh.history_new(e)
+        assert "Привет, путник" in sh.hist_text.get("1.0", "end")
+        # колесо мыши крутит раздел, даже когда курсор над плиткой (раньше — нет)
+        sh.show("voice")
+        sh.win.geometry(f"{sh.win.winfo_width()}x360")
+        app.root.update()
+        sc = sh._current_scroll()
+        tile = sh.voice_tiles[0]
+        app.root.update()
+        before = sc.canvas.yview()[0]
+        sc.wheel(-120)
+        app.root.update()
+        assert sc.canvas.yview()[0] > before, "раздел должен прокрутиться"
+        sh.win.geometry(f"{sh.win.winfo_width()}x{sh.height}")
+        sh.show("keys")
         sh.show("home")
         sh.show_update("9.9")
         app.root.update()
