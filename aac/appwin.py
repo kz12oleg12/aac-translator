@@ -11,7 +11,7 @@ import threading
 import tkinter as tk
 
 
-from . import chat, config, menu, core, game, history, hotkeys, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_shell, ui_windows, updater, watcher
+from . import chat, config, menu, core, game, history, hotkeys, profiles, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_shell, ui_windows, updater, watcher
 
 
 class App:
@@ -95,10 +95,10 @@ class App:
 
     def _check_game_focus(self):
         game.follow_foreground()          # игра из списка на экране — её пресет (всегда, без клавиш)
-        new = game.detect_new_game()      # новая игра на весь экран — предложить пресет (баннер, без окна поверх игры)
+        new = game.detect_new_game()      # новая игра (папка Steam/Epic… или весь экран) — пресет создаётся сам
         if new:
-            self.panel.offer_new_game(new)
-            tray.notify("Новая игра?", f"{new} — откройте панель, чтобы создать для неё пресет.")
+            prof = game.create_profile_for(*new)
+            self.game_created(prof)
         watch = config.GAMES_ONLY or (config.PAUSE_OUTSIDE_GAME and game.game_exe)
         if not (watch and core.auto_on.is_set()):
             if not game.game_active.is_set():
@@ -123,6 +123,12 @@ class App:
                 ov.hide()
             core.log(f"Вы не в игре ({exe}) — пауза")
             self.panel.refresh()
+
+    def game_created(self, prof):
+        """Программа сама узнала новую игру и завела ей пресет: баннер на Главной и одно уведомление."""
+        self.panel.show_new_game(prof)
+        tray.notify(f"Новая игра: {profiles.name(prof)}",
+                    f"Пресет создан. Обведите субтитры ({hotkeys.K('select')}) — и можно переводить.")
 
     def open_history(self):
         hw = getattr(self, "history_win", None)
@@ -700,6 +706,8 @@ class App:
                     self.profile_changed()
                 elif kind == "game_new":
                     self.panel.ask_new_game(payload)
+                elif kind == "game_created":
+                    self.game_created(payload)
                 elif kind == "quest":
                     self.quest.show(payload)
                 elif kind == "busy":

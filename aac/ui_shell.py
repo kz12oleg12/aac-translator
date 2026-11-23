@@ -206,10 +206,10 @@ class Shell(SectionsMixin, GamesMixin):
         self.new_banner = tk.Frame(b, bg=K.ACCENT_TINT, highlightthickness=1, highlightbackground=K.ACCENT_LINE)
         self.new_text = K.label(self.new_banner, "", 10, K.TEXT, bg=K.ACCENT_TINT, wraplength=330)
         self.new_text.pack(side="left", padx=14, pady=10)
-        K.button(self.new_banner, "✕", lambda: self.offer_new_game(None), kind="flat").pack(side="right", padx=(0, 6))
-        K.button(self.new_banner, "Не игра", self._new_not_game).pack(side="right", padx=4, pady=6)
-        K.button(self.new_banner, "Создать пресет", self._new_create, kind="primary").pack(side="right", padx=4, pady=6)
-        self.new_exe = None
+        K.button(self.new_banner, "✕", lambda: self.show_new_game(None), kind="flat").pack(side="right", padx=(0, 6))
+        K.button(self.new_banner, "Это не игра", self._new_not_game).pack(side="right", padx=4, pady=6)
+        K.button(self.new_banner, "Области →", self._new_areas, kind="primary").pack(side="right", padx=4, pady=6)
+        self.new_prof = None
 
         hero, hi = K.card(b, padx=20, pady=16)
         hero.pack(fill="x")
@@ -792,8 +792,6 @@ class Shell(SectionsMixin, GamesMixin):
             g = "📌 " + profiles.name()
         elif profiles.is_running():
             g = "🎮 " + profiles.name()
-        elif getattr(self, "new_exe", None):
-            g = "🎮 новая игра?"
         else:
             g = "🎮 ждёт игру"
         live = frozenset(profiles.running())
@@ -942,41 +940,39 @@ class Shell(SectionsMixin, GamesMixin):
         self._pick_rows = lst
         return d
 
-    def offer_new_game(self, exe):
-        """Баннер на Главной «Похоже, новая игра: … [Создать пресет] [Не игра]». exe=None — убрать."""
-        self.new_exe = exe
+    def show_new_game(self, prof):
+        """Баннер на Главной «🎮 Новая игра: … — пресет создан [Области →] [Это не игра]». None — убрать."""
+        self.new_prof = prof
         if not hasattr(self, "new_banner"):
             return
-        if exe is None:
+        if prof is None or prof not in profiles.all_profiles():
+            self.new_prof = None
             self.new_banner.pack_forget()
             return
-        if profiles.for_exe(exe):
-            return self.offer_new_game(None)
-        self.new_text.config(text=f"🎮 Похоже, запущена новая игра: {exe}. Создать для неё пресет?")
+        self.new_text.config(text=f"🎮 Новая игра: {profiles.name(prof)} — пресет создан сам. "
+                                  f"Обведите субтитры ({hotkeys.K('select')}) — и можно переводить.")
         if not self.new_banner.winfo_manager():
             self.new_banner.pack(fill="x", pady=(0, 12), before=self.hero_card)
-        core.log(f"Похоже, запущена новая игра: {exe} — на Главной можно создать для неё пресет", "ok")
 
-    def _new_create(self):
-        exe = self.new_exe
-        self.offer_new_game(None)
-        if exe:
-            self.ask_new_game(exe)          # то же окно с названием, что и по клавише
+    def _new_areas(self):
+        self.show_new_game(None)
+        self.show("areas")
 
     def _new_not_game(self):
-        exe = self.new_exe
-        self.offer_new_game(None)
-        if exe:
-            game.mark_not_game(exe)
+        """Ошиблась: это не игра — пресет убрать, про эту программу больше не думать."""
+        prof = self.new_prof
+        self.show_new_game(None)
+        if prof:
+            exes = profiles.all_profiles().get(prof, {}).get("exes", [])
+            profiles.delete(prof)
+            for exe in exes:
+                game.mark_not_game(exe)
 
     def ask_new_game(self, exe):
         """«Новая игра: … — создать пресет?» (только по вашей клавише автоперевода, не при Alt+Tab)."""
         if getattr(self, "_asking_exe", None) == exe and getattr(self, "_dialog", None) is not None:
             return
         self._asking_exe = exe
-
-        if getattr(self, "new_exe", None) == exe:
-            self.offer_new_game(None)
 
         def create(title):
             self._asking_exe = None

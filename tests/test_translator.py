@@ -2021,12 +2021,12 @@ def test_game_presets(monkey):
     monkey(game, "foreground_exe", lambda: (fg[0].lower(), 4242))
     assert game.blocked(), "у новой игры пресета ещё нет — клавиши не работают"
     drain()
-    assert game.remember_game_window() == "new"       # включили автоперевод в новой игре — сначала вопрос
-    assert ("game_new", "witcher3.exe") in drain() and set(profiles.all_profiles()) == {"archeage"}
-    game.create_profile_for("witcher3.exe", "Witcher3")   # ответ «Создать»
+    monkey(game, "foreground_title", lambda: "Witcher3")
+    assert game.remember_game_window() == "new"       # клавиша автоперевода в новой игре — пресет создаётся сам
+    ev = drain()
+    assert ("game_created", "witcher3") in ev and ("profile_changed", "witcher3") in ev
     assert core_m.active_profile == "witcher3" and profiles.name() == "Witcher3"
     assert core_m.region is None, "у новой игры — свои (пустые) области"
-    assert ("profile_changed", "witcher3") in drain()
     T.save_settings(region=(5, 6, 7, 8))
     glossary.set_entry("Geralt", "Геральт")
     assert [e[0] for e in glossary.entries()] == ["Geralt"], "словарь новой игры — свой"
@@ -2045,12 +2045,13 @@ def test_game_presets(monkey):
     fg[0] = "chrome.exe"
     drain()
     game.remember_game_window()
-    assert not any(k == "game_new" for k, _ in drain()) and set(profiles.all_profiles()) == {"archeage", "witcher3"}
+    assert not any(k == "game_created" for k, _ in drain()) and set(profiles.all_profiles()) == {"archeage", "witcher3"}
     assert game.blocked()
     # «Не игра» — больше не спрашиваем
-    fg[0] = "vlc.exe"
-    assert game.unknown_game() == "vlc.exe"
-    game.mark_not_game("vlc.exe")
+    assert game.unknown_game() is None, "плеер — в списке «не игр»"
+    fg[0] = "someplayer.exe"
+    assert game.unknown_game() == "someplayer.exe"
+    game.mark_not_game("someplayer.exe")
     assert game.unknown_game() is None and game.remember_game_window() is None
     # перевод уже включён, а на экране новая игра: клавиша не выключает перевод, а предлагает пресет
     fg[0] = "Skyrim.exe"
@@ -2058,7 +2059,8 @@ def test_game_presets(monkey):
     auto.set()
     drain()
     T.toggle_auto()
-    assert auto.is_set() and ("game_new", "skyrim.exe") in drain()
+    assert auto.is_set() and ("game_created", "skyrim") in drain()
+    assert profiles.delete("skyrim")
     auto.clear()
     # запущена ли игра: «сейчас» / «последняя»
     monkey(game, "running_programs", lambda: [("witcher3.exe", "The Witcher 3")])
@@ -2067,19 +2069,25 @@ def test_game_presets(monkey):
     monkey(game, "running_programs", lambda: [])
     profiles._run_cache["t"] = 0
     assert not profiles.is_running("witcher3")
-    # новая игра узнаётся сама, без клавиш: неизвестная программа на весь экран 3 секунды
+    # новая игра узнаётся сама, без клавиш: папка игр (Steam…) — сразу; иначе — на весь экран 3 секунды
     if hasattr(game, "detect_new_game"):
-        full = [False]
+        full, folder = [False], [False]
         monkey(game, "foreground_fullscreen", lambda: full[0])
+        monkey(game, "in_game_folder", lambda pid: folder[0])
+        monkey(game, "foreground_title", lambda: "ELDEN RING™")
         fg[0] = "EldenRing.exe"
-        assert all(game.detect_new_game() is None for _ in range(10)), "окно — не на весь экран: не спрашиваем"
+        assert all(game.detect_new_game() is None for _ in range(10)), "обычное окно не из папки игр — не игра"
         full[0] = True
         got = [game.detect_new_game() for _ in range(6)]
-        assert got[:5] == [None] * 5 and got[5] == "eldenring.exe"
-        assert all(game.detect_new_game() is None for _ in range(10)), "предлагаем один раз за запуск"
+        assert got[:5] == [None] * 5 and got[5] == ("eldenring.exe", "ELDEN RING")
+        full[0], folder[0] = False, True
+        fg[0] = "Hades.exe"
+        assert game.detect_new_game() is None and game.detect_new_game() == ("hades.exe", "ELDEN RING")
         fg[0] = "Witcher3.exe"
         assert all(game.detect_new_game() is None for _ in range(10)), "у известной игры уже есть пресет"
-        full[0] = False
+        folder[0] = False
+        assert game.nice_title("Cyberpunk 2077 (C) 2020 by CD Projekt RED", "cyberpunk2077.exe") == "Cyberpunk2077"
+        assert game.nice_title("Hollow Knight - v1.5.78", "hollow_knight.exe") == "Hollow Knight"
     # ещё файл игры (лаунчер / защита от читов / новое имя после обновления)
     assert profiles.add_exe("witcher3", "start_protected_game.exe")
     assert profiles.for_exe("START_PROTECTED_GAME.exe") == "witcher3"
@@ -2119,13 +2127,15 @@ def test_game_presets(monkey):
             first.event_generate("<Button-1>")
             app.root.update()
             assert got == ["eldenring.exe"] and app.panel._dialog is None
-            if hasattr(app.panel, "offer_new_game"):     # баннер «Похоже, новая игра» на Главной
-                app.panel.offer_new_game("eldenring.exe")
+            if hasattr(app.panel, "show_new_game"):     # баннер «Новая игра — пресет создан» на Главной
+                prof = game.create_profile_for("eldenring.exe", "ELDEN RING")
+                app.game_created(prof)
                 app.root.update()
-                assert app.panel.new_banner.winfo_manager() and "eldenring.exe" in app.panel.new_text.cget("text")
+                assert app.panel.new_banner.winfo_manager() and "ELDEN RING" in app.panel.new_text.cget("text")
                 app.panel.refresh()
-                app.panel._new_not_game()
+                app.panel._new_not_game()               # «Это не игра» — пресет убран, больше не узнаём
                 assert not app.panel.new_banner.winfo_manager() and "eldenring.exe" in game.not_games()
+                assert prof not in profiles.all_profiles()
         finally:
             app.root.destroy()
 

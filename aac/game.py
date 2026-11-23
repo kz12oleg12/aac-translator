@@ -21,11 +21,27 @@ NOT_GAME_EXE = {"python.exe", "pythonw.exe", "explorer.exe", "py.exe", "pyw.exe"
                 "chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "browser.exe", "brave.exe", "vivaldi.exe",
                 "discord.exe", "telegram.exe", "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe",
                 "obs64.exe", "code.exe", "notepad.exe", "notepad++.exe", "claude.exe", "taskmgr.exe",
-                "applicationframehost.exe", "lockapp.exe", "textinputhost.exe"}
+                "applicationframehost.exe", "lockapp.exe", "textinputhost.exe",
+                # лаунчеры, плееры и прочее, что бывает на весь экран, но не игра
+                "galaxyclient.exe", "battle.net.exe", "eadesktop.exe", "upc.exe", "ubisoftconnect.exe",
+                "riotclientservices.exe", "riotclientux.exe", "vkplay.exe", "gamecenter.exe", "msedgewebview2.exe",
+                "vlc.exe", "mpv.exe", "mpc-hc.exe", "mpc-hc64.exe", "mpc-be.exe", "mpc-be64.exe", "potplayer.exe",
+                "potplayermini.exe", "potplayermini64.exe", "wmplayer.exe", "video.ui.exe", "spotify.exe",
+                "powerpnt.exe", "winword.exe", "excel.exe", "acrord32.exe", "acrobat.exe", "zoom.exe", "teams.exe",
+                "ms-teams.exe", "slack.exe", "obs32.exe", "streamlabs obs.exe", "nvidia overlay.exe", "gamebar.exe",
+                "snippingtool.exe", "screenclippinghost.exe", "photos.exe", "microsoft.photos.exe"}
+# папки, куда ставят игры лаунчеры: программа оттуда — игра, даже в окне
+GAME_DIRS = ("\\steamapps\\common\\", "\\epic games\\", "\\gog galaxy\\games\\", "\\gog games\\",
+             "\\xboxgames\\", "\\riot games\\", "\\ubisoft game launcher\\games\\", "\\ea games\\",
+             "\\vk play\\", "\\games\\", "\\игры\\")
 
 
-def _exe_of(pid):
-    kernel32 = ctypes.windll.kernel32
+def _path_of(pid):
+    """Полный путь к .exe процесса (в нижнем регистре) или None."""
+    try:
+        kernel32 = ctypes.windll.kernel32
+    except Exception:
+        return None
     h = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not h:
         return None
@@ -33,10 +49,33 @@ def _exe_of(pid):
         buf = ctypes.create_unicode_buffer(1024)
         size = ctypes.c_ulong(1024)
         if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
-            return os.path.basename(buf.value).lower()
+            return buf.value.lower()
     finally:
         kernel32.CloseHandle(h)
     return None
+
+
+def _exe_of(pid):
+    p = _path_of(pid)
+    return os.path.basename(p) if p else None
+
+
+def in_game_folder(pid):
+    """Программа установлена в папку игр (Steam, Epic, GOG, Xbox, Riot…)?"""
+    p = _path_of(pid) if pid else None
+    return bool(p) and any(d in p for d in GAME_DIRS)
+
+
+def foreground_title():
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetForegroundWindow()
+        n = user32.GetWindowTextLengthW(hwnd)
+        buf = ctypes.create_unicode_buffer(n + 1)
+        user32.GetWindowTextW(hwnd, buf, n + 1)
+        return buf.value.strip()
+    except Exception:
+        return ""
 
 
 def foreground_exe():
@@ -83,24 +122,37 @@ def foreground_fullscreen():
         return False
 
 
-_seen_new = {"exe": None, "n": 0, "offered": set()}
+_seen_new = {"exe": None, "n": 0}
+
+
+def nice_title(title, exe):
+    """Название игры из заголовка окна («ELDEN RING™» → «ELDEN RING»); пустой или странный — из имени файла."""
+    from . import profiles
+    import re
+    t = re.sub(r"[™®©]", "", title or "").strip()
+    t = re.split(r"\s+[-–—|]\s+(?:v?\d|build|direct|vulkan|opengl|dx\d)", t, flags=re.I)[0].strip()
+    return t if 2 <= len(t) <= 40 else profiles._pretty(exe)
 
 
 def detect_new_game(checks_needed=6):
-    """Вызывается 2 раза в секунду, без всяких клавиш. Неизвестная программа на весь экран 3 секунды подряд —
-    похоже на новую игру: один раз за запуск программы предлагаем создать пресет (баннер в панели, не окно поверх игры).
-    Возвращает exe, если пора предложить."""
+    """Вызывается 2 раза в секунду, без всяких клавиш. Программа без пресета — игра, если она из папки игр
+    (Steam, Epic, GOG…) или 3 секунды подряд открыта на весь экран. Возвращает (exe, название) — пора создать пресет."""
     exe = unknown_game()
-    if not exe or exe in _seen_new["offered"] or not foreground_fullscreen():
+    if not exe:
+        _seen_new.update(exe=None, n=0)
+        return None
+    _, pid = foreground_exe()
+    need = 2 if in_game_folder(pid) else (checks_needed if foreground_fullscreen() else None)
+    if need is None:
         _seen_new.update(exe=None, n=0)
         return None
     if _seen_new["exe"] != exe:
         _seen_new.update(exe=exe, n=0)
     _seen_new["n"] += 1
-    if _seen_new["n"] < checks_needed:
+    if _seen_new["n"] < need:
         return None
-    _seen_new["offered"].add(exe)
-    return exe
+    _seen_new.update(exe=None, n=0)
+    return exe, nice_title(foreground_title(), exe)
 
 
 def running_programs():
@@ -170,7 +222,7 @@ def blocked():
         return False
     if _blocked_logged["exe"] != exe:
         _blocked_logged["exe"] = exe
-        core.log(f"Для {exe} нет пресета — переводчик работает только в играх из списка. Добавить игру: "
+        core.log(f"{exe} — не игра (или программа её не узнала), здесь не перевожу. Если это игра: "
                  "раздел «Игры» → «+ Добавить игру» или клавиша автоперевода в самой игре.", "warn")
     return True
 
@@ -225,8 +277,9 @@ def remember_game_window():
     if locked():
         return None                              # пресет закреплён — ничего не переключаем и не спрашиваем
     prof = profiles.for_exe(exe)
-    if prof is None:
-        core.events.put(("game_new", exe))      # окно: «Новая игра … — создать пресет?»
+    if prof is None:                             # новая игра — пресет создаётся сам, без вопросов
+        prof = create_profile_for(exe, nice_title(foreground_title(), exe))
+        core.events.put(("game_created", prof))
         return "new"
     if prof != core.active_profile:
         profiles.activate(prof)
@@ -244,6 +297,7 @@ def create_profile_for(exe, title=None):
     profiles.activate(prof, announce=False)
     game_exe = exe
     core.save_settings(game_exe=exe)
+    from . import hotkeys
     core.log(f"🎮 Новая игра: «{profiles.name(prof)}» — пресет создан. У неё свои области, словарь и персонажи: "
-             "обведите субтитры (F9) и ответы.", "ok")
+             f"обведите субтитры ({hotkeys.K('select')}) и ответы.", "ok")
     return prof
