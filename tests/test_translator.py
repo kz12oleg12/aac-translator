@@ -2067,6 +2067,19 @@ def test_game_presets(monkey):
     monkey(game, "running_programs", lambda: [])
     profiles._run_cache["t"] = 0
     assert not profiles.is_running("witcher3")
+    # новая игра узнаётся сама, без клавиш: неизвестная программа на весь экран 3 секунды
+    if hasattr(game, "detect_new_game"):
+        full = [False]
+        monkey(game, "foreground_fullscreen", lambda: full[0])
+        fg[0] = "EldenRing.exe"
+        assert all(game.detect_new_game() is None for _ in range(10)), "окно — не на весь экран: не спрашиваем"
+        full[0] = True
+        got = [game.detect_new_game() for _ in range(6)]
+        assert got[:5] == [None] * 5 and got[5] == "eldenring.exe"
+        assert all(game.detect_new_game() is None for _ in range(10)), "предлагаем один раз за запуск"
+        fg[0] = "Witcher3.exe"
+        assert all(game.detect_new_game() is None for _ in range(10)), "у известной игры уже есть пресет"
+        full[0] = False
     # ещё файл игры (лаунчер / защита от читов / новое имя после обновления)
     assert profiles.add_exe("witcher3", "start_protected_game.exe")
     assert profiles.for_exe("START_PROTECTED_GAME.exe") == "witcher3"
@@ -2106,6 +2119,13 @@ def test_game_presets(monkey):
             first.event_generate("<Button-1>")
             app.root.update()
             assert got == ["eldenring.exe"] and app.panel._dialog is None
+            if hasattr(app.panel, "offer_new_game"):     # баннер «Похоже, новая игра» на Главной
+                app.panel.offer_new_game("eldenring.exe")
+                app.root.update()
+                assert app.panel.new_banner.winfo_manager() and "eldenring.exe" in app.panel.new_text.cget("text")
+                app.panel.refresh()
+                app.panel._new_not_game()
+                assert not app.panel.new_banner.winfo_manager() and "eldenring.exe" in game.not_games()
         finally:
             app.root.destroy()
 

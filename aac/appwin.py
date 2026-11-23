@@ -94,7 +94,11 @@ class App:
         self.root.after(50, self._poll)
 
     def _check_game_focus(self):
-        game.follow_foreground()          # игра из списка на экране — её пресет
+        game.follow_foreground()          # игра из списка на экране — её пресет (всегда, без клавиш)
+        new = game.detect_new_game()      # новая игра на весь экран — предложить пресет (баннер, без окна поверх игры)
+        if new:
+            self.panel.offer_new_game(new)
+            tray.notify("Новая игра?", f"{new} — откройте панель, чтобы создать для неё пресет.")
         watch = config.GAMES_ONLY or (config.PAUSE_OUTSIDE_GAME and game.game_exe)
         if not (watch and core.auto_on.is_set()):
             if not game.game_active.is_set():

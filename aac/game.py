@@ -53,6 +53,56 @@ def foreground_exe():
         return None, None
 
 
+class _RECT(ctypes.Structure):
+    _fields_ = [("l", ctypes.c_long), ("t", ctypes.c_long), ("r", ctypes.c_long), ("b", ctypes.c_long)]
+
+
+class _MONINFO(ctypes.Structure):
+    _fields_ = [("cb", ctypes.c_ulong), ("mon", _RECT), ("work", _RECT), ("flags", ctypes.c_ulong)]
+
+
+def foreground_fullscreen():
+    """Активное окно закрывает весь монитор (полный экран или окно без рамки) — так выглядят игры."""
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return False
+        cls = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(hwnd, cls, 64)
+        if cls.value in ("Progman", "WorkerW", "Shell_TrayWnd"):     # рабочий стол и панель задач
+            return False
+        r = _RECT()
+        user32.GetWindowRect(hwnd, ctypes.byref(r))
+        mi = _MONINFO()
+        mi.cb = ctypes.sizeof(_MONINFO)
+        user32.GetMonitorInfoW(user32.MonitorFromWindow(hwnd, 2), ctypes.byref(mi))
+        m = mi.mon
+        return r.l <= m.l and r.t <= m.t and r.r >= m.r and r.b >= m.b
+    except Exception:
+        return False
+
+
+_seen_new = {"exe": None, "n": 0, "offered": set()}
+
+
+def detect_new_game(checks_needed=6):
+    """Вызывается 2 раза в секунду, без всяких клавиш. Неизвестная программа на весь экран 3 секунды подряд —
+    похоже на новую игру: один раз за запуск программы предлагаем создать пресет (баннер в панели, не окно поверх игры).
+    Возвращает exe, если пора предложить."""
+    exe = unknown_game()
+    if not exe or exe in _seen_new["offered"] or not foreground_fullscreen():
+        _seen_new.update(exe=None, n=0)
+        return None
+    if _seen_new["exe"] != exe:
+        _seen_new.update(exe=exe, n=0)
+    _seen_new["n"] += 1
+    if _seen_new["n"] < checks_needed:
+        return None
+    _seen_new["offered"].add(exe)
+    return exe
+
+
 def running_programs():
     """[(exe, заголовок окна)] — программы с видимыми окнами (кроме этой и «не игр»), для «+ Добавить игру»."""
     out = {}
@@ -120,8 +170,8 @@ def blocked():
         return False
     if _blocked_logged["exe"] != exe:
         _blocked_logged["exe"] = exe
-        core.log(f"Для {exe} нет пресета — переводчик работает только в играх из списка. Чтобы добавить эту "
-                 "игру, нажмите в ней клавишу автоперевода — программа предложит создать пресет.", "warn")
+        core.log(f"Для {exe} нет пресета — переводчик работает только в играх из списка. Добавить игру: "
+                 "раздел «Игры» → «+ Добавить игру» или клавиша автоперевода в самой игре.", "warn")
     return True
 
 
