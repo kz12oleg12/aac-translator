@@ -108,6 +108,15 @@ def _update_version():
     return info["version"] if info and updater.is_newer(info["version"]) else ""
 
 
+def notify(title, message):
+    """Всплывающее уведомление Windows от значка в трее."""
+    if _tray is not None:
+        try:
+            _tray.notify(message, title)
+        except Exception:
+            pass
+
+
 def update():
     """Обновить галочки в меню значка."""
     if _tray is not None:

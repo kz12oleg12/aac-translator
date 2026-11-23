@@ -1918,6 +1918,28 @@ def test_new_shell(monkey):
         app.root.destroy()
 
 
+def test_update_on_startup(monkey):
+    """При запуске: новая версия — обновиться сам (если включено), иначе — сказать, что версия последняя."""
+    from aac import updater
+    if not hasattr(updater, "startup_check"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    monkey(updater.time, "sleep", lambda s: None)
+    cfg = T._owner("UPDATE_AUTO")
+    newer = {"version": "99.0", "notes": "", "asset_url": "x"}
+    monkey(updater, "check", lambda quiet=True: newer)
+    monkey(cfg, "UPDATE_AUTO", True)
+    drain()
+    assert updater.startup_check() is True
+    assert ("update_install", None) in drain()
+    monkey(cfg, "UPDATE_AUTO", False)
+    assert updater.startup_check() is False
+    assert ("update_install", None) not in drain()
+    monkey(updater, "check", lambda quiet=True: {"version": T._owner("VERSION").VERSION, "notes": ""})
+    assert updater.startup_check() is False
+    assert any(k == "log" and "последняя версия" in p[1] for k, p in drain())
+
+
 # ---------- запуск ----------
 def main():
     print(f"Проверяю: {ROOT}  ({T.kind}, версия {T.VERSION})\n")

@@ -753,6 +753,10 @@ class App:
                              ". Кнопка «⬇ Обновить» в панели или в меню значка.", "ok")
                     self.panel.show_update(payload["version"])
                     tray.update()
+                    if updater.state.get("announced") != payload["version"]:   # уведомление — один раз на версию
+                        updater.state["announced"] = payload["version"]
+                        tray.notify(f"AAC Translator {payload['version']}",
+                                    "Вышла новая версия. Обновить — кнопка в окне программы или в меню значка.")
                 elif kind == "update_install":
                     info = updater.state.get("latest")
                     if info and updater.is_newer(info["version"]):

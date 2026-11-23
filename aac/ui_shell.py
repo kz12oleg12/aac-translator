@@ -281,11 +281,21 @@ class Shell(SectionsMixin):
                                           "скрыты от трансляции и записи экрана"), "ok")
         sc_, si = K.card(b, padx=16, pady=2)
         sc_.pack(fill="x", pady=(12, 0))
+
+        def set_auto_upd(v):
+            config.UPDATE_AUTO = bool(v)
+            core.save_settings(update_auto=config.UPDATE_AUTO)
+        self.upd_row = K.ToggleRow(si, "Обновляться сам при запуске",
+                                   "нашлась новая версия при запуске — поставится сразу, ещё до игры. Во время игры "
+                                   f"программа проверяет обновления каждые {config.UPDATE_EVERY_MINUTES} минут и "
+                                   "только предлагает обновиться.",
+                                   lambda: config.UPDATE_AUTO, set_auto_upd, last=True)
         self.stream_row = K.ToggleRow(si, "Показывать переводы на трансляции",
                                       "зрители в Discord, OBS и на записи экрана видят субтитры, ответы и подсказки. "
                                       "Это окно и журнал остаются скрытыми.",
-                                      lambda: config.SHOW_ON_STREAM, set_stream, last=True)
+                                      lambda: config.SHOW_ON_STREAM, set_stream)
         self.stream_row.pack(fill="x")
+        self.upd_row.pack(fill="x")
 
         keys = tk.Frame(b, bg=K.BG)
         keys.pack(fill="x", pady=(18, 0))
@@ -380,6 +390,7 @@ class Shell(SectionsMixin):
         for t in self.tiles.values():
             t.sync()
         self.stream_row.sync()
+        self.upd_row.sync()
         for hid, chip in self.home_keys.items():
             chip.config(text=hotkeys.K(hid))
         if self.update_version:

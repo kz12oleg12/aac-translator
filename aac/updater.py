@@ -93,16 +93,35 @@ def check_async(quiet=True):
     threading.Thread(target=check, args=(quiet,), daemon=True).start()
 
 
+def startup_check():
+    """Проверка при запуске. True — нашлась новая версия и запущено обновление."""
+    info = check(quiet=True)
+    if info and is_newer(info["version"]):
+        if config.UPDATE_AUTO:
+            core.log(f"Нашлась новая версия {info['version']} — обновляюсь сам, программа перезапустится…", "ok")
+            time.sleep(2)
+            core.events.put(("update_install", None))
+            return True
+    elif info:
+        core.log(f"Обновления проверены: у вас последняя версия {config.VERSION}")
+    elif state.get("error"):
+        core.log("Обновления: не удалось проверить при запуске — попробую позже", "warn")
+    return False
+
+
 def start_periodic():
-    """Проверка при запуске (через несколько секунд) и раз в config.UPDATE_EVERY_HOURS часов."""
+    """Проверка сразу при запуске и потом каждые config.UPDATE_EVERY_MINUTES минут.
+    При запуске (вы ещё не в игре) новая версия ставится сама, если включено «обновляться сам»."""
     if not config.UPDATE_CHECK or not config.UPDATE_REPO:
         return
 
     def loop():
-        time.sleep(8)
+        time.sleep(3)
+        if startup_check():
+            return
         while True:
+            time.sleep(max(5, config.UPDATE_EVERY_MINUTES) * 60)
             check(quiet=True)
-            time.sleep(config.UPDATE_EVERY_HOURS * 3600)
     threading.Thread(target=loop, daemon=True).start()
 
 
