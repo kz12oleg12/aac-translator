@@ -2060,6 +2060,13 @@ def test_game_presets(monkey):
     T.toggle_auto()
     assert auto.is_set() and ("game_new", "skyrim.exe") in drain()
     auto.clear()
+    # запущена ли игра: «сейчас» / «последняя»
+    monkey(game, "running_programs", lambda: [("witcher3.exe", "The Witcher 3")])
+    profiles._run_cache["t"] = 0
+    assert profiles.is_running("witcher3") and not profiles.is_running("archeage")
+    monkey(game, "running_programs", lambda: [])
+    profiles._run_cache["t"] = 0
+    assert not profiles.is_running("witcher3")
     # ещё файл игры (лаунчер / защита от читов / новое имя после обновления)
     assert profiles.add_exe("witcher3", "start_protected_game.exe")
     assert profiles.for_exe("START_PROTECTED_GAME.exe") == "witcher3"

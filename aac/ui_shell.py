@@ -361,8 +361,10 @@ class Shell(SectionsMixin, GamesMixin):
         parts = []
         if not core.region:
             parts.append(f"Обведите субтитры: {hotkeys.K('select')}")
-        else:
+        elif profiles.is_running() or core.SETTINGS.get("profile_lock"):
             parts.append(f"Игра: {profiles.name()}")
+        else:
+            parts.append(f"игра не запущена (последняя — {profiles.name()})")
         if core.stats["last"] and core.stats["last"] != "—":
             parts.append(f"последний перевод: {core.stats['last']}")
         self.hero_sub.config(text=" · ".join(parts) or "Включите автоперевод, находясь в игре")
@@ -778,7 +780,16 @@ class Shell(SectionsMixin, GamesMixin):
 
     # ---------- то, что вызывает остальная программа ----------
     def refresh(self):
-        g = ("📌 " if core.SETTINGS.get("profile_lock") else "🎮 ") + profiles.name()
+        if core.SETTINGS.get("profile_lock"):
+            g = "📌 " + profiles.name()
+        elif profiles.is_running():
+            g = "🎮 " + profiles.name()
+        else:
+            g = "🎮 ждёт игру"
+        live = frozenset(profiles.running())
+        if self.current == "games" and getattr(self, "_live_seen", None) is not None and live != self._live_seen:
+            self._games_render()                 # игру запустили или закрыли — обновить метки в «Играх»
+        self._live_seen = live
         if self.game_lbl.cget("text") != g:
             self.game_lbl.config(text=g)
         if self.current in self.HEAVY:

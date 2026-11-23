@@ -238,3 +238,25 @@ def stats(pid):
     except Exception:
         pass
     return chars, gl
+
+
+_run_cache = {"t": 0.0, "pids": set()}
+
+
+def running():
+    """Пресеты, чьи игры сейчас запущены (есть окно). Проверка раз в 3 с — это дёшево."""
+    import time
+    now = time.time()
+    if now - _run_cache["t"] > 3:
+        from . import game
+        found = set()
+        for exe, _ in game.running_programs():
+            pid = for_exe(exe)
+            if pid:
+                found.add(pid)
+        _run_cache.update(t=now, pids=found)
+    return _run_cache["pids"]
+
+
+def is_running(pid=None):
+    return (pid or core.active_profile) in running()

@@ -880,8 +880,15 @@ class GamesMixin:
             save = lambda ev=None, pid=pid, var=var: (profiles.rename(pid, var.get()), self.refresh())
             e.bind("<Return>", lambda ev, s=save: (s(), self.win.focus_set()))
             e.bind("<FocusOut>", save)
-            if on:
+            live = profiles.is_running(pid)
+            if on and (live or core.SETTINGS.get("profile_lock") == pid):
                 tk.Label(top, text="сейчас", bg=K.ACCENT, fg="#ffffff", font=K.f(8, "bold"), padx=8).pack(
+                    side="left", padx=(8, 0))
+            elif on:
+                tk.Label(top, text="последняя", bg=K.LINE, fg=K.TEXT2, font=K.f(8, "bold"), padx=8).pack(
+                    side="left", padx=(8, 0))
+            elif live:
+                tk.Label(top, text="запущена", bg=K.LINE, fg=K.TEXT2, font=K.f(8, "bold"), padx=8).pack(
                     side="left", padx=(8, 0))
             if core.SETTINGS.get("profile_lock") == pid:
                 tk.Label(top, text="📌 закреплён", bg=K.AMBER, fg="#141413", font=K.f(8, "bold"), padx=8).pack(
@@ -911,6 +918,10 @@ class GamesMixin:
                 tk.Label(regs, text=("✓ " if has else "— ") + title, font=K.f(9), padx=8, pady=2,
                          bg=K.ACCENT_TINT if has else K.SIDEBAR, fg=K.ACCENT_TEXT if has else K.FAINT
                          ).pack(side="left", padx=(0, 6))
+            if on and not live and core.SETTINGS.get("profile_lock") != pid:
+                K.label(ci, "Игра не запущена — пресет включится сам, когда вы запустите любую игру из списка. "
+                            "Пока что клавиши областей (F9 и др.) меняют этот пресет.", 9, K.DIM,
+                        wraplength=600).pack(anchor="w", pady=(8, 0))
             chars, gl = profiles.stats(pid)
             bottom = tk.Frame(ci, bg=K.CARD)
             bottom.pack(fill="x", pady=(10, 0))
