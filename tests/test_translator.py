@@ -2434,6 +2434,29 @@ def test_game_presets(monkey):
                 p._resize_start(e, "se"); e.x_root, e.y_root = -5000, -5000; p._resize_move(e); p._resize_end(e)
                 assert p.main_w >= 760 and p.height >= 640, "не меньше минимума"
                 p.reset_size()
+            if "layout=False" in open(os.path.join(ROOT, "aac", "appwin.py"), encoding="utf-8").read():
+                # начали обводить область — расстановка включается сама; отменили — выключается
+                monkey(game, "foreground_exe", lambda: (None, None))
+                profiles.activate("archeage", announce=False)
+                core_m.region = (10, 20, 300, 80)
+                assert not getattr(app, "layout", False)
+                app.select_answers_region()
+                app.root.update()
+                assert app.layout and "subs" in app.region_frames, "рамки других областей видны"
+                app._picking["cancel"]()
+                app.root.update()
+                assert not app.layout, "отменили — расстановка закрылась"
+                app.select_answers_region()
+                app.root.update()
+                cv = [c for w in app.root.winfo_children() if isinstance(w, tk.Toplevel)
+                      for c in w.winfo_children() if isinstance(c, tk.Canvas) and str(c.cget("cursor")) == "cross"][-1]
+                for ev, x, y in (("<ButtonPress-1>", 30, 300), ("<B1-Motion>", 330, 400), ("<ButtonRelease-1>", 330, 400)):
+                    cv.event_generate(ev, x=x, y=y)
+                app.root.update()
+                assert app.layout and "answers" in app.region_frames, "обвели — расстановка открыта, рамка уже есть"
+                app.toggle_layout()
+                app.root.update()
+                core_m.answers_region = None
             if hasattr(app, "sync_region_frames"):   # удалили область в режиме расстановки — рамка не возвращает её
                 core_m.region, core_m.answers_region = (10, 20, 300, 80), (10, 400, 300, 120)
                 app.toggle_layout()
