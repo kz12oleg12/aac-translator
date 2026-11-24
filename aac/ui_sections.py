@@ -55,18 +55,46 @@ class SectionsMixin:
         c, ci = K.card(left, padx=16, pady=14)
         c.pack(fill="x")
 
+        from . import style
+        # вид перевода — свой у каждой игры
+        self.st_title = K.h2(ci, "")
+        self.st_title.pack(anchor="w")
+        K.label(ci, "Шрифт, цвет и подложка — свои у каждой игры. Игры нет — вид по умолчанию.", 9, K.DIM).pack(
+            anchor="w", pady=(2, 10))
+        frow = tk.Frame(ci, bg=K.CARD)
+        frow.pack(fill="x")
+        K.label(frow, "Шрифт", 10, K.TEXT2).pack(side="left")
+        self.st_font = tk.StringVar(value=config.FONT[0])
+        self.st_font_sel = K.select(frow, self.st_font, style.FONTS,
+                                    lambda: (style.save(font_family=self.st_font.get()), self._style_changed()),
+                                    width=18)
+        self.st_font_sel.pack(side="right")
+        crow = tk.Frame(ci, bg=K.CARD)
+        crow.pack(fill="x", pady=(10, 0))
+        K.label(crow, "Цвет текста", 10, K.TEXT2).pack(side="left")
+        self.st_swatches = {}
+        for col in style.COLORS:
+            sw = tk.Frame(crow, bg=col, width=22, height=22, cursor="hand2", highlightthickness=2)
+            sw.pack(side="left", padx=(8, 0))
+            sw.bind("<Button-1>", lambda e, c_=col: (style.save(text_color=c_), self._style_changed()))
+            self.st_swatches[col] = sw
+        K.button(crow, "Другой…", self._style_color_pick, kind="ghost", size=9).pack(side="left", padx=(10, 0))
+        self.st_mode = K.Segmented(ci, style.MODES, lambda: config.TEXT_MODE,
+                                   lambda v: (style.save(text_mode=v), self._style_changed()))
+        self.st_mode.pack(fill="x", pady=(12, 14))
+
         def font_set(v, final):
-            config.FONT = ("Segoe UI", int(v))
-            config.HISTORY_FONT = ("Segoe UI", max(8, int(v) - 2))
+            config.FONT = (config.FONT[0], int(v))
+            config.HISTORY_FONT = (config.FONT[0], max(8, int(v) - 2))
             self._win_preview()
             if final:
-                core.save_settings(font_size=config.FONT[1])
+                style.save(font_size=config.FONT[1])
                 self._apply_overlays()
 
         def alpha_set(v, final):
             config.OVERLAY_ALPHA = v / 100
             if final:
-                core.save_settings(overlay_alpha=config.OVERLAY_ALPHA)
+                style.save(overlay_alpha=config.OVERLAY_ALPHA)
                 self._apply_overlays()
 
         def hist_set(v, final):
@@ -195,6 +223,18 @@ class SectionsMixin:
         K.button(crow, "Другой…", self._chat_color_pick, kind="ghost", size=9).pack(side="left", padx=(12, 0))
         return sc
 
+    def _style_changed(self):
+        self._apply_overlays()
+        self._refresh_win()
+
+    def _style_color_pick(self):
+        from tkinter import colorchooser
+        from . import style
+        col = colorchooser.askcolor(color=config.TEXT_COLOR, title="Цвет текста перевода", parent=self.win)[1]
+        if col:
+            style.save(text_color=col)
+            self._style_changed()
+
     def _chat_color(self, col):
         config.CHAT_FG = col
         core.save_settings(chat_fg=col)
@@ -211,21 +251,37 @@ class SectionsMixin:
         if not hasattr(self, "pv_main"):
             return
         size = config.FONT[1]
+        fam = config.FONT[0]
+        outline = config.TEXT_MODE == "outline"
+        bg = "#2b2119" if outline else "#14141a"       # обводка — текст прямо на «картинке игры»
+        for w in (self.pv_box, self.pv_prev, self.pv_main, self.pv_orig):
+            w.config(bg=bg)
         for w in (self.pv_prev, self.pv_main, self.pv_orig):
             w.pack_forget()
         if config.SUBS_HISTORY > 0:
-            self.pv_prev.config(font=K.f(max(8, size - 2)))
+            self.pv_prev.config(font=(fam, max(8, size - 2)))
             self.pv_prev.pack(fill="x", padx=10, pady=(8, 0))
-        self.pv_main.config(font=K.f(size, "bold"))
+        self.pv_main.config(font=(fam, size, "bold"), fg=config.TEXT_COLOR)
         self.pv_main.pack(fill="x", padx=10, pady=(8 if config.SUBS_HISTORY == 0 else 2, 2))
         if config.SHOW_ORIGINAL:
             self.pv_orig.pack(fill="x", padx=10, pady=(0, 8))
         else:
             self.pv_main.pack_configure(pady=(8 if config.SUBS_HISTORY == 0 else 2, 8))
         for w in self.pv_ans:
-            w.config(font=K.f(size))
+            w.config(font=(fam, size), fg=config.TEXT_COLOR)
 
     def _refresh_win(self):
+        from . import style
+        who = style.owner()
+        title = f"Вид перевода — {who}" if who else "Вид перевода — по умолчанию"
+        if self.st_title.cget("text") != title:
+            self.st_title.config(text=title)
+        if self.st_font.get() != config.FONT[0]:
+            self.st_font.set(config.FONT[0])
+        for col, sw in self.st_swatches.items():
+            on = col.lower() == str(config.TEXT_COLOR).lower()
+            sw.config(highlightbackground="#ffffff" if on else K.CARD, highlightcolor="#ffffff" if on else K.CARD)
+        self.st_mode.sync()
         for r in self.win_sliders + self.chat_sliders:
             r.sync()
         for r in self.win_rows + [self.chat_cover_row]:

@@ -73,6 +73,7 @@ class App:
         self.chat.enable_height_grip(self._chat_height_drag,
                                      lambda: core.save_settings(chat_height=config.CHAT_HEIGHT))
         self.chat.apply_style()
+        self.apply_game_style()
         self.chat.hide()
         self.chat.win.after(400, self._remember_chat_hwnd)
         self.chat_lines = []      # все переведённые сообщения (для прокрутки)
@@ -761,6 +762,7 @@ class App:
     def profile_changed(self):
         """Переключились на другую игру: убрать переводы прежней, перечитать её области."""
         editor.reset()
+        self.apply_game_style()
         for ov in (self.subs, self.answers, self.quest):
             ov.hide()
         self.subs.clear_history()
@@ -773,6 +775,13 @@ class App:
         if core.active_profile and profiles.is_running():
             gamefacts.gather(core.active_profile)      # один раз на игру: Groq собирает имена, термины, персонажей
         self.auto_start_check()
+
+    def apply_game_style(self):
+        """Вид перевода текущей игры (шрифт, цвет, плашка/обводка) — на все окна перевода."""
+        from . import style
+        style.apply()
+        for ov in (self.subs, self.answers, self.quest):
+            ov.apply_style()
 
     def auto_start_check(self):
         """Галочка пресета «Автоперевод при запуске игры»: игра запущена — включаем автоперевод сами."""

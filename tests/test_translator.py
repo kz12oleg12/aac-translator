@@ -2314,6 +2314,7 @@ def test_game_presets(monkey):
     cfg = T._owner("GAMES_ONLY")
     monkey(cfg, "GAMES_ONLY", True)
     core_m = T._owner("active_profile")
+    config_m = T._owner("FONT")
     monkey(core_m, "active_profile", "archeage")
     T.set("SETTINGS", {"region": [1, 2, 3, 4]})                 # старые настройки до пресетов
     open(os.path.join(d, "s.json"), "w").write('{"region": [1, 2, 3, 4]}')
@@ -2686,6 +2687,36 @@ def test_game_presets(monkey):
                 assert core_m.region is None and profiles.active().get("region") is None, "удалённая не вернулась"
                 assert core_m.answers_region == (50, 450, 320, 100), "новая область не затёрта старой рамкой"
                 core_m.answers_region = None
+            try:
+                from aac import style
+            except ImportError:
+                style = None
+            if style is not None:          # вид перевода — свой у каждой игры; плашка ⇄ обводка букв
+                from aac import ui_overlay
+                profiles.activate("archeage", announce=False)
+                app.apply_game_style()
+                app.subs.show("Привет, путник!")
+                app.root.update()
+                assert isinstance(app.subs.label, tk.Label) and app.subs.mode == "box"
+                style.save(text_mode="outline", text_color="#fff3b0", font_family="Georgia", font_size=18)
+                app.apply_game_style()
+                app.root.update()
+                assert isinstance(app.subs.label, ui_overlay.OutlineLabel) and app.subs.mode == "outline"
+                assert app.subs.label.cget("text") == "Привет, путник!", "текст не потерялся"
+                assert app.subs.label.cget("fg") == "#fff3b0" and app.subs.label.cget("font")[0] == "Georgia"
+                assert app.subs.label.winfo_reqheight() > 20, "высота по тексту"
+                app.subs.push("Вторая реплика")
+                app.root.update()
+                assert app.subs.label.cget("text") == "Вторая реплика"
+                assert profiles.all_profiles()["archeage"]["style"]["text_mode"] == "outline"
+                profiles.activate(None, announce=False)            # другая игра / игры нет — свой вид
+                app.apply_game_style()
+                app.root.update()
+                assert app.subs.mode == "box" and config_m.FONT[0] != "Georgia"
+                assert app.chat.mode == "box", "у окна чата своё оформление"
+                profiles.activate("archeage", announce=False)
+                profiles.all_profiles()["archeage"].pop("style", None)
+                app.apply_game_style()
             if hasattr(app, "auto_start_check"):   # галочка «Автоперевод при запуске игры»
                 profiles.activate("archeage", announce=False)
                 profs = profiles.all_profiles()

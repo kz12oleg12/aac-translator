@@ -72,6 +72,55 @@ def release_mouse(widget=None):
         pass
 
 
+KEY_BG = "#010203"      # «прозрачный» цвет окна в режиме обводки букв (Windows не рисует его вовсе)
+
+
+_Canvas = getattr(tk, "Canvas", object)     # проверки без окон подменяют tkinter пустышкой
+
+
+class OutlineLabel(_Canvas):
+    """Надпись без подложки, с чёрным контуром вокруг букв (как субтитры в кино).
+    Понимает то же, что окна перевода спрашивают у обычной надписи: text, font, fg, wraplength, cget."""
+    OWN = ("text", "font", "fg", "wraplength", "padx", "pady", "outline")
+
+    def __init__(self, master, text="", fg="#eee", font=("Segoe UI", 13), wraplength=300, padx=12, pady=6,
+                 outline="#000000", **_ignored):
+        super().__init__(master, bg=KEY_BG, highlightthickness=0, bd=0, height=1, width=10)
+        self._o = {"text": text, "fg": fg, "font": font, "wraplength": wraplength, "padx": padx, "pady": pady,
+                   "outline": outline}
+        self._draw()
+
+    def configure(self, cnf=None, **kw):
+        kw.update(cnf or {})
+        mine = {k: kw.pop(k) for k in list(kw) if k in self.OWN}
+        for k in ("justify", "anchor"):
+            kw.pop(k, None)
+        if kw:
+            tk.Canvas.configure(self, **kw)
+        if mine:
+            self._o.update(mine)
+            self._draw()
+    config = configure
+
+    def cget(self, key):
+        return self._o[key] if key in self._o else tk.Canvas.cget(self, key)
+
+    def _draw(self):
+        o = self._o
+        self.delete("all")
+        w = max(60, int(o["wraplength"]))
+        if not o["text"]:
+            tk.Canvas.configure(self, height=1, width=w + 2 * int(o["padx"]))
+            return
+        x, y = int(o["padx"]), int(o["pady"]) + 2
+        for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-2, -2), (2, 2), (-2, 2), (2, -2),
+                       (-1, -2), (1, 2), (-2, 1), (2, -1)):
+            self.create_text(x + dx, y + dy, text=o["text"], font=o["font"], fill=o["outline"], anchor="nw", width=w)
+        main = self.create_text(x, y, text=o["text"], font=o["font"], fill=o["fg"], anchor="nw", width=w)
+        box = self.bbox(main) or (0, 0, w, 20)
+        tk.Canvas.configure(self, height=box[3] - box[1] + 2 * int(o["pady"]) + 6, width=w + 2 * int(o["padx"]))
+
+
 class Overlay:
     """Полупрозрачное окно с текстом: перетаскивается мышкой, правый клик — скрыть."""
 
@@ -114,25 +163,59 @@ class Overlay:
         self.status.pack(fill="x", padx=10)
         # предыдущие реплики — бледным текстом над текущей (показывается, когда есть история)
         self.history = []
-        self.hist_label = tk.Label(win, text="", fg="#8a8a8a", bg="#111", font=config.HISTORY_FONT, justify="left",
-                                   wraplength=width - 32, padx=12, pady=2, anchor="w")
-        self.label = tk.Label(win, text="", fg="#eee", bg="#111", font=config.FONT, justify="left",
-                              wraplength=width - 32, padx=12, pady=6, anchor="w")
-        self.label.pack(fill="both", expand=True)
-        # оригинал — мелким серым под переводом (если включено в настройках)
-        self.orig_label = tk.Label(win, text="", fg="#7d8590", bg="#111", font=("Segoe UI", max(8, config.FONT[1] - 3)),
-                                   justify="left", wraplength=width - 32, padx=12, anchor="w")
-        for w in (self.label, self.status, self.hist_label, self.orig_label):
-            w.bind("<MouseWheel>", self._wheel)  # колесо мыши — ширина окна
-            w.bind("<ButtonPress-1>", self._start_move)
-            w.bind("<B1-Motion>", self._move)
-            w.bind("<ButtonRelease-1>", self._end_move)
-            # прячем на ОТПУСКАНИЕ правой кнопки и чуть позже: если спрятать окно, пока кнопка ещё зажата,
-            # Windows оставляет «захват мыши» за невидимым окном — и программа перестаёт реагировать
-            w.bind("<ButtonRelease-3>", lambda e: self.win.after(30, self.hide))
+        self.mode = None
+        self.label = self.hist_label = self.orig_label = None
+        self._make_labels("box")
+        self._bind_mouse(self.status)
         self.visible = True
         STREAM_WINDOWS.append(win)
         win.after(200, lambda: exclude_from_capture(win))
+
+    def _bind_mouse(self, w):
+        w.bind("<MouseWheel>", self._wheel)  # колесо мыши — ширина окна
+        w.bind("<ButtonPress-1>", self._start_move)
+        w.bind("<B1-Motion>", self._move)
+        w.bind("<ButtonRelease-1>", self._end_move)
+        # прячем на ОТПУСКАНИЕ правой кнопки и чуть позже: если спрятать окно, пока кнопка ещё зажата,
+        # Windows оставляет «захват мыши» за невидимым окном — и программа перестаёт реагировать
+        w.bind("<ButtonRelease-3>", lambda e: self.win.after(30, self.hide))
+
+    def _make_labels(self, mode):
+        """Надписи окна: обычные (на плашке) или с обводкой букв. Текст при пересоздании сохраняется."""
+        old = (self.label, self.hist_label, self.orig_label)
+        texts = [w.cget("text") if w is not None else "" for w in old]
+        shown = [w is not None and bool(w.winfo_manager()) for w in old]
+        for w in old:
+            if w is not None:
+                w.destroy()
+        wrap = self.width - 32
+        fam = config.FONT[0]
+        if mode == "outline":
+            mk = lambda **kw: OutlineLabel(self.win, **kw)
+        else:
+            mk = lambda **kw: tk.Label(self.win, bg="#111", justify="left", anchor="w", **kw)
+        self.hist_label = mk(text=texts[1], fg="#9a9a9a", font=config.HISTORY_FONT, wraplength=wrap, padx=12, pady=2)
+        self.label = mk(text=texts[0], fg="#eee", font=config.FONT, wraplength=wrap, padx=12, pady=6)
+        # оригинал — мелким серым под переводом (если включено в настройках)
+        self.orig_label = mk(text=texts[2], fg="#8d95a0", font=(fam, max(8, config.FONT[1] - 3)), wraplength=wrap,
+                             padx=12, pady=0)
+        if shown[1]:
+            self.hist_label.pack(fill="x")
+        self.label.pack(fill="both", expand=True)
+        if shown[2]:
+            self.orig_label.pack(fill="x", after=self.label, pady=(0, 6))
+        for w in (self.label, self.hist_label, self.orig_label):
+            self._bind_mouse(w)
+        bg = KEY_BG if mode == "outline" else "#111"
+        self.win.configure(bg=bg)
+        self.status.configure(bg=bg)
+        if not getattr(self, "_grip_on", False):
+            self.grip.configure(bg=bg if mode == "outline" else config.GRIP_COLOR)
+        try:
+            self.win.attributes("-transparentcolor", KEY_BG if mode == "outline" else "")
+        except tk.TclError:
+            pass                                    # не Windows — прозрачного цвета нет, просто тёмный фон
+        self.mode = mode
 
     # --- склейка окон ---
     def dock(self, leader):
@@ -205,10 +288,14 @@ class Overlay:
         self.fit()
 
     def apply_style(self):
-        """Применить размер шрифта и прозрачность из настроек."""
-        self.label.config(font=config.FONT, fg=(self.style_fg() if self.style_fg else None) or "#eee")
+        """Применить вид из настроек: шрифт, цвет, плашка/обводка, прозрачность (окно чата — своё оформление)."""
+        mode = "box" if self.style_fg else getattr(config, "TEXT_MODE", "box")
+        if mode != self.mode:
+            self._make_labels(mode)
+        fg = (self.style_fg() if self.style_fg else None) or getattr(config, "TEXT_COLOR", "#eee")
+        self.label.config(font=config.FONT, fg=fg)
         self.hist_label.config(font=config.HISTORY_FONT)
-        self.orig_label.config(font=("Segoe UI", max(8, config.FONT[1] - 3)))
+        self.orig_label.config(font=(config.FONT[0], max(8, config.FONT[1] - 3)))
         try:
             self.win.attributes("-alpha", (self.style_alpha() if self.style_alpha else None) or config.OVERLAY_ALPHA)
         except Exception:
@@ -219,7 +306,9 @@ class Overlay:
             self.fit()
 
     def highlight_grip(self, on):
-        self.grip.config(bg=config.GRIP_ACTIVE_COLOR if on else config.GRIP_COLOR)
+        self._grip_on = on
+        rest = KEY_BG if self.mode == "outline" else config.GRIP_COLOR
+        self.grip.config(bg=config.GRIP_ACTIVE_COLOR if on else rest)
         if getattr(self, "vgrip", None) is not None:
             self.vgrip.config(bg=config.GRIP_ACTIVE_COLOR if on else config.GRIP_COLOR)
 

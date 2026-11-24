@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "14.4"
+VERSION = "14.5"
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # папка программы (настройки, словарь, история, иконки)
 
 # ===================== НАСТРОЙКИ =====================
@@ -108,6 +108,8 @@ QUEST_WIDTH = 620            # ширина окна перевода задан
 PANEL_WIDTH = 740            # ширина системной панели, px
 OVERLAY_ALPHA = 0.88         # прозрачность окна (0..1)
 FONT = ("Segoe UI", 13)
+TEXT_COLOR = "#eeeeee"       # цвет перевода (свой у каждой игры — раздел «Окна перевода»)
+TEXT_MODE = "box"            # "box" — тёмная плашка, "outline" — без плашки, обводка букв
 GRIP_COLOR = "#2a2a2a"         # правый край окна перевода, за который меняется ширина
 GRIP_ACTIVE_COLOR = "#3c9a5f"  # он же в режиме расстановки
 HISTORY_FONT = ("Segoe UI", 11)
