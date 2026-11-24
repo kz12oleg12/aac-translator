@@ -39,6 +39,7 @@ def activate():
         p = os.path.join(d, extra)
         if os.path.isdir(p) and p not in sys.path:
             sys.path.append(p)
+    _complete_packages(os.path.join(d, "stdlib"))
     for dll_dir in (os.path.join(site, "torch", "lib"), os.path.join(d, "dlls")):
         if os.path.isdir(dll_dir) and hasattr(os, "add_dll_directory"):
             try:
@@ -47,6 +48,31 @@ def activate():
                 pass
     importlib.invalidate_caches()
     return True
+
+
+def _complete_packages(stdlib):
+    """В программе пакеты Python бывают урезаны (например, unittest без unittest.mock — PyTorch он нужен).
+    Такому пакету добавляем путь к полной копии из пакета голосов: недостающие части найдутся там."""
+    if not config.FROZEN or not os.path.isdir(stdlib):
+        return
+    import importlib.util
+    for name in os.listdir(stdlib):
+        full = os.path.join(stdlib, name)
+        if not os.path.isfile(os.path.join(full, "__init__.py")):
+            continue
+        try:
+            spec = importlib.util.find_spec(name)
+        except (ImportError, ValueError):
+            continue
+        locs = list(getattr(spec, "submodule_search_locations", None) or []) if spec else []
+        if not spec or not locs or any(os.path.normcase(l).startswith(os.path.normcase(stdlib)) for l in locs):
+            continue                                    # нет в программе — найдётся сам; или уже полный
+        try:
+            pkg = importlib.import_module(name)
+            if full not in pkg.__path__:
+                pkg.__path__.append(full)
+        except Exception:
+            pass
 
 
 def installed():
