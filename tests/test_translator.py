@@ -2131,18 +2131,6 @@ def test_ai_editor(monkey):
     assert mt.ask_ocr_mt("google", Image.new("RGB", (10, 10)), "Screenshot of a tooltip …") == "Я встретил Королева.", \
         "подсказки под мышью редактор не трогает"
     editor.reset()
-    # было «Groq (OCR + ИИ)» основным → основным становится машинный, Groq — редактором
-    m = importlib.import_module("aac.main")
-    monkey(cfg, "PROVIDER", "groq_ocr")
-    monkey(cfg, "FALLBACK_PROVIDERS", ["google"])
-    monkey(cfg, "EDITOR_ON", False)
-    m.migrate_ai_main()
-    assert cfg.PROVIDER == "google" and cfg.FALLBACK_PROVIDERS == ["microsoft"]
-    assert cfg.EDITOR == "groq" and cfg.EDITOR_ON
-    monkey(cfg, "PROVIDER", "microsoft")
-    monkey(cfg, "FALLBACK_PROVIDERS", ["google"])
-    m.migrate_ai_main()
-    assert cfg.PROVIDER == "microsoft" and cfg.FALLBACK_PROVIDERS == ["google"], "машинные — не трогаем"
 
 
 def test_game_facts(monkey):

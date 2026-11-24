@@ -601,12 +601,11 @@ class Shell(SectionsMixin, GamesMixin):
         sc, b = self._page("Переводчики", "Кто переводит текст. Если основной упрётся в лимит, сразу подхватит запасной.")
         row = tk.Frame(b, bg=K.BG)
         row.pack(fill="x")
-        mt_labels = {k: v for k, v in PROVIDER_LABELS.items() if k in ("microsoft", "google", "deepl")}
         self.main_var = tk.StringVar(value=PROVIDER_LABELS.get(config.PROVIDER, config.PROVIDER))
         self.fb_var = tk.StringVar(value=PROVIDER_LABELS.get(config.FALLBACK_PROVIDERS[0], "нет")
                                    if config.FALLBACK_PROVIDERS else "нет")
-        for i, (title, var, opts) in enumerate((("Основной", self.main_var, list(mt_labels.values())),
-                                                ("Запасной", self.fb_var, ["нет"] + list(mt_labels.values())))):
+        for i, (title, var, opts) in enumerate((("Основной", self.main_var, list(PROVIDER_LABELS.values())),
+                                                ("Запасной", self.fb_var, ["нет"] + list(PROVIDER_LABELS.values())))):
             c, ci = K.card(row, padx=14, pady=10)
             c.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
             row.columnconfigure(i, weight=1, uniform="p")
@@ -623,7 +622,8 @@ class Shell(SectionsMixin, GamesMixin):
         self.ed_row = K.ToggleRow(ci, "✏️ ИИ-редактор",
                                   "помощник основного переводчика: правит падежи и род, имена по словарю, тон и "
                                   "«ты»/«вы», учитывает прошлые реплики и сцену. Не успел или лимит — покажет "
-                                  "обычный перевод.", lambda: config.EDITOR_ON, set_editor_on, last=True)
+                                  "обычный перевод. Работает поверх Google, Microsoft и DeepL.", lambda: config.EDITOR_ON, set_editor_on,
+                                  last=True)
         self.ed_row.pack(fill="x")
         sel = tk.Frame(ci, bg=K.CARD)
         sel.pack(fill="x", pady=(8, 0))
@@ -750,6 +750,9 @@ class Shell(SectionsMixin, GamesMixin):
         txt = ("" if not config.EDITOR_ON else
                f"Поправил: {s['edited']} · без правок: {s['same']} · не успел (подменил позже): {s['late']}"
                + (f" · ошибок: {s['failed']}" if s["failed"] else ""))
+        if config.EDITOR_ON and config.PROVIDER not in ("google", "microsoft", "deepl"):
+            txt = ("Сейчас основной переводчик — нейросеть, она сама учитывает контекст. Редактор правит, только "
+                   "когда переводит Google, Microsoft или DeepL (например, запасной при лимите). " + txt)
         if self.ed_stats.cget("text") != txt:
             self.ed_stats.config(text=txt)
         chain = translate.provider_chain()

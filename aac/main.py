@@ -58,39 +58,12 @@ def apply_view_settings():
     config.TTS_READ_NAME = bool(core.SETTINGS.get("tts_read_name", config.TTS_READ_NAME))
 
 
-MT = ("google", "microsoft", "deepl")
-AI_OF = {"groq_ocr": "groq", "groq": "groq", "gemini_ocr": "gemini", "gemini": "gemini", "claude_ocr": "claude",
-         "claude": "claude", "mistral_ocr": "mistral", "mistral": "mistral"}
-
-
-def migrate_ai_main():
-    """Переводят теперь Google / Microsoft / DeepL, а нейросеть — их ИИ-редактор. Если основным стояла нейросеть,
-    основным становится машинный переводчик (запасной, если он машинный), а нейросеть — редактором."""
-    chain = [config.PROVIDER] + list(config.FALLBACK_PROVIDERS)
-    if all(p in MT for p in chain):
-        return
-    ai = next((AI_OF[p] for p in chain if p in AI_OF), None)
-    mts = [p for p in chain if p in MT]
-    main = mts[0] if mts else "google"
-    fb = [p for p in mts[1:2] if p != main] or ([] if main == "microsoft" else ["microsoft"])
-    old = " → ".join(chain)
-    config.PROVIDER, config.FALLBACK_PROVIDERS = main, fb
-    upd = {"provider": main, "fallback": fb}
-    if ai:
-        config.EDITOR, config.EDITOR_ON = ai, True
-        upd.update(editor=ai, editor_on=True)
-    core.save_settings(**upd)
-    core.log(f"Переводчики: было {old}. Теперь переводит {main}" + (f" (запасной — {fb[0]})" if fb else "")
-             + (f", а {ai.title()} — ИИ-редактор: правит перевод с учётом контекста" if ai else ""), "ok")
-
-
 def apply_saved_provider():
     """Выбор переводчика из системной панели (сохранён в настройках) важнее значений в aac/config.py."""
     if core.SETTINGS.get("provider"):
         config.PROVIDER = core.SETTINGS["provider"]
     if "fallback" in core.SETTINGS:
         config.FALLBACK_PROVIDERS = list(core.SETTINGS["fallback"])
-    migrate_ai_main()
     config.ANSWERS_DOCKED = bool(core.SETTINGS.get("answers_docked", config.ANSWERS_DOCKED))
     core.answers_auto = bool(core.SETTINGS.get("answers_auto", False))
     core.chat_auto = bool(core.SETTINGS.get("chat_auto", True))
