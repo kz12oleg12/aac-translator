@@ -11,7 +11,6 @@ from . import config, core, glossary, tcache, voices
 
 # кто может быть редактором: id → (название, переводчик в цепочке, чей ключ нужен)
 EDITORS = {
-    "": ("Выключен", None),
     "groq": ("Groq — бесплатно, быстро", "groq"),
     "gemini": ("Gemini — бесплатный уровень", "gemini"),
     "mistral": ("Mistral — бесплатный уровень", "mistral"),
@@ -44,7 +43,8 @@ stats = {"edited": 0, "same": 0, "late": 0, "failed": 0}
 
 
 def name():
-    return config.EDITOR if config.EDITOR in EDITORS else ""
+    """Нейросеть редактора, если редактор включён, иначе ""."""
+    return config.EDITOR if config.EDITOR_ON and config.EDITOR in EDITORS else ""
 
 
 def ready():

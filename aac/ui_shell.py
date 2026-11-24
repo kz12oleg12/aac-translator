@@ -251,9 +251,9 @@ class Shell(SectionsMixin, GamesMixin):
             c.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
             cards.columnconfigure(i, weight=1, uniform="c")
             K.label(ci, title, 9, K.DIM).pack(anchor="w")
-            v = K.label(ci, "", 11, K.TEXT)
+            v = K.label(ci, "", 11, K.TEXT, wraplength=190)    # длинный текст — перенос, а не раздвигать карточку
             v.pack(anchor="w")
-            s = K.label(ci, "", 8, K.FAINT)
+            s = K.label(ci, "", 8, K.FAINT, wraplength=190)
             s.pack(anchor="w")
             self.info[key] = (v, s)
 
@@ -406,10 +406,12 @@ class Shell(SectionsMixin, GamesMixin):
         self.info["tts"][0].config(text=tts.voice_title() if config.TTS_ENABLED else "выключена")
         self.info["tts"][1].config(text=f"вкл/выкл: {hotkeys.K('tts')}")
         chain = translate.provider_chain()
+        from . import editor
         self.info["tr"][0].config(text=" → ".join(PROVIDER_NAMES.get(p, p).replace(" (OCR)", "")
                                                  for p in chain[:2]) or "нет ключей!")
         err = core.stats["errors"]
-        self.info["tr"][1].config(text=f"запросов {core.stats['requests']} · ошибок {err}",
+        self.info["tr"][1].config(text=(f"✏️ редактор {config.EDITOR.title()} · " if editor.name() else "")
+                                  + f"запросов {core.stats['requests']} · ошибок {err}",
                                   fg=K.RED if err else K.FAINT)
         total = tcache.stats["hits"] + tcache.stats["misses"]
         pct = f"{100 * tcache.stats['hits'] // total}%" if total else "—"
@@ -599,11 +601,12 @@ class Shell(SectionsMixin, GamesMixin):
         sc, b = self._page("Переводчики", "Кто переводит текст. Если основной упрётся в лимит, сразу подхватит запасной.")
         row = tk.Frame(b, bg=K.BG)
         row.pack(fill="x")
+        mt_labels = {k: v for k, v in PROVIDER_LABELS.items() if k in ("microsoft", "google", "deepl")}
         self.main_var = tk.StringVar(value=PROVIDER_LABELS.get(config.PROVIDER, config.PROVIDER))
         self.fb_var = tk.StringVar(value=PROVIDER_LABELS.get(config.FALLBACK_PROVIDERS[0], "нет")
                                    if config.FALLBACK_PROVIDERS else "нет")
-        for i, (title, var, opts) in enumerate((("Основной", self.main_var, list(PROVIDER_LABELS.values())),
-                                                ("Запасной", self.fb_var, ["нет"] + list(PROVIDER_LABELS.values())))):
+        for i, (title, var, opts) in enumerate((("Основной", self.main_var, list(mt_labels.values())),
+                                                ("Запасной", self.fb_var, ["нет"] + list(mt_labels.values())))):
             c, ci = K.card(row, padx=14, pady=10)
             c.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 10, 0))
             row.columnconfigure(i, weight=1, uniform="p")
@@ -613,18 +616,21 @@ class Shell(SectionsMixin, GamesMixin):
         # ИИ-редактор — помощник основного переводчика
         c, ci = K.card(b, padx=16, pady=12)
         c.pack(fill="x", pady=(14, 0))
-        top = tk.Frame(ci, bg=K.CARD)
-        top.pack(fill="x")
-        tb = tk.Frame(top, bg=K.CARD)
-        tb.pack(side="left", fill="x", expand=True)
-        K.h2(tb, "✏️ ИИ-редактор").pack(anchor="w")
-        K.label(tb, "Помощник основного переводчика: правит падежи и род, имена по словарю, тон и «ты»/«вы», "
-                    "учитывает прошлые реплики и что происходит в сцене. Ждёт его до секунды — не успел или "
-                    "лимит, покажет обычный перевод. Работает поверх Google, Microsoft и DeepL.",
-                9, K.DIM, wraplength=420).pack(anchor="w", pady=(2, 0))
+        def set_editor_on(v):
+            config.EDITOR_ON = bool(v)
+            core.save_settings(editor_on=config.EDITOR_ON)
+            self._editor_changed()
+        self.ed_row = K.ToggleRow(ci, "✏️ ИИ-редактор",
+                                  "помощник основного переводчика: правит падежи и род, имена по словарю, тон и "
+                                  "«ты»/«вы», учитывает прошлые реплики и сцену. Не успел или лимит — покажет "
+                                  "обычный перевод.", lambda: config.EDITOR_ON, set_editor_on, last=True)
+        self.ed_row.pack(fill="x")
+        sel = tk.Frame(ci, bg=K.CARD)
+        sel.pack(fill="x", pady=(8, 0))
+        K.label(sel, "Нейросеть редактора", 9, K.DIM).pack(side="left")
         self.ed_var = tk.StringVar(value=self._editor_label(config.EDITOR))
-        self.ed_select = K.select(top, self.ed_var, self._editor_labels(), self._editor_changed, width=30)
-        self.ed_select.pack(side="right", anchor="n", padx=(12, 0))
+        self.ed_select = K.select(sel, self.ed_var, self._editor_labels(), self._editor_changed, width=34)
+        self.ed_select.pack(side="right")
         self.ed_stats = K.label(ci, "", 9, K.FAINT, wraplength=640)
         self.ed_stats.pack(anchor="w", pady=(8, 0))
 
@@ -664,7 +670,7 @@ class Shell(SectionsMixin, GamesMixin):
 
     def _editor_label(self, eid):
         from . import editor
-        title = editor.EDITORS.get(eid, editor.EDITORS[""])[0]
+        title = editor.EDITORS.get(eid, editor.EDITORS["groq"])[0]
         if eid and not translate.provider_has_key(eid):
             title += " (нет ключа)"
         return title
@@ -676,10 +682,10 @@ class Shell(SectionsMixin, GamesMixin):
     def _editor_changed(self):
         from . import editor
         by_label = {self._editor_label(e): e for e in editor.EDITORS}
-        eid = by_label.get(self.ed_var.get(), "")
-        config.EDITOR = eid
-        core.save_settings(editor=eid)
+        config.EDITOR = by_label.get(self.ed_var.get(), config.EDITOR)
+        core.save_settings(editor=config.EDITOR)
         editor.reset()
+        eid = config.EDITOR if config.EDITOR_ON else ""
         if not eid:
             core.log("ИИ-редактор выключен — показываю перевод основного переводчика как есть", "ok")
         elif not translate.provider_has_key(eid):
@@ -687,9 +693,6 @@ class Shell(SectionsMixin, GamesMixin):
         else:
             core.log(f"ИИ-редактор: {editor.EDITORS[eid][0].split(' —')[0]} — правит перевод основного переводчика",
                      "ok")
-        if config.PROVIDER not in ("google", "microsoft", "deepl") and eid:
-            core.log("Основной переводчик — нейросеть: она и так учитывает контекст, редактор нужен только "
-                     "для Google, Microsoft и DeepL", "warn")
         self.refresh()
 
     def _clear_cache(self):
@@ -744,12 +747,9 @@ class Shell(SectionsMixin, GamesMixin):
             self._build_prov_rows()
         from . import editor
         s = editor.stats
-        txt = ("" if not config.EDITOR else
+        txt = ("" if not config.EDITOR_ON else
                f"Поправил: {s['edited']} · без правок: {s['same']} · не успел (подменил позже): {s['late']}"
                + (f" · ошибок: {s['failed']}" if s["failed"] else ""))
-        if config.EDITOR and config.PROVIDER not in ("google", "microsoft", "deepl"):
-            txt = ("Основной сейчас — нейросеть, ей редактор не нужен: он правит только переводы Google, Microsoft "
-                   "и DeepL (например, когда работает запасной). " + txt)
         if self.ed_stats.cget("text") != txt:
             self.ed_stats.config(text=txt)
         chain = translate.provider_chain()
@@ -783,6 +783,10 @@ class Shell(SectionsMixin, GamesMixin):
             self.main_var.set(main)
         if self.fb_var.get() != fb:
             self.fb_var.set(fb)
+        self.ed_row.sync()
+        ed = self._editor_label(config.EDITOR)
+        if self.ed_var.get() != ed:
+            self.ed_var.set(ed)
 
     # ---------- Клавиши ----------
     def _build_keys(self):

@@ -119,6 +119,12 @@ def ask_ocr_ai(name, img, prompt):
 def ask_text(prompt):
     """Короткий текстовый вопрос нейросети из вашей цепочки переводчиков (например, пол персонажа).
     None — в цепочке нет нейросетей (только Google/Microsoft) или все на паузе."""
+    from . import editor
+    if editor.ready():
+        try:
+            return editor._ask(prompt)          # нейросеть ИИ-редактора
+        except Exception:
+            pass
     for name in provider_chain():
         base = OCR_AI.get(name, name)
         if base not in ("groq", "gemini", "claude", "mistral") or llm.provider_cooldown.get(name, 0) > time.time():

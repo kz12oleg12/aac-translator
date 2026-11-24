@@ -228,8 +228,18 @@ class Tile(_Frame):
         if self.key:
             self.key.pack(anchor="w", pady=(8, 0))
         self.frames = [self, self.inner, top]
-        self.inner.bind("<Configure>", lambda e: (self.title.config(wraplength=max(60, e.width - 4)),
-                                                  self.sub.config(wraplength=max(60, e.width - 4))))
+        self._wrap_w = None
+
+        def rewrap(e):
+            # перенос строк по ширине плитки; мелкие колебания ширины пропускаем — иначе перенос меняет ширину,
+            # ширина — перенос, и окно бесконечно перестраивается (зависание)
+            w = max(60, e.width - 4)
+            if self._wrap_w is not None and abs(w - self._wrap_w) < 12:
+                return
+            self._wrap_w = w
+            self.title.config(wraplength=w)
+            self.sub.config(wraplength=w)
+        self.inner.bind("<Configure>", rewrap)
         for w in (self, self.inner, top, self.icon, self.title, self.sub):
             w.bind("<Button-1>", lambda e: self.toggle.click())
             w.config(cursor="hand2")

@@ -2075,6 +2075,7 @@ def test_ai_editor(monkey):
         return
     cfg = T._owner("EDITOR")
     monkey(cfg, "EDITOR", "groq")
+    monkey(cfg, "EDITOR_ON", True)
     monkey(cfg, "EDITOR_WAIT", 0.3)
     monkey(cfg, "EDITOR_SCENE_EVERY", 2)
     monkey(T._owner("GROQ_API_KEY"), "GROQ_API_KEY", "gsk_test")
@@ -2115,13 +2116,13 @@ def test_ai_editor(monkey):
     assert editor.improve("Bye.", "Пока.", "subs") is None
     monkey(editor, "_ask", lambda prompt: "Sure! Here is the improved translation in English and more text")
     assert editor.improve("Bye now.", "Пока-пока.", "subs") is None
-    # выключен — не вызывается
-    monkey(cfg, "EDITOR", "")
+    # выключен — не вызывается (нейросеть выбрана, но переключатель выключен)
+    monkey(cfg, "EDITOR_ON", False)
     called = []
     monkey(editor, "_ask", lambda prompt: called.append(1) or "x")
     assert editor.improve("Hey.", "Эй.", "subs") is None and not called
     # связка с машинным переводчиком: Google даёт черновик, редактор — итог
-    monkey(cfg, "EDITOR", "groq")
+    monkey(cfg, "EDITOR_ON", True)
     monkey(mt.ocr, "ocr_lines", lambda img: ["I met the Queen."])
     monkey(mt, "_mt_google", lambda text: "Я встретил Королева.")
     monkey(editor, "_ask", lambda prompt: "Я встретил Королеву.")
@@ -2130,6 +2131,18 @@ def test_ai_editor(monkey):
     assert mt.ask_ocr_mt("google", Image.new("RGB", (10, 10)), "Screenshot of a tooltip …") == "Я встретил Королева.", \
         "подсказки под мышью редактор не трогает"
     editor.reset()
+    # было «Groq (OCR + ИИ)» основным → основным становится машинный, Groq — редактором
+    m = importlib.import_module("aac.main")
+    monkey(cfg, "PROVIDER", "groq_ocr")
+    monkey(cfg, "FALLBACK_PROVIDERS", ["google"])
+    monkey(cfg, "EDITOR_ON", False)
+    m.migrate_ai_main()
+    assert cfg.PROVIDER == "google" and cfg.FALLBACK_PROVIDERS == ["microsoft"]
+    assert cfg.EDITOR == "groq" and cfg.EDITOR_ON
+    monkey(cfg, "PROVIDER", "microsoft")
+    monkey(cfg, "FALLBACK_PROVIDERS", ["google"])
+    m.migrate_ai_main()
+    assert cfg.PROVIDER == "microsoft" and cfg.FALLBACK_PROVIDERS == ["google"], "машинные — не трогаем"
 
 
 def test_game_facts(monkey):
