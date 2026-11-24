@@ -177,6 +177,8 @@ class Watcher:
             except Exception as e:
                 import traceback
                 traceback.print_exc()
+                core.error_traces.append(time.strftime("%Y-%m-%d %H:%M:%S") + f" [{self.name}]\n"
+                                         + traceback.format_exc())
                 errors += 1
                 if errors <= 3:
                     tb = traceback.extract_tb(e.__traceback__)

@@ -122,9 +122,15 @@ def save_settings(**kw):
 stats = {"requests": 0, "errors": 0, "last": "—", "tok_in": 0, "tok_out": 0, "cost": 0.0}
 
 
+import collections
+log_lines = collections.deque(maxlen=3000)     # журнал за этот запуск — для «Сообщить о проблеме»
+error_traces = collections.deque(maxlen=50)    # полные тексты ошибок программы
+
+
 def log(msg, level="info"):
     """level: info / ok / warn / error — сообщение уходит в системную панель и в консоль."""
     print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+    log_lines.append((time.strftime("%Y-%m-%d %H:%M:%S"), level, msg))
     events.put(("log", (time.strftime("%H:%M:%S"), msg, level)))
 
 

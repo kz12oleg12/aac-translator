@@ -2189,6 +2189,37 @@ def test_keys_in_app(monkey):
     os.environ.pop("GROQ_API_KEY", None)
 
 
+def test_problem_report(monkey):
+    """«Сообщить о проблеме»: архив с журналом, ошибками, сведениями — и без ключей."""
+    try:
+        from aac import report
+    except ImportError:
+        return
+    import zipfile
+    d = tempfile.mkdtemp(dir=TMP)
+    monkey(T._owner("APP_DIR"), "APP_DIR", d)
+    monkey(T._owner("GROQ_API_KEY"), "GROQ_API_KEY", "gsk_supersecret12345")
+    T.log("тестовое сообщение журнала")
+    core_m = T._owner("active_profile")
+    core_m.error_traces.append("Traceback: тестовая ошибка")
+    T.save_settings(some_api_key="gsk_supersecret12345")       # даже если ключ как-то попал в настройки
+    path = report.make()
+    with zipfile.ZipFile(path) as z:
+        names = set(z.namelist())
+        assert {"info.txt", "log.txt", "errors.txt", "settings.json"} <= names, names
+        allt = "".join(z.read(n).decode("utf-8") for n in names)
+    assert "тестовое сообщение журнала" in z_read(path, "log.txt") and "тестовая ошибка" in z_read(path, "errors.txt")
+    assert "AAC Translator" in z_read(path, "info.txt") and "Groq — есть" in z_read(path, "info.txt")
+    assert "gsk_supersecret12345" not in allt, "ключ в архив не попадает"
+    T.save_settings(some_api_key=None)
+
+
+def z_read(path, name):
+    import zipfile
+    with zipfile.ZipFile(path) as z:
+        return z.read(name).decode("utf-8")
+
+
 def test_game_facts(monkey):
     """Groq один раз собирает об игре: словарь, персонажей с полом, описание (для DeepL и нейросетей)."""
     try:

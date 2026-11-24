@@ -141,6 +141,7 @@ class Shell(SectionsMixin, GamesMixin):
         self.check_btn = K.button(bottom, "Проверить обновления", lambda: core.events.put(("update_check", None)),
                                   kind="flat")
         self.check_btn.pack(fill="x")
+        K.button(bottom, "Сообщить о проблеме", self._report, kind="flat").pack(fill="x")
         K.button(bottom, "Перезапустить", lambda: core.events.put(("restart", None)), kind="flat").pack(fill="x")
         K.button(bottom, "Выключить программу", lambda: core.events.put(("quit", None)),
                  kind="danger").pack(fill="x")
@@ -695,6 +696,22 @@ class Shell(SectionsMixin, GamesMixin):
             core.log(f"ИИ-редактор: {editor.EDITORS[eid][0].split(' —')[0]} — правит перевод основного переводчика",
                      "ok")
         self.refresh()
+
+    def _report(self):
+        """Собрать архив для разбора проблемы и показать его в Проводнике."""
+        from . import report
+        try:
+            path = report.make()
+        except Exception as e:
+            core.log(f"Не удалось собрать архив: {e}", "error")
+            return
+        core.log(f"📦 Архив для разбора проблемы: {path}", "ok")
+        report.show_in_folder(path)
+        self.ask("Архив готов",
+                 f"{os.path.basename(path)} — в папке reports (Проводник уже открыт).\n\n"
+                 "Опишите, что случилось, и приложите этот архив. В нём журнал, версия, мониторы, переводчики, "
+                 "игры и их области. Ключей и ваших словарей, персонажей, истории в нём нет.",
+                 "Понятно", lambda: None, no_text="Открыть папку", on_no=lambda: report.show_in_folder(path))
 
     def _ask_key(self, pid):
         """Окно «Ключ Groq»: вставить ключ → сохранить в Windows, подхватить сразу и проверить."""

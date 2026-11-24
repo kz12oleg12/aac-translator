@@ -826,6 +826,7 @@ class App:
             import traceback
             tb = traceback.format_exc()
             print(tb)
+            core.error_traces.append(time.strftime("%Y-%m-%d %H:%M:%S") + "\n" + tb)
             key = f"{type(e).__name__}:{e}"
             if key not in getattr(self, "_poll_errors", set()):
                 self._poll_errors = getattr(self, "_poll_errors", set()) | {key}
