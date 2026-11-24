@@ -18,6 +18,36 @@ KEYS = {
 ALIASES = {"groq_ocr": "groq", "gemini_ocr": "gemini", "mistral_ocr": "mistral", "claude_ocr": "claude"}
 
 
+def load_from_windows():
+    """Перечитать сохранённые ключи (и адрес для отчётов) прямо из Windows (HKCU\\Environment).
+    Нужно, когда программу перезапустили из неё самой: новая копия получает старые переменные, без тех,
+    что сохранили после её запуска (setx или кнопкой «Ключ» в другой копии). Возвращает, что подхватили."""
+    try:
+        import winreg
+    except ImportError:
+        return []
+    got = []
+    names = [env for env, _, _, _ in KEYS.values()] + ["AAC_REPORT_WEBHOOK"]
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            for name in names:
+                try:
+                    value, _ = winreg.QueryValueEx(key, name)
+                except FileNotFoundError:
+                    continue
+                value = str(value or "").strip()
+                if value and os.environ.get(name) != value:
+                    os.environ[name] = value
+                    got.append(name)
+    except OSError:
+        return got
+    for k, (env, attr, _, _) in KEYS.items():       # ключи — сразу в настройки программы
+        v = os.environ.get(env, "").strip()
+        if v:
+            setattr(config, attr, v)
+    return got
+
+
 def kind(pid):
     """id из списка переводчиков → чей это ключ (или None — ключ не нужен)."""
     pid = ALIASES.get(pid, pid)

@@ -2317,6 +2317,29 @@ def test_uninstall(monkey):
                 assert not os.path.exists(root), os.listdir(root)
 
 
+def test_keys_from_windows_registry(monkey):
+    """Ключи и адрес для отчётов читаются прямо из Windows — и после «Перезапустить» (старые переменные)."""
+    try:
+        from aac import keys
+    except ImportError:
+        return
+    if not hasattr(keys, "load_from_windows") or sys.platform != "win32":
+        return
+    import winreg
+    name, val = "AAC_REPORT_WEBHOOK", "https://discord.com/api/webhooks/1/test-from-registry"
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as k:
+        winreg.SetValueEx(k, name, 0, winreg.REG_SZ, val)
+    try:
+        os.environ.pop(name, None)
+        assert name in keys.load_from_windows() and os.environ[name] == val
+        from aac import report
+        assert report.webhook() == val
+    finally:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as k:
+            winreg.DeleteValue(k, name)
+        os.environ.pop(name, None)
+
+
 def z_read(path, name):
     import zipfile
     with zipfile.ZipFile(path) as z:

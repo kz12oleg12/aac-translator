@@ -294,6 +294,11 @@ def _watchdog():
 def main():
     import sys
     try:
+        from . import keys
+        keys.load_from_windows()      # ключи и адрес для отчётов — из Windows, даже после «Перезапустить»
+    except Exception:
+        pass
+    try:
         from . import voicepack
         voicepack.activate()          # скачанные офлайн-голоса (.exe) — подключить до первого голоса
     except Exception:

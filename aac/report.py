@@ -151,6 +151,13 @@ def webhook():
     """Куда отправлять отчёты: вшито при сборке .exe (секрет репозитория) или своё (переменная AAC_REPORT_WEBHOOK)."""
     url = os.environ.get("AAC_REPORT_WEBHOOK", "").strip()
     if not url:
+        try:            # сохранили командой setx уже после запуска программы — читаем прямо из Windows
+            from . import keys
+            keys.load_from_windows()
+            url = os.environ.get("AAC_REPORT_WEBHOOK", "").strip()
+        except Exception:
+            pass
+    if not url:
         try:
             from . import _report_target
             url = (getattr(_report_target, "REPORT_WEBHOOK", "") or "").strip()
