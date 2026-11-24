@@ -1939,7 +1939,12 @@ def test_new_shell(monkey):
         sh.show("win")
         cfg_f = T._owner("FONT")
         sh.win_sliders[0].slider.command(18, True)
-        assert cfg_f.FONT[1] == 18 and T.load_settings()["font_size"] == 18
+        try:
+            from aac import style as st_m
+            saved = st_m.current()["font_size"]          # у игры свой вид, без игры — общий
+        except ImportError:
+            saved = T.load_settings()["font_size"]
+        assert cfg_f.FONT[1] == 18 and saved == 18, (cfg_f.FONT, saved)
         sh.win_sliders[0].slider.command(13, True)
         # словарь из программы: добавить, исправить, удалить
         from aac import glossary as G

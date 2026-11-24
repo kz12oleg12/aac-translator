@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write     # снимки окон кладутся в ветку ci-shots
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -26,8 +29,14 @@ jobs:
         env:
           PYTHONUTF8: "1"
         run: python tests/windows_shots.py
-      - uses: actions/upload-artifact@v4
+      - name: Снимки — в ветку ci-shots
         if: always()
-        with:
-          name: shots
-          path: shots/
+        shell: bash
+        run: |
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          git checkout --orphan ci-shots
+          git rm -rf --cached . > /dev/null
+          git add -f shots
+          git commit -q -m "снимки окон ${GITHUB_SHA::7}"
+          git push -q -f origin ci-shots
