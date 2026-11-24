@@ -2276,6 +2276,28 @@ def test_game_presets(monkey):
                 assert app._area_target() is None, "в браузере области не обводим"
                 profiles.delete("hades")
                 profiles.delete(w3)
+            if hasattr(app, "_picking"):        # F7 несколько раз — затемнения не накладываются друг на друга
+                import tkinter as tk
+                overlays = lambda: [c for w in app.root.winfo_children() if isinstance(w, tk.Toplevel) and w.winfo_exists()
+                                    for c in w.winfo_children() if isinstance(c, tk.Canvas) and str(c.cget("cursor")) == "cross"]
+                n0 = len(overlays())
+                core_m.auto_on.set()
+                app.pick_area("Обведите ЗАДАНИЕ.", lambda r: None)
+                app.root.update()
+                assert len(overlays()) == n0 + 1 and not core_m.auto_on.is_set()
+                app.pick_area("Обведите ЗАДАНИЕ.", lambda r: None)      # та же клавиша ещё раз — отмена
+                app.root.update()
+                assert len(overlays()) == n0 and app._picking is None
+                app.root.after(200, lambda: None); time.sleep(0.25); app.root.update()
+                assert core_m.auto_on.is_set(), "автоперевод вернулся"
+                app.pick_area("Обведите ЗАДАНИЕ.", lambda r: None)
+                app.pick_area("Обведите текст — переведу и прочитаю вслух.", lambda r: None)   # другая — замена
+                app.root.update()
+                assert len(overlays()) == n0 + 1
+                app._picking["cancel"]()
+                app.root.update(); time.sleep(0.25); app.root.update()
+                assert core_m.auto_on.is_set()
+                core_m.auto_on.clear()
             if hasattr(app.panel, "_resize_start"):       # размер окна — тянуть за край, запоминается
                 class E:
                     pass

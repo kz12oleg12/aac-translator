@@ -188,6 +188,13 @@ class App:
         """Затемняет экран и даёт обвести прямоугольник мышкой.
         game_area — область игры (субтитры, ответы, чат, меню): сохраняется в пресет игры, которая была
         на экране в момент нажатия клавиши, даже если за время обводки активная игра сменилась."""
+        key = prompt
+        cur = getattr(self, "_picking", None)
+        if cur is not None:                 # затемнение уже открыто — второе поверх не открываем
+            same = cur["prompt"] == key
+            cur["cancel"]()                 # закрыть прежнее (и вернуть автоперевод, если был)
+            if same:
+                return                      # та же клавиша ещё раз — просто отмена
         if game_area:
             target = self._area_target()
             if target is None:
@@ -219,12 +226,23 @@ class App:
         cv.create_text(sw // 2, 40, text=prompt + "   Esc — отмена.", fill="white", font=("Segoe UI", 18))
         state = {}
 
-        def finish(result):
-            sel.destroy()
+        def close():
+            if getattr(self, "_picking", None) is picking:
+                self._picking = None
+            try:
+                sel.destroy()
+            except tk.TclError:
+                pass
             if was_auto:
                 # дать окну затемнения исчезнуть, потом вернуть автоперевод
                 self.root.after(150, core.auto_on.set)
+
+        def finish(result):
+            close()
             on_done(result)
+
+        picking = {"prompt": key, "cancel": lambda: finish(None)}
+        self._picking = picking
 
         def down(e):
             state["x0"], state["y0"] = e.x, e.y
@@ -247,9 +265,7 @@ class App:
         sel.bind("<Escape>", lambda e: finish(None))
         if on_clear:   # правый клик — убрать область
             def clear(e):
-                sel.destroy()
-                if was_auto:
-                    self.root.after(150, core.auto_on.set)
+                close()
                 on_clear()
             cv.bind("<Button-3>", clear)
         sel.focus_force()
