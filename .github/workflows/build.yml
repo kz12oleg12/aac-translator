@@ -42,6 +42,19 @@ jobs:
           Get-Content "dist/AAC Translator/selftest.txt"
           Remove-Item "dist/AAC Translator/selftest.txt"
           if ($p.ExitCode -ne 0) { throw "самопроверка не прошла: $($p.ExitCode)" }
+      - name: Запуск .exe (10 секунд, не падает)
+        shell: pwsh
+        run: |
+          $d = "dist/AAC Translator"
+          $p = Start-Process -FilePath "$d/AAC Translator.exe" -PassThru
+          Start-Sleep -Seconds 10
+          $alive = -not $p.HasExited
+          if ($alive) { Stop-Process -Id $p.Id -Force }
+          if (Test-Path "$d/translator.log") { Get-Content "$d/translator.log" -Tail 30 }
+          foreach ($f in "translator.log","aac_translator_settings.json","glossary.txt","characters.json") {
+            if (Test-Path "$d/$f") { Remove-Item "$d/$f" } }
+          Get-ChildItem $d -Directory | Where-Object { $_.Name -in "history","profiles","backups","reports" } | Remove-Item -Recurse -Force
+          if (-not $alive) { throw "программа закрылась сама (код $($p.ExitCode))" }
       - name: Архив
         shell: pwsh
         run: Compress-Archive -Path "dist/AAC Translator/*" -DestinationPath AAC_Translator_win64.zip

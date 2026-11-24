@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "14.9"
+VERSION = "15.0"
 import sys as _sys
 FROZEN = bool(getattr(_sys, "frozen", False))      # собранная программа (AAC Translator.exe), без Python
 # папка программы (настройки, словарь, история, иконки): рядом с .exe или с aac_translator.py

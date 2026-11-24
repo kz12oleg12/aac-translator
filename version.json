@@ -1,6 +1,6 @@
 {
- "version": "14.9",
+ "version": "15.0",
  "notes": [
-  "Есть версия без Python: AAC Translator.exe (раздел «Релизы» на GitHub); она обновляется сама так же"
+  "Есть версия без Python: AAC Translator.exe (github.com/kz12oleg12/aac-translator/releases) — распаковать и запустить"
  ]
 }
