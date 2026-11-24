@@ -11,32 +11,34 @@ TITLE = "AAC Translator"
 class Api:
     """Вызывается из страницы: window.pywebview.api.…"""
 
+    # Только поля с «_»: pywebview обходит открытые поля js_api, и объект окна там вешает окно («Не отвечает»).
     def __init__(self):
-        self.window = None
-        self.quitting = False
+        self._window = None
+        self._quitting = False
+        self._hidden = False
 
     def toggle(self):
-        w = self.window
+        w = self._window
         if w is None:
             return
-        if getattr(self, "hidden", False):
+        if self._hidden:
             w.show()
             w.restore()
-            self.hidden = False
+            self._hidden = False
         else:
             w.hide()
-            self.hidden = True
+            self._hidden = True
 
     def show(self):
-        if self.window is not None:
-            self.window.show()
-            self.window.restore()
-            self.hidden = False
+        if self._window is not None:
+            self._window.show()
+            self._window.restore()
+            self._hidden = False
 
     def quit(self):
-        self.quitting = True
-        if self.window is not None:
-            self.window.destroy()
+        self._quitting = True
+        if self._window is not None:
+            self._window.destroy()
 
 
 def _follow_parent(pid):
@@ -111,13 +113,13 @@ def _run(url, parent=None):
     icon = os.path.join(os.path.dirname(here), "icon.ico")
     w = webview.create_window(TITLE, url, js_api=api, width=1320, height=900, min_size=(980, 640),
                               background_color="#262624", text_select=True)
-    api.window = w
+    api._window = w
 
     def closing():
-        if api.quitting:
+        if api._quitting:
             return True
         w.hide()                 # крестик — спрятать, не закрывать
-        api.hidden = True
+        api._hidden = True
         return False
     w.events.closing += closing
     kw = {"gui": "edgechromium"} if sys.platform == "win32" else {}
