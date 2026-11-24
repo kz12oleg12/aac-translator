@@ -1,0 +1,58 @@
+name: Сборка .exe
+
+on:
+  push:
+    branches: [main]
+    paths: [version.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write     # выложить архив в «Релизы»
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Библиотеки
+        run: >
+          python -m pip install --disable-pip-version-check pyinstaller mss pillow keyboard requests pynput pystray
+          edge-tts numpy winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Globalization
+          winrt-Windows.Foundation winrt-Windows.Storage.Streams
+      - name: Сборка
+        run: >
+          pyinstaller --noconfirm --windowed --name "AAC Translator" --icon icon.ico
+          --collect-submodules aac --collect-submodules winrt --collect-all edge_tts
+          --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 --hidden-import pystray._win32
+          --exclude-module torch --exclude-module torchaudio aac_translator.py
+      - name: Файлы рядом с программой
+        shell: pwsh
+        run: |
+          $d = "dist/AAC Translator"
+          foreach ($f in "icon.ico","icon_22.png","icon_32.png","logo.svg","version.json","README.txt") { Copy-Item $f $d }
+      - name: Самопроверка .exe
+        shell: pwsh
+        run: |
+          $exe = "dist/AAC Translator/AAC Translator.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--selftest" -Wait -PassThru
+          Get-Content "dist/AAC Translator/selftest.txt"
+          Remove-Item "dist/AAC Translator/selftest.txt"
+          if ($p.ExitCode -ne 0) { throw "самопроверка не прошла: $($p.ExitCode)" }
+      - name: Архив
+        shell: pwsh
+        run: Compress-Archive -Path "dist/AAC Translator/*" -DestinationPath AAC_Translator_win64.zip
+      - name: Релиз
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = (Get-Content version.json -Raw | ConvertFrom-Json)
+          $ver = $v.version
+          $notes = ($v.notes -join "`n") + "`n`nСкачайте AAC_Translator_win64.zip, распакуйте в любую папку и запустите «AAC Translator.exe». Python не нужен."
+          gh release view "v$ver" *> $null
+          if ($LASTEXITCODE -eq 0) { gh release upload "v$ver" AAC_Translator_win64.zip --clobber }
+          else { gh release create "v$ver" AAC_Translator_win64.zip --title "AAC Translator $ver" --notes $notes --latest }

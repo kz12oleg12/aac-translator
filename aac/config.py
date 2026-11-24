@@ -4,8 +4,12 @@
 import os
 
 
-VERSION = "14.8"
-APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # папка программы (настройки, словарь, история, иконки)
+VERSION = "14.9"
+import sys as _sys
+FROZEN = bool(getattr(_sys, "frozen", False))      # собранная программа (AAC Translator.exe), без Python
+# папка программы (настройки, словарь, история, иконки): рядом с .exe или с aac_translator.py
+APP_DIR = (os.path.dirname(_sys.executable) if FROZEN
+           else os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ===================== НАСТРОЙКИ =====================
 # Кто переводит:

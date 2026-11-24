@@ -31,6 +31,12 @@ ZIP_URL = "https://api.github.com/repos/{repo}/zipball/{branch}"            # с
 RAW_ZIP_URL = "https://codeload.github.com/{repo}/zip/refs/heads/{branch}"  # без токена — без лимита
 
 
+# собранная программа (.exe) обновляется готовым архивом из «Релизов» GitHub (лимитов API у этих ссылок нет)
+EXE_ZIP = "AAC_Translator_win64.zip"
+EXE_ZIP_URL = "https://github.com/{repo}/releases/download/v{ver}/" + EXE_ZIP
+EXE_NAME = "AAC Translator.exe"
+
+
 def _use_api():
     return bool(os.environ.get("GITHUB_TOKEN", "").strip())
 
@@ -121,6 +127,8 @@ def check(quiet=True):
                 "api_asset": False}
         if not info["version"]:
             raise RuntimeError("Обновления: в version.json нет номера версии.")
+        if config.FROZEN:
+            info["asset_url"] = EXE_ZIP_URL.format(repo=config.UPDATE_REPO, ver=info["version"])
         state["latest"], state["error"] = info, None
         try:        # запомнить — после перезапуска первый запрос тоже будет «изменилось ли?», а не полный
             core.save_settings(update_cache={"etag_api": state.get("etag_api"), "etag_raw": state.get("etag_raw"),
@@ -209,9 +217,23 @@ def download(info, dest_dir):
                 raise RuntimeError("подозрительный путь в архиве обновления")
         z.extractall(dest_dir)
     for root, dirs, files in os.walk(dest_dir):
-        if "install.py" in files and "aac" in dirs:
+        if config.FROZEN and EXE_NAME in files:
             return root
-    raise RuntimeError("в архиве обновления нет install.py")
+        if not config.FROZEN and "install.py" in files and "aac" in dirs:
+            return root
+    raise RuntimeError(f"в архиве обновления нет {EXE_NAME if config.FROZEN else 'install.py'}")
+
+
+def exe_update_script(src, app_dir, pid):
+    """Для .exe: bat-файл — дождаться закрытия программы, скопировать новые файлы поверх, запустить снова.
+    Ваши файлы (настройки, словари, история) в архиве обновления не лежат и не трогаются."""
+    log = os.path.join(app_dir, "update.log")
+    return ("@echo off\r\nchcp 65001 >nul\r\n"
+            ":wait\r\n"
+            f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && (timeout /t 1 /nobreak >nul & goto wait)\r\n'
+            f'echo Обновление из "{src}" >> "{log}"\r\n'
+            f'robocopy "{src}" "{app_dir}" /E /R:5 /W:1 /NFL /NDL /NJH /NP >> "{log}"\r\n'
+            f'start "" "{os.path.join(app_dir, EXE_NAME)}"\r\n')
 
 
 def install(info):
@@ -222,16 +244,24 @@ def install(info):
     try:
         core.log(f"Скачиваю версию {info['version']}…")
         folder = download(info, tempfile.mkdtemp(prefix="aac_update_"))
-        py = sys.executable   # тот же Python, которым запущена программа
         flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0   # отдельно от программы
-        subprocess.Popen([py, os.path.join(folder, "install.py"), "--update", "--wait-pid", str(os.getpid())],
-                         cwd=folder, creationflags=flags, close_fds=True)
+        if config.FROZEN:
+            bat = os.path.join(tempfile.gettempdir(), f"aac_update_{os.getpid()}.bat")
+            with open(bat, "w", encoding="utf-8") as f:
+                f.write(exe_update_script(folder, config.APP_DIR, os.getpid()))
+            subprocess.Popen(["cmd", "/c", bat], creationflags=flags | 0x08000000, close_fds=True)
+        else:
+            py = sys.executable   # тот же Python, которым запущена программа
+            subprocess.Popen([py, os.path.join(folder, "install.py"), "--update", "--wait-pid", str(os.getpid())],
+                             cwd=folder, creationflags=flags, close_fds=True)
         core.log(f"Устанавливаю версию {info['version']} — программа перезапустится сама через полминуты.", "ok")
         core.events.put(("quit", None))
     except Exception as e:
         state["installing"] = False
-        core.log(f"Обновление не удалось: {e}. Можно обновиться вручную: github.com/{config.UPDATE_REPO} → "
-                 f"Code → Download ZIP, распаковать и запустить install.bat", "error")
+        how = (f"github.com/{config.UPDATE_REPO}/releases → скачать {EXE_ZIP} и распаковать поверх папки программы"
+               if config.FROZEN else
+               f"github.com/{config.UPDATE_REPO} → Code → Download ZIP, распаковать и запустить install.bat")
+        core.log(f"Обновление не удалось: {e}. Можно обновиться вручную: {how}", "error")
 
 
 def install_async(info):

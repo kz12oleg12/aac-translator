@@ -1,5 +1,5 @@
 """
-Экранный ИИ-переводчик для ArcheAge Chronicles (и любых других игр). Версия 14.8
+Экранный ИИ-переводчик для ArcheAge Chronicles (и любых других игр). Версия 14.9
 
 Горячие клавиши:
   F9           — выделить область СУБТИТРОВ (запоминается навсегда, даже после перезапуска)
@@ -31,8 +31,41 @@ import ctypes
 import os
 import sys
 
+# папка программы: рядом с AAC Translator.exe (собранная версия) или с этим файлом
+_HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+
+if "--selftest" in sys.argv:
+    # проверка сборки: все модули программы загружаются (без окон и клавиатуры); код выхода 0 — всё хорошо
+    import importlib
+    import pkgutil
+    import traceback
+    sys.path.insert(0, _HERE)
+    try:
+        import aac
+        bad = []
+        for m in pkgutil.iter_modules(aac.__path__):
+            try:
+                importlib.import_module("aac." + m.name)
+            except Exception:
+                bad.append(m.name + ": " + traceback.format_exc(limit=1).strip().splitlines()[-1])
+        for opt in ("PIL", "mss", "requests", "keyboard", "pynput", "pystray", "edge_tts",
+                    "winrt.windows.media.ocr"):
+            try:
+                importlib.import_module(opt)
+            except Exception as e:
+                bad.append(f"{opt}: {e}")
+        with open(os.path.join(_HERE, "selftest.txt"), "w", encoding="utf-8") as f:
+            f.write("OK\n" if not bad else "\n".join(bad))
+        sys.exit(1 if bad else 0)
+    except SystemExit:
+        raise
+    except Exception:
+        with open(os.path.join(_HERE, "selftest.txt"), "w", encoding="utf-8") as f:
+            f.write(traceback.format_exc())
+        sys.exit(2)
+
 if sys.stdout is None or sys.stderr is None:
-    _log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "translator.log")
+    _log_path = os.path.join(_HERE, "translator.log")
     try:
         if os.path.exists(_log_path) and os.path.getsize(_log_path) > 2_000_000:
             os.replace(_log_path, _log_path + ".old")  # не даём файлу журнала разрастись
@@ -47,7 +80,7 @@ try:
 except Exception:
     pass
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _HERE)
 from aac.main import main  # noqa: E402
 
 if __name__ == "__main__":
