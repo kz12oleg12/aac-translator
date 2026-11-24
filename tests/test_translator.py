@@ -2118,6 +2118,16 @@ def test_game_presets(monkey):
         drain()
         T.toggle_auto()
         assert not auto0.is_set() and any("Игра не запущена" in p[1] for k, p in drain() if k == "log")
+        hk = T._owner("register_hotkeys") if hasattr(T, "register_hotkeys") else None
+        import importlib
+        hkm = importlib.import_module(game.__name__.rsplit(".", 1)[0] + ".hotkeys")
+        if hasattr(hkm, "allowed"):          # без игры горячие клавиши молчат, кроме панели и выхода
+            drain()
+            for ev in ("select", "layout", "tooltip_key", "auto", "panel_toggle", "quit"):
+                hkm._fire(ev) if ev != "quit" else hkm.allowed(ev) and core_m.events.put((ev, None))
+            ev = drain()
+            assert [k for k, _ in ev if k != "log"] == ["panel_toggle", "quit"], ev
+            assert sum("горячие клавиши не работают" in p[1] for k, p in ev if k == "log") == 1, "в журнал — один раз"
         monkey(game, "running_programs", lambda: [("witcher3.exe", "The Witcher 3")])
         profiles._run_cache["t"] = 0
         assert not game.no_game()

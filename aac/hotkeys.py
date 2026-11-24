@@ -108,12 +108,32 @@ def unregister_hotkeys():
     mouse_bindings.clear()
 
 
+ALWAYS = {"panel_toggle", "quit"}   # работают всегда: показать панель и выйти
+_gate = {"logged": False}
+
+
+def allowed(ev):
+    """Игра не запущена — горячие клавиши молчат (кроме панели и выхода): ничего не переводим и не меняем."""
+    if ev in ALWAYS:
+        return True
+    from . import game
+    if game.no_game():
+        if not _gate["logged"]:
+            _gate["logged"] = True
+            core.log(f"Игра не запущена — горячие клавиши не работают (кроме панели {K('panel')} и выхода). "
+                     "Запустите игру — программа подхватит её сама.", "warn")
+        return False
+    _gate["logged"] = False
+    return True
+
+
 def _fire(ev):
     import time
     if ev == "quit" and core.heartbeat and time.time() - core.heartbeat > 3:
         from . import tray
         tray.emergency("quit")      # окна зависли — выход сразу
-    core.events.put((ev, None))
+    if allowed(ev):
+        core.events.put((ev, None))
 
 
 def register_hotkeys():
@@ -157,10 +177,12 @@ def _on_mouse_click(x, y, button, pressed):
     if mouse_capture:
         mouse_capture(combo)
     elif combo in mouse_bindings:
-        core.events.put((mouse_bindings[combo], None))
+        if allowed(mouse_bindings[combo]):
+            core.events.put((mouse_bindings[combo], None))
     elif name in mouse_bindings:
         # Ctrl+кнопка не назначена отдельно — срабатывает просто кнопка (например, бежите с зажатым Shift)
-        core.events.put((mouse_bindings[name], None))
+        if allowed(mouse_bindings[name]):
+            core.events.put((mouse_bindings[name], None))
 
 
 def start_mouse_listener():
