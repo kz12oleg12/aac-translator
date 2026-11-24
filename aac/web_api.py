@@ -89,7 +89,7 @@ def state():
     for pid, p in _safe(profiles.all_profiles, {}).items():
         if profiles.is_free(pid):
             continue
-        games.append({"id": pid, "name": p.get("name") or pid, "running": pid in run,
+        games.append({"id": pid, "name": _clean(p.get("name") or pid), "running": pid in run,
                       "active": pid == core.active_profile})
     games.sort(key=lambda g: (not g["running"], not g["active"]))
     keys = {hid: _safe(lambda h=hid: hotkeys.K(h), "") for hid, *_ in hotkeys.HOTKEY_DEFS}
@@ -100,7 +100,7 @@ def state():
         "version": config.VERSION,
         "update": getattr(getattr(app, "panel", None), "update_version", None) if app else None,
         "auto": {"on": on, "paused": paused, "sub": sub},
-        "game": {"name": profiles.name() if core.active_profile else None,
+        "game": {"name": _clean(profiles.name()) if core.active_profile else None,
                  "running": _safe(profiles.is_running, False), "free": _safe(profiles.is_free, False)},
         "games": games[:6],
         "translator": {"chain": [PROVIDER_NAMES.get(p, p) for p in chain[:3]], "editor": editor_name,
@@ -120,6 +120,11 @@ def state():
         "update_auto": bool(getattr(config, "UPDATE_AUTO", False)),
         "keys": keys, "key_desc": descs,
     }
+
+
+def _clean(name):
+    from .web_screens import _clean as c
+    return c(name)
 
 
 # ---------- действия из панели ----------
@@ -176,7 +181,8 @@ def _do(name, arg):
     elif name == "quit":
         core.events.put(("quit", None))
     else:
-        return False
+        from . import web_screens
+        return web_screens.do(name, arg, app)
     core.events.put(("panel", None))
     return True
 
@@ -233,8 +239,20 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(PAGE_DIR, "index.html"), encoding="utf-8") as f:
                 html = f.read().replace("__TOKEN__", _state["token"])
             return self._send(200, html, "text/html; charset=utf-8")
+        if path == "/app.js":
+            with open(os.path.join(PAGE_DIR, "app.js"), encoding="utf-8") as f:
+                js = f.read().replace("__TOKEN__", _state["token"])
+            return self._send(200, js, "application/javascript; charset=utf-8")
         if path == "/api/state":
             return self._send(200, state())
+        if path == "/api/screen":
+            from urllib.parse import parse_qs, urlparse
+            from . import web_screens
+            name = (parse_qs(urlparse(self.path).query).get("name") or [""])[0]
+            try:
+                return self._send(200, web_screens.screen(name))
+            except Exception as e:
+                return self._send(500, {"error": str(e)})
         if path == "/api/log":
             tail = [{"t": t[-8:], "msg": m, "level": lv} for t, lv, m in list(core.log_lines)[-200:]]
             return self._send(200, tail)

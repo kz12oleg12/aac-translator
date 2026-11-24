@@ -35,6 +35,11 @@ class Api:
             self._window.restore()
             self._hidden = False
 
+    def hide(self):
+        if self._window is not None:
+            self._window.hide()
+            self._hidden = True
+
     def quit(self):
         self._quitting = True
         if self._window is not None:

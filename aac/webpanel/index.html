@@ -69,6 +69,45 @@ aside{width:360px;flex-shrink:0;background:var(--side);border-left:.5px solid va
 .jf{padding:12px 16px;border-top:.5px solid var(--line);display:flex;align-items:center;font-size:12px;color:var(--f)}
 .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#30302E;border:.5px solid var(--line2);border-radius:10px;padding:10px 16px;display:none}
 .upd{display:none;align-items:center;gap:12px;padding:12px 16px;background:rgba(88,101,242,.14);border-radius:14px}
+
+h1{margin:0;font-size:22px;font-weight:600}
+.subt{font-size:13px;color:var(--m)}
+.sel{display:flex;align-items:center;height:36px;padding:0 10px;border-radius:8px;background:var(--side);border:.5px solid var(--line);color:var(--t);font:inherit;width:100%}
+select.sel{appearance:auto}
+.inp{height:34px;padding:0 10px;border-radius:8px;background:var(--card);border:0;color:var(--t);font:inherit;font-size:13px;width:100%;outline:0}
+.inp:focus{outline:1px solid var(--acc)}
+.chip{border:.5px solid var(--line);background:none;color:var(--t3);border-radius:8px;padding:0 10px;height:30px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.chip[aria-pressed=true]{border-color:var(--line2);background:#30302E;color:var(--t)}
+.chip .c{color:var(--f);font-size:12px}
+.lst>div+div{border-top:.5px solid var(--line)}
+.r{display:flex;align-items:center;gap:12px;padding:10px 0}
+.r .tx{display:flex;flex-direction:column;flex-grow:1;min-width:0}
+.r .d{font-size:12px;color:var(--m)}
+.sec{font-size:12px;font-weight:600;color:var(--m);padding:16px 0 2px}
+.gl{width:232px;flex-shrink:0;display:flex;flex-direction:column;gap:10px}
+.gi{display:flex;align-items:center;gap:10px;padding:6px;border-radius:10px;border:0;background:none;color:var(--t2);text-align:left;width:100%}
+.gi[aria-current]{background:rgba(88,101,242,.16);color:var(--t)}
+.gi .lg{width:40px;height:40px;border-radius:8px;flex-shrink:0;background:repeating-linear-gradient(135deg,#34343a 0 8px,#2e2e33 8px 16px);display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--t3)}
+.hdr{display:flex;align-items:center;gap:10px}
+.tabs{display:flex;gap:22px;border-bottom:.5px solid var(--line)}
+.tabs button{background:none;border:0;padding:8px 2px;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--m)}
+.tabs button[aria-current]{border-bottom-color:var(--acc);color:var(--t);font-weight:600}
+.seg{display:flex;gap:2px;padding:2px;border-radius:8px;background:var(--side);border:.5px solid var(--line);flex-shrink:0}
+.seg button{border:0;border-radius:6px;padding:0 9px;height:26px;font-size:12px;background:none;color:var(--m)}
+.seg button[aria-pressed=true]{background:#3D3D3A;color:#fff}.seg button.m[aria-pressed=true]{background:var(--acc)}
+.av{width:32px;height:32px;border-radius:16px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex-shrink:0}
+.eng{border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--card);border:0;text-align:left;color:var(--t)}
+.eng[aria-checked=true]{background:rgba(88,101,242,.12);outline:1px solid var(--acc);outline-offset:-1px}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9}
+.modal.on{display:flex}
+.dlg{width:520px;background:var(--card);border:.5px solid var(--line2);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:14px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+textarea.inp{height:96px;padding:10px 12px;resize:none;background:var(--side);border:.5px solid var(--line)}
+.dlg .inp{background:var(--side);border:.5px solid var(--line)}
+.btnd{background:none;color:var(--err);border:.5px solid var(--line);border-radius:6px;padding:3px 14px;font-size:12px}
+.thumb{width:64px;height:36px;border-radius:6px;flex-shrink:0;background:repeating-linear-gradient(135deg,#34343a 0 6px,#2e2e33 6px 12px)}
+.sq{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.empty{color:var(--f);font-size:13px;padding:14px 0}
 </style>
 </head>
 <body>
@@ -76,39 +115,15 @@ aside{width:360px;flex-shrink:0;background:var(--side);border-left:.5px solid va
 <nav aria-label="Разделы">
   <div class="brand"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Crect x='10' y='10' width='236' height='236' rx='64' fill='%235865F2'/%3E%3Cg transform='translate(0 6)'%3E%3Cpath d='M67 188A14.79 14.79 0 0 1 52.2 173L53.7 64.3A9 9 0 0 1 68.3 57.3L99.3 81.8A10 10 0 0 0 105.5 84H150.5A10 10 0 0 0 156.7 81.8L187.7 57.3A9 9 0 0 1 202.3 64.3L203.6 159.6A28 28 0 0 1 175.6 188H111.4A4 4 0 0 0 108.9 188.8L85.5 207.1A4.76 4.76 0 0 1 78 202L80.5 193.1A4 4 0 0 0 76.7 188Z' fill='%23fff'/%3E%3Crect x='87' y='120' width='22' height='28' rx='8' fill='%235865F2'/%3E%3Crect x='147' y='120' width='22' height='28' rx='8' fill='%235865F2'/%3E%3C/g%3E%3C/svg%3E" alt="">AAC Translator</div>
   <div class="items" id="nav"></div>
-  <div style="padding:0 10px 6px"><button class="it" data-old="report"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v4M12 14h.01"/></svg><span style="white-space:nowrap">Сообщить о проблеме</span></button></div>
+  <div style="padding:0 10px 6px"><button class="it" data-report="1"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v4M12 14h.01"/></svg><span style="white-space:nowrap">Сообщить о проблеме</span></button></div>
   <div class="foot">
-    <button class="ib" title="Настройки" aria-label="Настройки" data-old="settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
+    <button class="ib" id="gear" title="Настройки" aria-label="Настройки" data-go="settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
     <button class="ver" id="ver" title="Проверить обновления" data-act="update_check">v</button>
     <button class="ib" title="Перезапустить" aria-label="Перезапустить" data-act="restart" style="color:var(--f)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg></button>
     <button class="ib" title="Выключить программу" aria-label="Выключить программу" data-act="quit" style="color:var(--err)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/></svg></button>
   </div>
 </nav>
-
-<main id="main">
-  <div class="upd" id="upd"><span style="flex-grow:1" id="updt"></span><button class="btnp" data-act="update_install">Обновить</button></div>
-  <div class="games" id="games"></div>
-  <div class="card auto">
-    <span class="dot" id="adot" style="width:10px;height:10px;border-radius:5px"></span>
-    <div style="display:flex;flex-direction:column;gap:2px;flex-grow:1"><span class="ttl">Автоперевод</span><span class="sub" id="asub"></span></div>
-    <span class="key" id="akey"></span>
-    <button class="btnp" id="abtn" data-act="auto"></button>
-  </div>
-  <div class="two">
-    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Переводчик</span><a data-old="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px" id="tr"></span><div id="lim0"></div></div>
-    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">ИИ-редактор</span><a data-old="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px" id="ed"></span><div id="lim1"></div></div>
-  </div>
-  <div class="grid3" id="modes"></div>
-  <div class="card" style="padding:12px 14px;display:flex;align-items:center;gap:12px">
-    <span class="ico" style="background:var(--acc);color:#fff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="15" height="14" rx="2"/><path d="m17 10 5-3v10l-5-3"/></svg></span>
-    <div style="display:flex;flex-direction:column;gap:2px;flex-grow:1"><span style="font-weight:600">Показывать на трансляции</span><span style="font-size:12px;color:var(--m)">Зрители в Discord, OBS и на записи экрана видят переводы. Панель и журнал скрыты</span></div>
-    <button class="sw" role="switch" id="stream" aria-label="Показывать на трансляции"><i></i></button>
-  </div>
-  <div style="height:.5px;background:var(--line)"></div>
-  <div style="display:flex;flex-direction:column;gap:10px"><h2>Ещё клавиши</h2><div class="keys" id="keys"></div>
-    <button class="btn" data-old="keys" style="padding:3px 16px">Изменить</button></div>
-</main>
-
+<main id="main"></main>
 <aside aria-label="Журнал" id="jr">
   <div class="grip" id="grip"></div>
   <div class="jh">Журнал</div>
@@ -116,86 +131,7 @@ aside{width:360px;flex-shrink:0;background:var(--side);border-left:.5px solid va
   <div id="log" aria-live="polite"></div>
 </aside>
 </div>
-<div class="toast" id="toast"></div>
-<script>
-const T="__TOKEN__", H={"X-Token":T,"Content-Type":"application/json"};
-const I={home:'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',games:'<rect x="2" y="6" width="20" height="12" rx="4"/><path d="M6 12h4M8 10v4M15 11h.01M18 13h.01"/>',tr:'<path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/>',voice:'<path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',hist:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/>',keys:'<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
-subs:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h4M13 15h4M7 11h10"/>',lines:'<path d="M4 7h16M4 12h10M4 17h7"/>',ans:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',chat:'<path d="M4 4h16v12H7l-3 3z"/>',frame:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/>',grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',mon:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/>'};
-const svg=(k,s=17,w=1.8)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${I[k]}</svg>`;
-const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const $=id=>document.getElementById(id);
-async function act(name,arg){try{await fetch("/api/action",{method:"POST",headers:H,body:JSON.stringify({name,arg})});}catch(e){}poll();}
-const NAV=[["home","Главная"],["games","Игры"],["tr","Переводчики"],["voice","Озвучка"],["hist","История"],["keys","Клавиши"]];
-$("nav").innerHTML=NAV.map(([id,t])=>`<button class="it" ${id=="home"?'aria-current="page"':'data-old="'+id+'"'}>${svg(id)}<span>${t}</span>${id=="games"?'<span class="n" id="gcount"></span>':""}</button>`).join("");
-document.addEventListener("click",e=>{const b=e.target.closest("[data-act],[data-old],[data-mode],[data-game]");if(!b)return;
- if(b.dataset.act)act(b.dataset.act);else if(b.dataset.old)act("old",b.dataset.old);
- else if(b.dataset.game)act(b.dataset.game=="__free"?"free":"game",b.dataset.game);
- else if(b.dataset.mode){const m=b.dataset.mode,on=b.getAttribute("aria-checked")!="true";
-   if(m=="answers"||m=="chat")act(m,on);else act(m);}});
-$("stream").onclick=()=>act("stream",$("stream").getAttribute("aria-checked")!="true");
-let S=null;
-function render(s){S=s;
- $("ver").textContent="v "+s.version;
- $("upd").style.display=s.update?"flex":"none";$("updt").textContent=s.update?`Доступна новая версия ${s.update}`:"";
- const g=s.games.filter(x=>!x.active).slice(0,4), cur=s.game;
- $("gcount").textContent=s.games.length||"";
- $("games").innerHTML=`<div class="gnow"><span class="logo">${esc((cur.name||"?")[0])}</span><div style="display:flex;flex-direction:column;gap:2px;min-width:0">
-  <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--m)"><span class="dot" style="background:${cur.running?"var(--ok)":"var(--f)"}"></span>${cur.free?"Без игры":cur.running?"Запущена":"Не запущена"}</span>
-  <span style="font-size:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(cur.name||"Игра не выбрана")}</span>
-  <a data-old="games" style="font-size:12px">Настройки игры</a></div></div>`+
-  g.map(x=>`<button class="gt" data-game="${esc(x.id)}" title="${esc(x.name)}" aria-label="${esc(x.name)}">${esc(x.name[0])}</button>`).join("")+
-  `<button class="gt tool" data-game="__free" title="Переводить без игры: в любом окне, по пресету «Без игры» со своими областями">${svg("mon",20)}Без игры</button>
-   <button class="gt tool" data-old="games">${svg("grid",20)}Все игры</button>`;
- const a=s.auto;
- $("adot").style.background=!a.on?"var(--f)":a.paused?"var(--warn)":"var(--acc)";
- $("asub").textContent=a.sub;$("akey").textContent=s.keys.auto||"";
- $("abtn").textContent=a.on?"Выключить":"Включить";$("abtn").className="btnp"+(a.on?"":" off");
- $("tr").textContent=s.translator.chain.join(" → ")||"нет ключей!";
- $("ed").textContent=s.translator.editor||"выключен";
- const lim=(el,b)=>{$(el).innerHTML=b?`<div class="bar"><i style="width:${b.frac==null?0:Math.round(b.frac*100)}%"></i></div><span class="lbl" style="margin-top:4px;display:block">${esc(b.name)}: ${esc(b.text)}</span>`:""};
- lim("lim0",s.limits[0]);lim("lim1",s.limits[1]);
- const M=s.modes,K=s.keys;
- const card=(id,ic,t,d,on,key,toggle)=>`<button class="mode${on?" on":""}" data-mode="${id}" role="switch" aria-checked="${on}">
-  <div class="row"><span class="ico">${svg(ic,16,2)}</span><span style="flex-grow:1"></span>${toggle?`<span class="sw" aria-checked="${on}"><i></i></span>`:""}</div>
-  <div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">${t}</span><span style="font-size:12px;color:var(--m)">${d}</span></div>
-  <div class="row" style="margin-top:auto"><span class="key">${esc(key)}</span></div></button>`;
- $("modes").innerHTML=
-  card("select","subs","Субтитры",M.subs.ready?"Основная область":"Не обведена — нажмите",M.subs.ready,K.select,false)+
-  card("select_subs2","lines","Реплики",M.subs2.ready?"Вторая область":"Не обведена — нажмите",M.subs2.ready,K.select_subs2,false)+
-  card("answers","ans","Ответы",M.answers.ready?"Переводятся сами":"Сначала обведите: "+esc(K.select_answers),M.answers.on,K.select_answers,true)+
-  card("chat","chat","Чат",M.chat.ready?"Переводится сам":"Область не задана",M.chat.on,K.select_chat,true)+
-  card("toggle","frame","Окна поверх игры","Показать или спрятать",true,K.toggle,false)+
-  card("tts","voice","Озвучка","Читать вслух",M.tts.on,K.tts,true);
- $("stream").setAttribute("aria-checked",s.stream);
- const show=["once","repeat","tooltip","once_tts","subs_once","answers_once","chat_once","chat_compose","layout","reset","panel","flip_gender","menu_learn","quit"];
- $("keys").innerHTML=show.filter(h=>K[h]).map(h=>`<div class="k"><span class="key">${esc(K[h])}</span><span>${esc(s.key_desc[h])}</span></div>`).join("");
-}
-async function poll(){try{const r=await fetch("/api/state",{headers:H});if(r.ok)render(await r.json());}catch(e){}}
-// журнал
-let F="all";const LC={ok:"var(--ok)",warn:"var(--warn)",error:"var(--err)",info:"var(--f)"};
-function addLog(e,scroll=true){const tr=/→|:\s/.test(e.msg)&&e.level=="info";
- const d=document.createElement("div");d.className="e";d.dataset.k=e.level=="error"||e.level=="warn"?"err":tr?"tr":"other";
- d.innerHTML=`<div class="m"><i class="dot" style="width:6px;height:6px;background:${LC[e.level]||LC.info}"></i><span>${esc(e.t)}</span></div><div>${esc(e.msg)}</div>`;
- d.style.display=F=="all"||d.dataset.k==F?"":"none";
- const L=$("log"),atEnd=L.scrollHeight-L.scrollTop-L.clientHeight<40;L.appendChild(d);
- while(L.children.length>500)L.firstChild.remove();if(scroll&&atEnd)L.scrollTop=L.scrollHeight;}
-$("flt").onclick=e=>{const b=e.target.closest("button");if(!b)return;F=b.dataset.f;
- for(const x of $("flt").children)x.setAttribute("aria-pressed",x==b);
- for(const d of $("log").children)d.style.display=F=="all"||d.dataset.k==F?"":"none";};
-// ширина журнала
-(()=>{let x0,w0;const g=$("grip"),j=$("jr");try{const w=localStorage.getItem("jw");if(w)j.style.width=w+"px";}catch(e){}
- g.onmousedown=e=>{x0=e.clientX;w0=j.offsetWidth;document.onmousemove=m=>{j.style.width=Math.max(260,Math.min(700,w0+x0-m.clientX))+"px"};
- document.onmouseup=()=>{document.onmousemove=null;try{localStorage.setItem("jw",j.offsetWidth)}catch(e){}}};})();
-async function start(){
- try{await fetch("/api/hello",{method:"POST",headers:H,body:"{}"});}catch(e){}
- try{const r=await fetch("/api/log",{headers:H});(await r.json()).forEach(e=>addLog(e,false));$("log").scrollTop=1e9;}catch(e){}
- const es=new EventSource("/api/events?t="+encodeURIComponent(T));
- es.addEventListener("log",m=>{addLog(JSON.parse(m.data));poll();});
- es.addEventListener("toggle",()=>{window.pywebview&&pywebview.api.toggle();});
- es.addEventListener("quit",()=>{window.pywebview&&pywebview.api.quit();});
- poll();setInterval(poll,1000);
-}
-start();
-</script>
+<div class="modal" id="modal"><div class="dlg" id="dlg" role="dialog" aria-modal="true"></div></div>
+<script src="/app.js?t=__TOKEN__"></script>
 </body>
 </html>
