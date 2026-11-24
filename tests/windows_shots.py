@@ -18,7 +18,9 @@ d = tempfile.mkdtemp()
 config.APP_DIR = d
 config.SETTINGS_FILE = os.path.join(d, "s.json")
 core.SETTINGS = core.load_settings() or {}
-from aac import profiles, style, appwin  # noqa: E402
+config.SHOW_ON_STREAM = True       # иначе окна перевода скрыты от записи экрана — и от снимка тоже
+from aac import profiles, style, appwin, ui_overlay  # noqa: E402
+ui_overlay.exclude_from_capture = lambda w: None      # панель тоже обычно скрыта от записи экрана
 import tkinter as tk  # noqa: E402
 from PIL import ImageGrab  # noqa: E402
 
