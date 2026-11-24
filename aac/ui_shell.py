@@ -737,20 +737,100 @@ class Shell(SectionsMixin, GamesMixin, WizardMixin):
         self.refresh()
 
     def _report(self):
-        """Собрать архив для разбора проблемы и показать его в Проводнике."""
+        """Окно «Сообщить о проблеме»: описание, снимок экрана, отправка автору (или архив, если отправки нет)."""
         from . import report
-        try:
-            path = report.make()
-        except Exception as e:
-            core.log(f"Не удалось собрать архив: {e}", "error")
-            return
-        core.log(f"📦 Архив для разбора проблемы: {path}", "ok")
-        report.show_in_folder(path)
-        self.ask("Архив готов",
-                 f"{os.path.basename(path)} — в папке reports (Проводник уже открыт).\n\n"
-                 "Опишите, что случилось, и приложите этот архив. В нём журнал, версия, мониторы, переводчики, "
-                 "игры и их области. Ключей и ваших словарей, персонажей, истории в нём нет.",
-                 "Понятно", lambda: None, no_text="Открыть папку", on_no=lambda: report.show_in_folder(path))
+        shot = None
+        try:            # снимок — сразу, как есть на экране (окна программы на снимки не попадают)
+            from PIL import ImageGrab
+            shot = ImageGrab.grab(all_screens=True)
+        except Exception:
+            pass
+        can, why = report.can_send()
+        old = getattr(self, "_dialog", None)
+        if old is not None:
+            try:
+                old.destroy()
+            except tk.TclError:
+                pass
+        d = tk.Toplevel(self.win.master)
+        self._dialog = d
+        d.overrideredirect(True)
+        d.attributes("-topmost", True)
+        d.configure(bg=K.ACCENT_LINE)
+        box = tk.Frame(d, bg=K.CARD)
+        box.pack(fill="both", expand=True, padx=1, pady=1)
+        inner = tk.Frame(box, bg=K.CARD)
+        inner.pack(fill="both", expand=True, padx=22, pady=18)
+        K.label(inner, "Сообщить о проблеме", 13, K.TEXT, "bold").pack(anchor="w")
+        K.label(inner, "Что случилось и что вы ожидали? Например: «в Dead Cells после F9 перевод не появляется».",
+                9, K.MUTED, wraplength=440).pack(anchor="w", pady=(4, 6))
+        txt = tk.Text(inner, height=6, width=56, bg=K.SIDEBAR, fg=K.TEXT, insertbackground=K.TEXT, relief="flat",
+                      highlightthickness=1, highlightbackground=K.BORDER, highlightcolor=K.ACCENT, font=K.f(10),
+                      wrap="word", padx=8, pady=6)
+        txt.pack(fill="x")
+        txt.after(50, txt.focus_force)
+        cvar = tk.StringVar()
+        crow = tk.Frame(inner, bg=K.CARD)
+        crow.pack(fill="x", pady=(10, 0))
+        K.label(crow, "Как с вами связаться (необязательно)", 9, K.DIM).pack(side="left")
+        K.entry(crow, cvar, width=22).pack(side="right")
+        shot_on = {"v": shot is not None}
+        srow = tk.Frame(inner, bg=K.CARD)
+        srow.pack(fill="x", pady=(10, 0))
+        if shot is not None:
+            K.Toggle(srow, True, lambda v: shot_on.update(v=bool(v)), small=True).pack(side="left")
+            K.label(srow, f"Приложить снимок экрана ({shot.width}×{shot.height}, окна программы на нём не видны)",
+                    9, K.TEXT2).pack(side="left", padx=(8, 0))
+        K.label(inner, ("Уйдёт автору программы вместе с журналом и настройками — без ключей, без вашего имени "
+                        "и путей к папкам, без словарей и истории." if can else
+                        f"Отправка: {why}. Сохраню архив — его можно передать автору вручную."),
+                8, K.FAINT, wraplength=440).pack(anchor="w", pady=(10, 12))
+        btns = tk.Frame(inner, bg=K.CARD)
+        btns.pack(fill="x")
+
+        def close():
+            try:
+                d.destroy()
+            except tk.TclError:
+                pass
+            self._dialog = None
+
+        def save_only():
+            desc = txt.get("1.0", "end").strip()
+            close()
+            try:
+                path = report.make(desc, shot if shot_on["v"] else None)
+            except Exception as e:
+                core.log(f"Не удалось собрать архив: {e}", "error")
+                return
+            core.log(f"📦 Архив для разбора проблемы: {path}", "ok")
+            report.show_in_folder(path)
+
+        def send():
+            desc = txt.get("1.0", "end").strip()
+            if not desc:
+                txt.config(highlightbackground=K.RED)
+                return
+            img, contact = (shot if shot_on["v"] else None), cvar.get()
+            close()
+            core.log("Отправляю отчёт автору…")
+
+            def work():
+                ok, msg = report.send(desc, img, contact)
+                core.log("✓ Отчёт отправлен автору — спасибо!" if ok else f"Отчёт не отправлен: {msg}",
+                         "ok" if ok else "warn")
+            threading.Thread(target=work, daemon=True).start()
+        if can:
+            K.button(btns, "Отправить", send, kind="primary").pack(side="right")
+            K.button(btns, "Только сохранить архив", save_only, kind="flat", size=9).pack(side="left")
+        else:
+            K.button(btns, "Сохранить архив", save_only, kind="primary").pack(side="right")
+        K.button(btns, "Отмена", close, kind="ghost").pack(side="right", padx=(0, 8))
+        d.update_idletasks()
+        w, h = d.winfo_reqwidth(), d.winfo_reqheight()
+        sw, sh, ox, oy = self._dialog_area()
+        d.geometry(f"{w}x{h}+{ox + (sw - w) // 2}+{oy + (sh - h) // 3}")
+        d.after(200, lambda: ui_overlay.exclude_from_capture(d))
 
     def _ask_key(self, pid):
         """Окно «Ключ Groq»: вставить ключ → сохранить в Windows, подхватить сразу и проверить."""

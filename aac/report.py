@@ -85,24 +85,126 @@ def _info():
     return "\n".join(lines)
 
 
-def make():
-    """Собрать архив. Возвращает путь к нему."""
+def anonymize(text):
+    """Убрать то, что указывает на человека: имя пользователя Windows и путь к его папке (в т.ч. OneDrive)."""
+    import re
+    home = os.path.expanduser("~")
+    user = os.path.basename(home)
+    for p in sorted({home, home.replace("\\", "/"), os.environ.get("OneDrive", ""), os.environ.get("USERPROFILE", "")},
+                    key=len, reverse=True):
+        if p and len(p) > 3:
+            text = text.replace(p, "%USERPROFILE%")
+    text = re.sub(r"(?i)[A-Z]:\\Users\\[^\\/\n\"']+", "%USERPROFILE%", text)
+    if user and len(user) > 2:
+        text = re.sub(re.escape(user), "<user>", text, flags=re.I)
+    return text
+
+
+def make(description="", screenshot=None, anonymous=False):
+    """Собрать архив. description — что случилось; screenshot — PIL-картинка; anonymous — для отправки:
+    без имени пользователя и путей, без списка открытых программ (кроме игр). Возвращает путь к архиву."""
     folder = os.path.join(config.APP_DIR, "reports")
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, f"aac_report_{time.strftime('%Y-%m-%d_%H-%M-%S')}.zip")
+    clean = anonymize if anonymous else (lambda s: s)
+    info = _info()
+    if anonymous:       # список открытых программ — только игры из пресетов
+        from . import profiles
+        lines = []
+        for ln in info.splitlines():
+            if ln.startswith("Открытые программы"):
+                games = sorted({e for e in ln.split(":", 1)[1].replace(" ", "").split(",") if profiles.for_exe(e)})
+                ln = "Открытые игры: " + (", ".join(games) or "нет")
+            lines.append(ln)
+        info = "\n".join(lines)
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("info.txt", _info())
-        z.writestr("log.txt", "\n".join(f"{t} [{lvl}] {msg}" for t, lvl, msg in core.log_lines))
-        z.writestr("errors.txt", "\n\n".join(core.error_traces) or "ошибок программы не было")
+        if description:
+            z.writestr("описание.txt", description)
+        z.writestr("info.txt", clean(info))
+        z.writestr("log.txt", clean("\n".join(f"{t} [{lvl}] {msg}" for t, lvl, msg in core.log_lines)))
+        z.writestr("errors.txt", clean("\n\n".join(core.error_traces) or "ошибок программы не было"))
         try:
             with open(config.SETTINGS_FILE, encoding="utf-8") as f:
-                z.writestr("settings.json", json.dumps(_clean_settings(json.load(f)), ensure_ascii=False, indent=1))
+                z.writestr("settings.json", clean(json.dumps(_clean_settings(json.load(f)), ensure_ascii=False,
+                                                             indent=1)))
         except Exception as e:
             z.writestr("settings.json", f"не удалось прочитать: {e}")
         upd = os.path.join(config.APP_DIR, "update.log")
         if os.path.exists(upd):
-            z.write(upd, "update.log")
+            try:
+                with open(upd, encoding="utf-8", errors="replace") as f:
+                    z.writestr("update.log", clean(f.read()[-200000:]))
+            except OSError:
+                pass
+        if screenshot is not None:
+            import io
+            buf = io.BytesIO()
+            shot = screenshot.convert("RGB")
+            shot.thumbnail((2560, 2560))
+            shot.save(buf, "JPEG", quality=85)
+            z.writestr("снимок_экрана.jpg", buf.getvalue())
     return path
+
+
+# ---------- отправка автору (Discord) ----------
+def webhook():
+    """Куда отправлять отчёты: вшито при сборке .exe (секрет репозитория) или своё (переменная AAC_REPORT_WEBHOOK)."""
+    url = os.environ.get("AAC_REPORT_WEBHOOK", "").strip()
+    if not url:
+        try:
+            from . import _report_target
+            url = (getattr(_report_target, "REPORT_WEBHOOK", "") or "").strip()
+        except ImportError:
+            url = ""
+    return url if url.startswith("https://") and "/api/webhooks/" in url else ""
+
+
+MAX_PER_HOUR = 3
+
+
+def can_send():
+    """(можно ли отправить сейчас, причина если нельзя)."""
+    if not webhook():
+        return False, "в этой версии отправка не настроена"
+    now = time.time()
+    sent = [t for t in core.SETTINGS.get("reports_sent", []) if now - t < 3600]
+    if len(sent) >= MAX_PER_HOUR:
+        return False, f"не больше {MAX_PER_HOUR} отчётов в час — попробуйте позже"
+    return True, ""
+
+
+def send(description, screenshot=None, contact=""):
+    """Собрать обезличенный архив и отправить автору. Возвращает (ok, сообщение)."""
+    import requests
+    ok, why = can_send()
+    if not ok:
+        return False, why
+    from . import profiles
+    path = make(description, screenshot, anonymous=True)
+    head = (f"**AAC Translator {config.VERSION}** · игра: {profiles.name() if core.active_profile else 'нет'}"
+            + (f" · связь: {contact.strip()[:80]}" if contact.strip() else "") + "\n")
+    text = head + (description.strip() or "(без описания)")
+    if len(text) > 1900:
+        text = text[:1900] + "…"
+    errs = len(core.error_traces)
+    if errs:
+        text += f"\n⚠ ошибок программы в этом запуске: {errs}"
+    payload = {"content": text, "username": "AAC Translator", "allowed_mentions": {"parse": []}}
+    files = {"files[0]": (os.path.basename(path), open(path, "rb"), "application/zip")}
+    try:
+        r = requests.post(webhook() + "?wait=true", data={"payload_json": json.dumps(payload, ensure_ascii=False)},
+                          files=files, timeout=60)
+    except requests.exceptions.RequestException as e:
+        return False, f"нет связи ({e.__class__.__name__}) — архив сохранён: {path}"
+    finally:
+        files["files[0]"][1].close()
+    if r.status_code in (200, 204):
+        sent = [t for t in core.SETTINGS.get("reports_sent", []) if time.time() - t < 3600] + [time.time()]
+        core.save_settings(reports_sent=sent)
+        return True, "отправлено"
+    if r.status_code == 413:
+        return False, f"архив слишком большой для отправки — он сохранён: {path}"
+    return False, f"сервер ответил {r.status_code} — архив сохранён: {path}"
 
 
 def show_in_folder(path):

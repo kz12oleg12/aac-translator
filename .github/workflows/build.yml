@@ -23,6 +23,15 @@ jobs:
           python -m pip install --disable-pip-version-check pyinstaller mss pillow keyboard requests pynput pystray
           edge-tts numpy scipy winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Globalization
           winrt-Windows.Foundation winrt-Windows.Storage.Streams
+      - name: Адрес для отчётов о проблемах (из секрета репозитория, в открытый код не попадает)
+        shell: pwsh
+        env:
+          REPORT_WEBHOOK: ${{ secrets.REPORT_WEBHOOK }}
+        run: |
+          if ($env:REPORT_WEBHOOK) {
+            "REPORT_WEBHOOK = '$($env:REPORT_WEBHOOK.Trim())'" | Out-File aac/_report_target.py -Encoding utf8
+            "адрес для отчётов: есть"
+          } else { "адрес для отчётов: нет (секрет REPORT_WEBHOOK не задан) — в программе будет только «Сохранить архив»" }
       - name: Сборка
         run: >
           pyinstaller --noconfirm --windowed --name "AAC Translator" --icon icon.ico

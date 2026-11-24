@@ -2220,6 +2220,53 @@ def test_problem_report(monkey):
     T.save_settings(some_api_key=None)
 
 
+def test_problem_report_send(monkey):
+    """Отправка отчёта автору в Discord: обезличенный архив, описание, не чаще 3 в час; без адреса — нельзя."""
+    try:
+        from aac import report
+    except ImportError:
+        return
+    if not hasattr(report, "send"):
+        return
+    import zipfile
+    d = tempfile.mkdtemp(dir=TMP)
+    monkey(T._owner("APP_DIR"), "APP_DIR", d)
+    home = os.path.expanduser("~")
+    T.log(f"файл {home}\\Documents\\x.txt и C:\\Users\\Ivan.Petrov\\OneDrive - Corp\\a")
+    monkey(report.os, "environ", dict(os.environ, AAC_REPORT_WEBHOOK=""))
+    assert report.can_send() == (False, "в этой версии отправка не настроена")
+    hook = "https://discord.com/api/webhooks/1/abc"
+    monkey(report.os, "environ", dict(os.environ, AAC_REPORT_WEBHOOK=hook))
+    T.save_settings(reports_sent=[])
+    sent = []
+
+    class R:
+        status_code = 200
+
+    def post(url, data=None, files=None, timeout=None):
+        f = files["files[0]"]
+        sent.append((url, json.loads(data["payload_json"]), f[0], f[1].read()))
+        return R()
+    import requests as rq
+    monkey(rq, "post", post)
+    from PIL import Image
+    ok, msg = report.send("После F9 перевод не появляется", Image.new("RGB", (800, 600), "red"), "@friend")
+    assert ok, msg
+    url, payload, name, blob = sent[0]
+    assert url.startswith(hook) and "После F9" in payload["content"] and "@friend" in payload["content"]
+    assert payload["allowed_mentions"] == {"parse": []}, "никаких @everyone из описания"
+    import io
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        names = set(z.namelist())
+        log = z.read("log.txt").decode("utf-8")
+    assert {"описание.txt", "снимок_экрана.jpg", "info.txt"} <= names, names
+    assert home not in log and "Ivan.Petrov" not in log and "%USERPROFILE%" in log, log
+    for _ in range(2):
+        assert report.send("ещё", None)[0]
+    assert report.send("четвёртый за час", None) == (False, "не больше 3 отчётов в час — попробуйте позже")
+    T.save_settings(reports_sent=[])
+
+
 def z_read(path, name):
     import zipfile
     with zipfile.ZipFile(path) as z:
