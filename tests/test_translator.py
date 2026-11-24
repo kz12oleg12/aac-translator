@@ -1734,6 +1734,11 @@ def test_word_at_cursor(monkey):
     # весь путь: снимок → OCR → событие для маленькой плашки
     from PIL import Image
     monkey(tooltip, "screen_size", lambda: (1920, 1080))
+    try:
+        from aac import screens
+        monkey(screens, "monitor_at", lambda x, y: (0, 0, 1920, 1080))   # не настоящий монитор компьютера
+    except ImportError:
+        pass
     monkey(tooltip.capture, "grab", lambda reg: Image.new("RGB", (reg[2], reg[3])))
     monkey(tooltip.ocr, "ocr_boxes", lambda img: [("Archivist Rotild", (500, 440, 620, 458)),
                                                   ("Silent Crossway", (100, 100, 220, 118))])

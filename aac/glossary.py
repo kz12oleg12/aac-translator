@@ -33,7 +33,8 @@ def glossary():
         if not os.path.exists(GLOSSARY_FILE):
             with open(GLOSSARY_FILE, "w", encoding="utf-8") as f:
                 f.write(GLOSSARY_TEMPLATE)
-        mt = os.path.getmtime(GLOSSARY_FILE)
+        st = os.stat(GLOSSARY_FILE)
+        mt = (st.st_mtime_ns, st.st_size)    # и размер: Windows обновляет время грубо — дописали в тот же миг
         if mt != _glossary["mtime"]:
             items, ignore = [], set()
             with open(GLOSSARY_FILE, encoding="utf-8-sig") as f:
