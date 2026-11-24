@@ -31,7 +31,7 @@ _kb_counter = itertools.count()
 kb.registered = {}
 
 
-def _add_hotkey(combo, cb):
+def _add_hotkey(combo, cb, suppress=False, **kw):
     n = next(_kb_counter)
     kb.registered[n] = (combo, cb)
     return n
@@ -2223,6 +2223,31 @@ def z_read(path, name):
     import zipfile
     with zipfile.ZipFile(path) as z:
         return z.read(name).decode("utf-8")
+
+
+def test_hotkey_conflicts(monkey):
+    """Клавиши, занятые во многих играх: предупреждение; «не доходят до игры» — перехват (suppress)."""
+    try:
+        from aac import hotkeys
+    except ImportError:
+        return
+    if not hasattr(hotkeys, "risk"):
+        return
+    assert "загрузка" in hotkeys.risk("f9") and hotkeys.risk("shift+f9") is None
+    assert hotkeys.risk("e") and hotkeys.risk("ctrl+shift+l") is None
+    calls = []
+    monkey(hotkeys.keyboard, "add_hotkey", lambda combo, fn, suppress=False: calls.append((combo, suppress)) or 1,
+           ) if hasattr(hotkeys.keyboard, "add_hotkey") else None
+    cfg = T._owner("HOTKEY_SUPPRESS")
+    monkey(cfg, "HOTKEY_SUPPRESS", True)
+    hotkeys.register_hotkeys()
+    sup = dict(calls)
+    assert sup.get(hotkeys.hotkeys["select"]) is True, calls
+    assert sup.get(hotkeys.hotkeys["quit"]) is False, "выход — без перехвата"
+    calls.clear()
+    monkey(cfg, "HOTKEY_SUPPRESS", False)
+    hotkeys.register_hotkeys()
+    assert not any(s for _, s in calls)
 
 
 def test_game_facts(monkey):

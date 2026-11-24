@@ -77,6 +77,7 @@ class Shell(SectionsMixin, GamesMixin):
         K.install_clipboard(win)                         # Ctrl+V и т.п. на русской раскладке, меню правой кнопкой
         self._build_grips()
         self._compact_nav()
+        self._risky_keys_hint()
         win.after(200, lambda: ui_overlay.exclude_from_capture(win))
 
     # ---------- боковая колонка ----------
@@ -846,6 +847,21 @@ class Shell(SectionsMixin, GamesMixin):
     # ---------- Клавиши ----------
     def _build_keys(self):
         sc, b = self._page("Клавиши", "Нажмите «Изменить», затем нужную клавишу или кнопку мыши. Можно с Ctrl / Shift / Alt.")
+        c, ci = K.card(b, padx=16, pady=4)
+        c.pack(fill="x", pady=(0, 12))
+
+        def set_sup(v):
+            config.HOTKEY_SUPPRESS = bool(v)
+            core.save_settings(hotkey_suppress=config.HOTKEY_SUPPRESS)
+            hotkeys.register_hotkeys()
+            core.log("Клавиши программы " + ("больше не доходят до игры" if v else "снова доходят и до игры"), "ok")
+            self._refresh_keys()
+        self.sup_row = K.ToggleRow(ci, "Клавиши программы не доходят до игры",
+                                   "нажали F9 — сработает только программа, игра нажатия не увидит. Включите, если "
+                                   "клавиши программы что-то делают в игре (например, F9 загружает сохранение). "
+                                   "Кнопки мыши — не перехватываются.", lambda: config.HOTKEY_SUPPRESS, set_sup,
+                                   last=True)
+        self.sup_row.pack(fill="x")
         cols = tk.Frame(b, bg=K.BG)
         cols.pack(fill="x")
         desc = {d[0]: d[1] for d in hotkeys.HOTKEY_DEFS}
@@ -855,6 +871,7 @@ class Shell(SectionsMixin, GamesMixin):
         if rest:
             groups.append(("Другое", rest))
         self.key_chips = {}
+        self.key_warns = {}
         for g, ids in groups:
             c, ci = K.card(cols, padx=16, pady=8)
             c.pack(fill="x", pady=(0, 12))
@@ -872,7 +889,11 @@ class Shell(SectionsMixin, GamesMixin):
                 chip = K.key_chip(line)
                 chip.config(width=16)
                 chip.pack(side="right", padx=(8, 0))
-                K.label(line, d[:1].upper() + d[1:], 10, K.TEXT).pack(side="left", fill="x", expand=True)
+                tb = tk.Frame(line, bg=K.CARD)
+                tb.pack(side="left", fill="x", expand=True)
+                K.label(tb, d[:1].upper() + d[1:], 10, K.TEXT).pack(anchor="w")
+                warn = K.label(tb, "", 8, K.AMBER, wraplength=430)
+                self.key_warns[hid] = warn
                 self.key_chips[hid] = chip
                 if n < len(ids) - 1:
                     K.separator(r).pack(fill="x")
@@ -1003,12 +1024,33 @@ class Shell(SectionsMixin, GamesMixin):
             except tk.TclError:
                 pass
 
+    def _risky_keys_hint(self):
+        """Один раз: какие клавиши программы во многих играх уже заняты (F9 — быстрая загрузка и т.п.)."""
+        if core.SETTINGS.get("risky_keys_hint") or config.HOTKEY_SUPPRESS:
+            return
+        risky = [f"{hotkeys.K(h)} ({hotkeys.risk(c)})" for h, c in hotkeys.hotkeys.items() if hotkeys.risk(c)]
+        if risky:
+            core.log("⚠ Эти клавиши программы во многих играх уже заняты: " + "; ".join(risky[:3])
+                     + ". Если мешают — «Клавиши» → «Клавиши программы не доходят до игры».", "warn")
+        core.save_settings(risky_keys_hint=True)
+
     def _refresh_keys(self):
         for hid, chip in getattr(self, "key_chips", {}).items():
             if hotkeys.capturing == hid:
                 chip.config(text="нажмите…", fg=K.AMBER)
             else:
                 chip.config(text=hotkeys.K(hid), fg=K.TEXT2)
+        for hid, warn in getattr(self, "key_warns", {}).items():
+            why = None if config.HOTKEY_SUPPRESS else hotkeys.risk(hotkeys.hotkeys.get(hid))
+            txt = f"⚠ {why}" if why else ""
+            if warn.cget("text") != txt:
+                warn.config(text=txt)
+                if txt:
+                    warn.pack(anchor="w")
+                else:
+                    warn.pack_forget()
+        if hasattr(self, "sup_row"):
+            self.sup_row.sync()
 
     def update_keys(self):
         self._refresh_keys()

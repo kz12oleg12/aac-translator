@@ -127,6 +127,29 @@ def allowed(ev):
     return True
 
 
+# клавиши, которые во многих играх уже что-то делают (без Ctrl/Shift/Alt)
+RISKY = {
+    "f1": "во многих играх — справка или меню",
+    "f5": "во многих играх — быстрое сохранение",
+    "f9": "во многих играх — быстрая загрузка (Skyrim, Fallout, The Witcher…): можно загрузить старое сохранение",
+    "f12": "снимок экрана в Steam",
+    "alt+enter": "переключает полноэкранный режим игры",
+    "tab": "в играх почти всегда занята", "esc": "меню игры", "enter": "чат или подтверждение в игре",
+    "space": "прыжок или действие в игре", "print screen": "снимок экрана",
+    "mouse_middle": "колесо мыши в играх часто занято (оружие, приближение)",
+}
+
+
+def risk(combo):
+    """Чем клавиша может помешать в игре (или None)."""
+    c = (combo or "").lower()
+    if c in RISKY:
+        return RISKY[c]
+    if len(c) == 1 and c.isalnum():
+        return "одиночная буква или цифра в игре почти наверняка занята"
+    return None
+
+
 def _fire(ev):
     import time
     if ev == "quit" and core.heartbeat and time.time() - core.heartbeat > 3:
@@ -146,7 +169,9 @@ def register_hotkeys():
                 core.log("Кнопки мыши не работают: установите pynput (py -m pip install pynput)", "error")
             continue
         try:
-            _hotkey_handles.append(keyboard.add_hotkey(combo, lambda ev=ev: _fire(ev)))
+            # suppress — игра не увидит нажатие (нет конфликта с её клавишами); выход — всегда без перехвата
+            sup = bool(getattr(config, "HOTKEY_SUPPRESS", False)) and hid != "quit"
+            _hotkey_handles.append(keyboard.add_hotkey(combo, lambda ev=ev: _fire(ev), suppress=sup))
         except Exception as e:
             core.log(f"Не удалось назначить «{combo}»: {e}", "error")
 
@@ -245,6 +270,10 @@ def capture_hotkey(hid):
         hotkeys[hid] = combo
         core.save_settings(hotkeys=dict(hotkeys))
         core.log(f"«{desc}» теперь на {K(hid)}", "ok")
+        why = risk(combo)
+        if why and not config.HOTKEY_SUPPRESS:
+            core.log(f"⚠ {K(hid)}: {why}. Если мешает — включите «Клавиши программы не доходят до игры» "
+                     "в разделе «Клавиши» или выберите сочетание с Ctrl/Shift.", "warn")
     capturing = None
     register_hotkeys()
     core.events.put(("keys", None))
