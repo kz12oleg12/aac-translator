@@ -2266,6 +2266,23 @@ def test_game_presets(monkey):
                 assert app._area_target() is None, "в браузере области не обводим"
                 profiles.delete("hades")
                 profiles.delete(w3)
+            if hasattr(app.panel, "_resize_start"):       # размер окна — тянуть за край, запоминается
+                class E:
+                    pass
+                p = app.panel
+                for edge, dx, dy in (("se", 200, 50), ("log", 60, 0)):
+                    e = E(); e.x_root, e.y_root = 500, 500
+                    p._resize_start(e, edge)
+                    e.x_root, e.y_root = 500 + dx, 500 + dy
+                    p._resize_move(e)
+                    p._resize_end(e)
+                app.root.update()
+                assert core_m.SETTINGS["panel_size"][0] == p.main_w and p.log_w == core_m.SETTINGS["log_width"]
+                assert p.win.winfo_width() == p.total_w()
+                e = E(); e.x_root, e.y_root = 0, 0
+                p._resize_start(e, "se"); e.x_root, e.y_root = -5000, -5000; p._resize_move(e); p._resize_end(e)
+                assert p.main_w >= 760 and p.height >= 640, "не меньше минимума"
+                p.reset_size()
             if hasattr(app.panel, "_ask_clear_area"):     # удалить любую область, с вопросом
                 core_m.region, core_m.answers_region = (1, 2, 3, 4), (5, 6, 7, 8)
                 app.panel.show("areas")

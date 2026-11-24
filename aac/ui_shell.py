@@ -16,6 +16,9 @@ from .ui_panel import LOG_COLORS, PROVIDER_LABELS, PROVIDER_NAMES
 W, H = 960, 720
 SIDE_W = 220
 LOG_W = 380
+MIN_W, MIN_H = 760, 640          # меньше — разделы не помещаются
+MIN_LOG, MAX_LOG = 240, 700
+GRIP = 5                          # толщина «ручки» по краю окна (тонкая рамка)
 
 NAV = [  # (группа, [(id, название)])
     ("Перевод", [("home", "Главная"), ("games", "Игры"), ("areas", "Области"), ("tr", "Переводчики"),
@@ -40,16 +43,25 @@ class Shell(SectionsMixin, GamesMixin):
         win.attributes("-alpha", 0.97)
         win.configure(bg=K.BG)
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        h = min(H, sh - 80)
-        default = (sw - W - 20, 40)
+        size = core.SETTINGS.get("panel_size") or (W, H)          # размер окна, который вы растянули мышкой
+        try:
+            mw, h = int(size[0]), int(size[1])
+        except (TypeError, ValueError, IndexError):
+            mw, h = W, H
+        self.main_w = max(MIN_W, min(mw, sw))
+        h = max(MIN_H, min(h, sh - 40))
+        try:
+            self.log_w = max(MIN_LOG, min(int(core.SETTINGS.get("log_width", LOG_W)), MAX_LOG))
+        except (TypeError, ValueError):
+            self.log_w = LOG_W
+        default = (sw - self.main_w - 20, 40)
         x, y = core.SETTINGS.get("panel_pos", default)
         if not (0 <= x <= sw - 100 and 0 <= y <= sh - 60):
             x, y = default
-        x = max(0, min(x, sw - W))
         self.default_pos = default
         self.height = h
         self.log_on = bool(core.SETTINGS.get("log_visible", True))
-        width = W + (LOG_W if self.log_on else 0)
+        width = self.total_w()
         x = max(0, min(x, sw - width))
         win.geometry(f"{width}x{h}+{x}+{y}")
         self.visible = True
@@ -62,6 +74,8 @@ class Shell(SectionsMixin, GamesMixin):
         self.content.pack(side="left", fill="both", expand=True)
         self.show("home")
         K.install_wheel(win, self._current_scroll)     # колесо мыши — где бы ни был курсор в разделе
+        self._build_grips()
+        self._compact_nav()
         win.after(200, lambda: ui_overlay.exclude_from_capture(win))
 
     # ---------- боковая колонка ----------
@@ -98,8 +112,11 @@ class Shell(SectionsMixin, GamesMixin):
 
         nav = tk.Frame(side, bg=K.SIDEBAR)
         nav.pack(fill="both", expand=True, padx=8)
+        self.nav_caps = []
         for group, items in NAV:
-            K.caps(nav, group).pack(anchor="w", padx=10, pady=(12, 3))
+            cap = K.caps(nav, group)
+            cap.pack(anchor="w", padx=10, pady=(12, 3))
+            self.nav_caps.append(cap)
             for sid, text in items:
                 row = tk.Frame(nav, bg=K.SIDEBAR, cursor="hand2")
                 row.pack(fill="x", pady=1)
@@ -114,7 +131,7 @@ class Shell(SectionsMixin, GamesMixin):
                 self.nav_items[sid] = (row, bar, lab)
 
         bottom = tk.Frame(side, bg=K.SIDEBAR)
-        bottom.pack(fill="x", side="bottom", padx=8, pady=(0, 10))
+        bottom.pack(fill="x", side="bottom", padx=8, pady=(0, 10), before=nav)   # низ виден при любой высоте
         K.separator(bottom).pack(fill="x", pady=(0, 6))
         self.update_btn = K.button(bottom, "⬇ Обновить", lambda: core.events.put(("update_install", None)),
                                    kind="primary", size=9)
@@ -160,6 +177,7 @@ class Shell(SectionsMixin, GamesMixin):
             self.sections[sid] = getattr(self, f"_build_{sid}")()
         self.current = sid
         self.sections[sid].pack(fill="both", expand=True)
+        self._lift_grips()
         self._mark(sid)
         self.refresh()
         self._on_show(sid)
@@ -1049,6 +1067,7 @@ class Shell(SectionsMixin, GamesMixin):
         self.visible = not self.visible
 
     def reset_pos(self):
+        self.reset_size()
         x, y = self.default_pos
         self.win.geometry(f"+{x}+{y}")
         core.save_settings(panel_pos=(x, y))
@@ -1062,6 +1081,103 @@ class Shell(SectionsMixin, GamesMixin):
     def _end_move(self, e):
         core.save_settings(panel_pos=(self.win.winfo_x(), self.win.winfo_y()))
 
+    # ---------- размер окна: тянуть за край или угол ----------
+    def total_w(self):
+        return self.main_w + (self.log_w + 1 if self.log_on else 0)
+
+    def _build_grips(self):
+        """Невидимые полоски по краям окна (у окна без рамки Windows не даёт тянуть само)."""
+        self.grips = []
+        spec = [("e", dict(relx=1, x=-GRIP, y=0, width=GRIP, relheight=1), "sb_h_double_arrow"),
+                ("w", dict(x=0, y=0, width=GRIP, relheight=1), "sb_h_double_arrow"),
+                ("s", dict(x=0, rely=1, y=-GRIP, relwidth=1, height=GRIP), "sb_v_double_arrow"),
+                ("se", dict(relx=1, rely=1, x=-14, y=-14, width=14, height=14), "bottom_right_corner"),
+                ("sw", dict(x=0, rely=1, y=-14, width=14, height=14), "bottom_left_corner")]
+        for edge, place, cursor in spec:
+            g = tk.Frame(self.win, bg=K.SIDEBAR, cursor=cursor)
+            g.place(**place)
+            g.bind("<ButtonPress-1>", lambda e, edge=edge: self._resize_start(e, edge))
+            g.bind("<B1-Motion>", self._resize_move)
+            g.bind("<ButtonRelease-1>", self._resize_end)
+            self.grips.append(g)
+        # граница журнала — тянуть, чтобы сделать журнал шире или уже
+        self.log_grip = tk.Frame(self.win, bg=K.LINE, cursor="sb_h_double_arrow")
+        self.log_grip.bind("<ButtonPress-1>", lambda e: self._resize_start(e, "log"))
+        self.log_grip.bind("<B1-Motion>", self._resize_move)
+        self.log_grip.bind("<ButtonRelease-1>", self._resize_end)
+        self._lift_grips()
+
+    def _lift_grips(self):
+        for g in getattr(self, "grips", []):
+            g.lift()
+        lg = getattr(self, "log_grip", None)
+        if lg is not None:
+            if self.log_on:
+                lg.place(relx=1, x=-(self.log_w + 3), y=0, width=5, relheight=1)
+                lg.lift()
+            else:
+                lg.place_forget()
+
+    def _resize_start(self, e, edge):
+        w = self.win
+        self._rs = (edge, e.x_root, e.y_root, w.winfo_x(), w.winfo_y(), self.main_w, self.height, self.log_w)
+
+    def _resize_move(self, e):
+        rs = getattr(self, "_rs", None)
+        if not rs:
+            return
+        edge, x0, y0, wx, wy, mw, h, lw = rs
+        dx, dy = e.x_root - x0, e.y_root - y0
+        sw, sh = self.win.winfo_screenwidth(), self.win.winfo_screenheight()
+        x, y = wx, wy
+        if edge == "log":                         # журнал шире ⇄ раздел уже; общий размер окна тот же
+            lw2 = max(MIN_LOG, min(lw - dx, MAX_LOG, mw + lw - MIN_W))
+            self.main_w, self.log_w = mw + lw - lw2, lw2
+            self.logwin.frame.config(width=lw2)
+            self._lift_grips()
+            return
+        if "e" in edge:
+            self.main_w = max(MIN_W, min(mw + dx, sw))
+        if "w" in edge:
+            nw = max(MIN_W, min(mw - dx, sw))
+            x = wx + (mw - nw)
+            self.main_w = nw
+        if "s" in edge:
+            self.height = max(MIN_H, min(h + dy, sh))
+        if edge == "n":
+            nh = max(MIN_H, min(h - dy, sh))
+            y = wy + (h - nh)
+            self.height = nh
+        self.win.geometry(f"{self.total_w()}x{self.height}+{x}+{y}")
+        self._compact_nav()
+        self._lift_grips()
+
+    def _compact_nav(self):
+        """Окно низкое — пункты боковой колонки плотнее, чтобы все поместились."""
+        on = self.height < 800
+        if getattr(self, "_nav_compact", None) == on:
+            return
+        self._nav_compact = on
+        for cap in getattr(self, "nav_caps", []):
+            cap.pack_configure(pady=(6, 1) if on else (12, 3))
+        for row, bar, lab in self.nav_items.values():
+            bar.pack_configure(pady=3 if on else 7)
+            row.pack_configure(pady=0 if on else 1)
+
+    def _resize_end(self, e):
+        if getattr(self, "_rs", None):
+            self._rs = None
+            core.save_settings(panel_size=(self.main_w, self.height), log_width=self.log_w,
+                               panel_pos=(self.win.winfo_x(), self.win.winfo_y()))
+
+    def reset_size(self):
+        self.main_w, self.height, self.log_w = W, min(H, self.win.winfo_screenheight() - 80), LOG_W
+        self.logwin.frame.config(width=self.log_w)
+        self.win.geometry(f"{self.total_w()}x{self.height}")
+        self._compact_nav()
+        self._lift_grips()
+        core.save_settings(panel_size=(self.main_w, self.height), log_width=self.log_w)
+
 
 
 class LogColumn:
@@ -1070,7 +1186,7 @@ class LogColumn:
 
     def __init__(self, shell, win):
         self.shell, self.win = shell, win
-        self.frame = tk.Frame(win, bg=K.SIDEBAR, width=LOG_W)
+        self.frame = tk.Frame(win, bg=K.SIDEBAR, width=shell.log_w)
         self.frame.pack_propagate(False)
         self.line = tk.Frame(win, bg=K.LINE, width=1)
         head = tk.Frame(self.frame, bg=K.SIDEBAR)
@@ -1121,7 +1237,8 @@ class LogColumn:
 
     def toggle(self):
         self.visible = not self.visible
-        w = W + (LOG_W if self.visible else 0)
+        self.shell.log_on = self.visible
+        w = self.shell.total_w()
         x, y = self.win.winfo_x(), self.win.winfo_y()
         sw = self.win.winfo_screenwidth()
         if self.visible:
@@ -1132,4 +1249,4 @@ class LogColumn:
             self.line.pack_forget()
         self.win.geometry(f"{w}x{self.shell.height}+{x}+{y}")
         core.save_settings(log_visible=self.visible)
-        self.shell.log_on = self.visible
+        self.shell._lift_grips()
