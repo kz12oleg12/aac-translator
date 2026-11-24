@@ -181,12 +181,21 @@ class App:
             if prof != core.active_profile:
                 profiles.activate(prof)
             return prof
+        if not config.GAMES_ONLY and (exe in game.NOT_GAME_EXE or exe in game.not_games()
+                                      or not game.in_game_folder(pid)):
+            return self._free_target()           # режим без игры: обычная программа — пресет «Без игры»
         if exe in game.NOT_GAME_EXE or exe in game.not_games():
             core.log(f"{exe} — не игра: области обводятся в самой игре (или в панели → «Области»)", "warn")
             return None
         prof = game.create_profile_for(exe, game.nice_title(game.foreground_title(), exe))
         self.game_created(prof)
         return prof
+
+    def _free_target(self):
+        pid = profiles.free_pid()
+        if core.active_profile != pid:
+            profiles.activate(pid, announce=False)
+        return pid
 
     def pick_area(self, prompt, on_done, on_clear=None, game_area=False):
         """Затемняет экран и даёт обвести прямоугольник мышкой.

@@ -28,6 +28,32 @@ def active():
     return all_profiles().get(core.active_profile) or {}
 
 
+FREE = "_free"     # пресет «Без игры» — режим проверки: переводить в любом окне, когда игра не запущена
+
+
+def free_pid():
+    """Пресет «🧪 Без игры» (создаётся при первом включении режима). Свои области, словарь, персонажи."""
+    profs = all_profiles()
+    if FREE not in profs:
+        profs[FREE] = {"name": "🧪 Без игры", "exes": [], "free": True, "desc": "a video game"}
+        core.save_settings(profiles=profs)
+    return FREE
+
+
+def is_free(pid=None):
+    return (pid or core.active_profile) == FREE
+
+
+def idle_target():
+    """Какой пресет выбран, когда ни одна игра не запущена: «Без игры» в режиме проверки, иначе никакой."""
+    return None if config.GAMES_ONLY else free_pid()
+
+
+def game_profiles():
+    """Пресеты настоящих игр (без «Без игры») — для раздела «Игры»."""
+    return {k: v for k, v in all_profiles().items() if not v.get("free")}
+
+
 _hold = {"pid": None}     # пресет, выбранный вручную в панели (настроить области без игры) — не снимать сам
 
 

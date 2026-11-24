@@ -2285,6 +2285,32 @@ def test_game_presets(monkey):
         profiles.activate(None)
         T.save_settings(region=(5, 5, 5, 5))       # игры нет — области некуда сохранять, пресеты не портятся
         assert profiles.all_profiles()["archeage"]["region"] == [9, 9, 9, 9] and None not in profiles.all_profiles()
+    if hasattr(profiles, "free_pid"):     # режим «Переводить без игры» (проверка): пресет «🧪 Без игры»
+        monkey(cfg, "GAMES_ONLY", False)
+        monkey(game, "running_programs", lambda: [])
+        monkey(game, "in_game_folder", lambda pid: False)
+        profiles._hold["pid"] = None
+        game._scan["t"] = 0
+        game.scan_running()
+        assert core_m.active_profile == profiles.FREE and not game.no_game() and not game.blocked()
+        assert profiles.FREE not in profiles.game_profiles(), "в «Играх» его нет"
+        T.save_settings(region=(7, 7, 7, 7))
+        assert profiles.all_profiles()[profiles.FREE]["region"] == [7, 7, 7, 7]
+        fg[0] = "notepad.exe"
+        assert game.remember_game_window() is None and profiles.for_exe("notepad.exe") is None, \
+            "обычная программа пресет не получает"
+        monkey(game, "running_programs", lambda: [("archeagechronicles.exe", "ArcheAge")])
+        game._scan["t"] = 0
+        game.scan_running()
+        assert core_m.active_profile == "archeage", "запустили игру — её пресет"
+        monkey(game, "running_programs", lambda: [])
+        game._scan["t"] = 0
+        game.scan_running()
+        assert core_m.active_profile == profiles.FREE and core_m.region == (7, 7, 7, 7), "закрыли — снова «Без игры»"
+        monkey(cfg, "GAMES_ONLY", True)
+        game._scan["t"] = 0
+        game.scan_running()
+        assert core_m.active_profile is None, "режим выключили — без игры пресета нет"
     profiles.activate("archeage", announce=False)
     # «только игры из списка» выключено — любая программа
     monkey(cfg, "GAMES_ONLY", False)
@@ -2312,6 +2338,7 @@ def test_game_presets(monkey):
                 assert prof not in profiles.all_profiles()
             if hasattr(app, "_area_target"):     # две игры: область — в пресет игры, где нажали клавишу
                 import tkinter as tk
+                monkey(cfg, "GAMES_ONLY", True)
                 w3 = profiles.create("witcher3.exe", "The Witcher 3")
                 fg2 = ["witcher3.exe"]
                 monkey(game, "foreground_exe", lambda: (fg2[0], 4242))

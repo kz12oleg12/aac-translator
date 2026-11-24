@@ -298,13 +298,15 @@ def main():
     core.SETTINGS = core.load_settings()
     if "profiles" not in core.SETTINGS:
         core.save_settings(profiles=profiles.all_profiles())
+    config.GAMES_ONLY = bool(core.SETTINGS.get("games_only", config.GAMES_ONLY))   # нужен до выбора пресета
     lock = core.SETTINGS.get("profile_lock")
     if lock in profiles.all_profiles():
         core.active_profile = lock                # закреплённый пресет — всегда он
         core.apply_profile_regions(profiles.all_profiles()[lock])
-    elif core.active_profile is not None and not profiles.is_running(core.active_profile):
-        core.active_profile = None                # игра не запущена — пресет не выбран, «ждёт игру»
-        core.apply_profile_regions({})
+    elif not profiles.is_running(core.active_profile):
+        # игра не запущена — пресет не выбран («ждёт игру») или «Без игры» в режиме проверки
+        core.active_profile = profiles.idle_target()
+        core.apply_profile_regions(profiles.all_profiles().get(core.active_profile) or {})
     core.save_settings(active_profile=core.active_profile)
     profiles.bind(core.active_profile)          # файлы пресета текущей игры: словарь, персонажи, кэш, меню
     apply_saved_provider()

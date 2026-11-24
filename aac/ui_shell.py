@@ -329,17 +329,20 @@ class Shell(SectionsMixin, GamesMixin):
                                       "Это окно и журнал остаются скрытыми.",
                                       lambda: config.SHOW_ON_STREAM, set_stream)
 
-        def set_only(v):
-            config.GAMES_ONLY = bool(v)
+        def set_free(v):
+            config.GAMES_ONLY = not v
             core.save_settings(games_only=config.GAMES_ONLY)
-            if not v:
-                game.game_active.set()
-            core.log("Перевод " + ("только в играх из списка (раздел «Игры»)" if v else
-                                   "в любой программе, где включён автоперевод"), "ok")
-        self.only_row = K.ToggleRow(si, "Только игры из списка",
-                                    "в других программах перевод на паузе. Новую игру программа узнаёт сама и заводит "
-                                    "ей пресет — со своими областями, словарём и персонажами.",
-                                    lambda: config.GAMES_ONLY, set_only)
+            game.game_active.set()
+            if not core.SETTINGS.get("profile_lock") and not profiles.is_running() \
+                    and profiles._hold["pid"] != core.active_profile:
+                profiles.activate(profiles.idle_target(), announce=False)   # игры нет — «Без игры» или ничего
+            core.log("Режим проверки: без игры перевожу в любом окне (пресет «🧪 Без игры» — свои области, "
+                     "словарь, персонажи)" if v else "Перевожу только в играх", "ok")
+            self.refresh()
+        self.only_row = K.ToggleRow(si, "Переводить без игры (для проверки)",
+                                    "когда ни одна игра не запущена, перевод и клавиши работают в любом окне — "
+                                    "по пресету «🧪 Без игры» со своими областями. Игровые пресеты не затрагиваются.",
+                                    lambda: not config.GAMES_ONLY, set_free)
         self.only_row.pack(fill="x")
         self.stream_row.pack(fill="x")
         self.upd_row.pack(fill="x")
@@ -387,6 +390,9 @@ class Shell(SectionsMixin, GamesMixin):
         parts = []
         if core.active_profile is None:
             parts.append("игра не запущена — запустите игру, программа подхватит её сама")
+        elif profiles.is_free():
+            parts.append("режим проверки: игра не запущена, перевожу в любом окне" +
+                         ("" if core.region else f" — обведите субтитры: {hotkeys.K('select')}"))
         elif not core.region:
             parts.append(f"{profiles.name()}: обведите субтитры — {hotkeys.K('select')}")
         elif profiles.is_running() or core.SETTINGS.get("profile_lock"):
@@ -530,7 +536,8 @@ class Shell(SectionsMixin, GamesMixin):
 
     def _render_area_games(self):
         """«Области игры: [ArcheAge] [● Dead Cells]» — какую игру сейчас настраиваете; щелчок — другая."""
-        profs = profiles.all_profiles()
+        profs = {k: v for k, v in profiles.all_profiles().items()
+                 if not v.get("free") or not config.GAMES_ONLY}      # «Без игры» — только в режиме проверки
         live = profiles.running()
         locked = core.SETTINGS.get("profile_lock")
         key = (tuple(profs), core.active_profile, frozenset(live), locked,
@@ -857,6 +864,8 @@ class Shell(SectionsMixin, GamesMixin):
     def refresh(self):
         if core.SETTINGS.get("profile_lock"):
             g = "📌 " + profiles.name()
+        elif profiles.is_free():
+            g = "🧪 без игры (проверка)"
         elif profiles.is_running():
             g = "🎮 " + profiles.name()
         else:

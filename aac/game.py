@@ -271,9 +271,13 @@ def scan_running(every=3.0):
         others = [p for p in known if p]
         if others:
             profiles.activate(others[0])          # запущена другая знакомая игра — её пресет
-        elif act is not None and profiles._hold["pid"] != act:
-            profiles.activate(None)               # игра закрылась — пресет снят, «ждёт игру»
-            core.log("Игра закрыта — жду игру")
+        else:
+            target = profiles.idle_target()       # игр нет: «Без игры» (режим проверки) или никакой
+            if act != target and (act is None or profiles._hold["pid"] != act):
+                was_game = act is not None and not profiles.is_free(act)
+                profiles.activate(target, announce=False)
+                if was_game:
+                    core.log("Игра закрыта — " + ("перевожу без игры (режим проверки)" if target else "жду игру"))
     for exe, title in progs:
         if profiles.for_exe(exe) or exe in not_games() or exe in NOT_GAME_EXE or exe in skip_this_run:
             continue
@@ -333,7 +337,7 @@ def is_game(exe):
         return bool(exe) and exe not in NOT_GAME_EXE and exe not in not_games()
     if config.GAMES_ONLY:
         return profiles.for_exe(exe) is not None
-    return exe == game_exe
+    return True          # режим «Переводить без игры» — переводим в любом окне
 
 
 _blocked_logged = {"exe": None}
@@ -428,6 +432,8 @@ def remember_game_window():
     if locked():
         return None                              # пресет закреплён — ничего не переключаем и не спрашиваем
     prof = profiles.for_exe(exe)
+    if prof is None and not config.GAMES_ONLY and not in_game_folder(pid):
+        return None                              # режим без игры: обычная программа — пресет «Без игры»
     if prof is None:                             # новая игра — пресет создаётся сам, без вопросов
         prof = create_profile_for(exe, nice_title(foreground_title(), exe))
         core.events.put(("game_created", prof))

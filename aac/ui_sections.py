@@ -865,7 +865,7 @@ class GamesMixin:
         from . import profiles
         for w in self.games_box.winfo_children():
             w.destroy()
-        profs = profiles.all_profiles()
+        profs = profiles.game_profiles()          # «🧪 Без игры» — не игра, её здесь нет
         for pid, p in profs.items():
             on = pid == core.active_profile
             c, ci = K.card(self.games_box, bg=K.CARD, border=K.ACCENT_LINE if on else K.BORDER, padx=16, pady=12)
