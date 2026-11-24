@@ -2434,6 +2434,22 @@ def test_game_presets(monkey):
                 p._resize_start(e, "se"); e.x_root, e.y_root = -5000, -5000; p._resize_move(e); p._resize_end(e)
                 assert p.main_w >= 760 and p.height >= 640, "не меньше минимума"
                 p.reset_size()
+            if hasattr(app, "sync_region_frames"):   # удалили область в режиме расстановки — рамка не возвращает её
+                core_m.region, core_m.answers_region = (10, 20, 300, 80), (10, 400, 300, 120)
+                app.toggle_layout()
+                app.root.update()
+                assert set(app.region_frames) >= {"subs", "answers"}
+                app.panel._clear_area("region")
+                app.root.update()
+                assert "subs" not in app.region_frames, "рамка исчезла сразу"
+                core_m.answers_region = (50, 450, 320, 100)      # обвели ответы заново, пока расстановка открыта
+                app.sync_region_frames()
+                assert app.region_frames["answers"].src == (50, 450, 320, 100)
+                app.toggle_layout()                               # выход из расстановки
+                app.root.update()
+                assert core_m.region is None and profiles.active().get("region") is None, "удалённая не вернулась"
+                assert core_m.answers_region == (50, 450, 320, 100), "новая область не затёрта старой рамкой"
+                core_m.answers_region = None
             if hasattr(app.panel, "_ask_clear_area"):     # удалить любую область, с вопросом
                 core_m.region, core_m.answers_region = (1, 2, 3, 4), (5, 6, 7, 8)
                 app.panel.show("areas")

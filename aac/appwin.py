@@ -103,6 +103,7 @@ class App:
         self.root.after(50, self._poll)
 
     def _check_game_focus(self):
+        self.sync_region_frames()         # расстановка открыта, а область удалили/обвели заново/сменилась игра
         game.follow_foreground()          # игра из списка на экране — её пресет (всегда, без клавиш)
         new = game.detect_new_game() or game.scan_running()   # новая игра: на экране или в фоне — пресет сам
         if new:
@@ -608,18 +609,7 @@ class App:
             self._layout_was_auto = core.auto_on.is_set()
             core.auto_on.clear()
             self.region_frames = {}
-            if core.region:
-                self.region_frames["subs"] = ui_windows.RegionFrame(self, "Область СУБТИТРОВ", "#2060d0", core.region,
-                                                         self._regions_changed)
-            if core.answers_region:
-                self.region_frames["answers"] = ui_windows.RegionFrame(self, "Область ОТВЕТОВ", "#d07010", core.answers_region,
-                                                            self._regions_changed)
-            if core.chat_region:
-                self.region_frames["chat"] = ui_windows.RegionFrame(self, "Область ЧАТА", "#9050d0", core.chat_region,
-                                                         self._regions_changed)
-            if core.region2:
-                self.region_frames["subs2"] = ui_windows.RegionFrame(self, "Область РЕПЛИК 2", "#18a090", core.region2,
-                                                          self._regions_changed)
+            self.sync_region_frames()
             self._regions_changed(live=True)
             for ov, txt in ((self.subs, self.LAYOUT_SUBS),
                             (self.answers, self.LAYOUT_DOCKED if config.ANSWERS_DOCKED else self.LAYOUT_ANSWERS)):
@@ -645,6 +635,35 @@ class App:
                 ov.highlight_grip(False)
             core.log("Расстановка сохранена")
 
+    REGION_FRAMES = (("subs", "region", "Область СУБТИТРОВ", "#2060d0"),
+                     ("answers", "answers_region", "Область ОТВЕТОВ", "#d07010"),
+                     ("chat", "chat_region", "Область ЧАТА", "#9050d0"),
+                     ("subs2", "region2", "Область РЕПЛИК 2", "#18a090"))
+
+    def sync_region_frames(self):
+        """Рамки расстановки = текущие области. Область удалили — рамка исчезает (и при выходе не вернёт её);
+        обвели заново или сменилась игра — рамка встаёт по новой области. Перетаскивание рамки не сбивается."""
+        if not getattr(self, "layout", False):
+            return
+        frames = self.region_frames
+        changed = False
+        for key, attr, title, color in self.REGION_FRAMES:
+            reg = getattr(core, attr)
+            fr = frames.get(key)
+            if fr is not None and getattr(fr, "src", None) == reg:
+                continue
+            if fr is not None:
+                fr.destroy()
+                frames.pop(key)
+                changed = True
+            if reg:
+                fr = ui_windows.RegionFrame(self, title, color, reg, self._regions_changed)
+                fr.src = reg
+                frames[key] = fr
+                changed = True
+        if changed:
+            self._regions_changed(live=True)
+
     def _regions_changed(self, live=False):
         frames = getattr(self, "region_frames", {})
         warn = {k: False for k in frames}
@@ -657,6 +676,7 @@ class App:
             fr.set_warn(warn[k])
 
     def _save_regions(self):
+        self.sync_region_frames()          # удалённые за время расстановки области — не сохранять обратно
         frames = getattr(self, "region_frames", {})
         if "subs" in frames:
             core.region = frames["subs"].rect()

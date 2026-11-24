@@ -528,6 +528,7 @@ class Shell(SectionsMixin, GamesMixin):
             self.app.chat.hide()
         elif hide:
             core.events.put((hide, None))
+        self.app.sync_region_frames()      # рамка в режиме расстановки исчезает сразу
         core.log(f"Область «{title}» удалена", "ok")
         if core.auto_on.is_set() and not any((core.region, core.region2, core.answers_region, core.chat_region)):
             core.auto_on.clear()
