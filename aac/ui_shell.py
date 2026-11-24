@@ -11,6 +11,8 @@ import tkinter as tk
 from . import config, core, game, glossary, hotkeys, limits, menu, profiles, screens, tcache, translate, tts, ui_overlay
 from . import ui_kit as K
 from .ui_sections import GamesMixin, SectionsMixin
+from .ui_wizard import WizardMixin
+from . import ui_wizard
 from .ui_panel import LOG_COLORS, PROVIDER_LABELS, PROVIDER_NAMES
 
 W, H = 960, 720
@@ -35,7 +37,7 @@ KEY_GROUPS = [
 HOME_KEYS = ["auto", "tooltip", "once", "repeat"]
 
 
-class Shell(SectionsMixin, GamesMixin):
+class Shell(SectionsMixin, GamesMixin, WizardMixin):
     def __init__(self, app, win):
         self.app, self.win = app, win
         win.overrideredirect(True)
@@ -72,7 +74,7 @@ class Shell(SectionsMixin, GamesMixin):
         self.logwin = LogColumn(self, win)       # журнал — своя колонка справа, не зависит от раздела
         self.content = tk.Frame(win, bg=K.BG)
         self.content.pack(side="left", fill="both", expand=True)
-        self.show("home")
+        self.show("start" if ui_wizard.needed() else "home")   # новый пользователь — мастер первого запуска
         K.install_wheel(win, self._current_scroll)     # колесо мыши — где бы ни был курсор в разделе
         K.install_clipboard(win)                         # Ctrl+V и т.п. на русской раскладке, меню правой кнопкой
         self._build_grips()
@@ -372,7 +374,8 @@ class Shell(SectionsMixin, GamesMixin):
             d = desc.get(hid, hid)
             K.label(cell, d[:1].upper() + d[1:], 10, K.TEXT2).pack(side="left", padx=(10, 0))
             self.home_keys[hid] = chip
-
+        K.button(b, "Мастер первого запуска →", lambda: self.show("start"), kind="flat", size=9).pack(
+            anchor="w", pady=(14, 0))
         return sc
 
     def _refresh_home(self):

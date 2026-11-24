@@ -1895,7 +1895,8 @@ def test_new_shell(monkey):
     app = T.App()
     try:
         sh = app.panel
-        assert isinstance(sh, ui_shell.Shell) and sh.current == "home"
+        assert isinstance(sh, ui_shell.Shell) and sh.current in ("home", "start")   # start — мастер первого запуска
+        sh.show("home")
         for sid in ("areas", "tr", "keys", "backup", "home"):
             sh.show(sid)
             app.root.update()
@@ -2326,6 +2327,11 @@ def test_new_user_no_presets(monkey):
     open(os.path.join(d, "s.json"), "w").write('{"font_size": 14}')
     T.set("SETTINGS", T.load_settings())
     assert profiles.all_profiles() == {} and core_m.active_profile is None and core_m.region is None
+    try:
+        from aac import ui_wizard
+        assert ui_wizard.needed(), "новому пользователю — мастер первого запуска"
+    except ImportError:
+        pass
     assert profiles.name() == "нет игры"
     T.save_settings(region=(1, 2, 3, 4))
     assert json.load(open(os.path.join(d, "s.json"))).get("profiles") in (None, {})
@@ -2747,6 +2753,29 @@ def test_game_presets(monkey):
                 profiles.activate("archeage", announce=False)
                 profiles.all_profiles()["archeage"].pop("style", None)
                 app.apply_game_style()
+            if hasattr(app.panel, "_build_start"):     # мастер первого запуска: шаги отмечаются сами
+                from aac import ui_wizard
+                app.panel.show("start")
+                app.root.update()
+                core_m.region = None
+                core_m.auto_on.clear()
+                monkey(profiles, "running", lambda: set())
+                app.panel.refresh()
+                assert "ждёт игру" in app.panel.wz["game"]["state"].cget("text")
+                assert "сначала запустите игру" in app.panel.wz["area"]["state"].cget("text")
+                profiles.activate("archeage", announce=False)
+                monkey(profiles, "running", lambda: {"archeage"})
+                core_m.region = (1, 2, 300, 40)
+                app.panel.refresh()
+                assert app.panel.wz["game"]["state"].cget("text").startswith("✓")
+                assert app.panel.wz["area"]["state"].cget("text").startswith("✓")
+                app.panel._wz_auto_start(True)
+                assert profiles.all_profiles()["archeage"].get("auto_start") is True
+                profiles.all_profiles()["archeage"]["auto_start"] = False
+                app.panel._wz_finish()
+                assert app.panel.current == "home" and core_m.SETTINGS.get("wizard_done") is True
+                assert not ui_wizard.needed()
+                core_m.region = None
             if hasattr(app, "auto_start_check"):   # галочка «Автоперевод при запуске игры»
                 profiles.activate("archeage", announce=False)
                 profs = profiles.all_profiles()
