@@ -12,23 +12,22 @@ import tkinter as tk
 from . import config, core, game, glossary, hotkeys, limits, llm, tcache, translate, tts, ui_overlay
 
 
-PROVIDER_LABELS = {  # как переводчики называются в выпадающем списке панели
-    "groq_ocr": "Groq (OCR + ИИ)",
-    "gemini_ocr": "Gemini (OCR + ИИ)",
-    "claude_ocr": "Claude (OCR + ИИ, платно)",
-    "google": "Google Переводчик (OCR)",
-    "microsoft": "Microsoft Переводчик (OCR)",
-    "deepl": "DeepL (OCR, ключ)",
-    "mistral": "Mistral (бесплатно)",
-    "gemini": "Gemini (бесплатно)",
-    "groq": "Groq (бесплатно)",
-    "claude": "Claude (платно)",
-    "ollama": "Ollama (локально)",
+PROVIDER_LABELS = {  # как переводчики называются в выпадающем списке (текст всегда читает программа на ПК)
+    "groq_ocr": "Groq — нейросеть, бесплатно",
+    "gemini_ocr": "Gemini — нейросеть, бесплатно",
+    "mistral_ocr": "Mistral — нейросеть, бесплатно",
+    "claude_ocr": "Claude — нейросеть, платно",
+    "google": "Google Переводчик",
+    "microsoft": "Microsoft Переводчик",
+    "deepl": "DeepL (нужен ключ)",
 }
 PROVIDER_NAMES = {"gemini": "Gemini", "claude": "Claude", "ollama": "Ollama (локально)",
-                  "mistral": "Mistral", "groq": "Groq", "google": "Google (OCR)", "deepl": "DeepL (OCR)",
-                  "microsoft": "Microsoft (OCR)", "groq_ocr": "Groq (OCR+ИИ)", "gemini_ocr": "Gemini (OCR+ИИ)",
-                  "claude_ocr": "Claude (OCR+ИИ)", "mistral_ocr": "Mistral (OCR+ИИ)"}
+                  "mistral": "Mistral", "groq": "Groq", "google": "Google", "deepl": "DeepL",
+                  "microsoft": "Microsoft", "groq_ocr": "Groq", "gemini_ocr": "Gemini",
+                  "claude_ocr": "Claude", "mistral_ocr": "Mistral"}
+# прежние варианты «по картинке» → такая же нейросеть, но текст читает программа
+BY_IMAGE = {"groq": "groq_ocr", "gemini": "gemini_ocr", "claude": "claude_ocr", "mistral": "mistral_ocr",
+            "ollama": "google"}
 LOG_COLORS = {"info": "#ccc", "ok": "#7d7", "warn": "#fc6", "error": "#f77"}
 
 

@@ -64,6 +64,15 @@ def apply_saved_provider():
         config.PROVIDER = core.SETTINGS["provider"]
     if "fallback" in core.SETTINGS:
         config.FALLBACK_PROVIDERS = list(core.SETTINGS["fallback"])
+    from .ui_panel import BY_IMAGE
+    chain = [config.PROVIDER] + list(config.FALLBACK_PROVIDERS)
+    if any(p in BY_IMAGE for p in chain):       # режима «нейросеть по картинке» больше нет
+        new = [BY_IMAGE.get(p, p) for p in chain]
+        new = [p for i, p in enumerate(new) if p not in new[:i]]
+        config.PROVIDER, config.FALLBACK_PROVIDERS = new[0], new[1:2]
+        core.save_settings(provider=config.PROVIDER, fallback=config.FALLBACK_PROVIDERS)
+        core.log("Переводчики: режим «нейросеть по картинке» убран — теперь текст читает программа, "
+                 f"а переводит {' → '.join(new[:2])}", "ok")
     config.ANSWERS_DOCKED = bool(core.SETTINGS.get("answers_docked", config.ANSWERS_DOCKED))
     core.answers_auto = bool(core.SETTINGS.get("answers_auto", False))
     core.chat_auto = bool(core.SETTINGS.get("chat_auto", True))

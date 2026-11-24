@@ -715,7 +715,8 @@ class Shell(SectionsMixin, GamesMixin):
         self.refresh()
 
     TR_ROWS = [("deepl", "DeepL"), ("microsoft", "Microsoft"), ("google", "Google"), ("groq_ocr", "Groq · нейросеть"),
-               ("gemini_ocr", "Gemini · нейросеть"), ("claude_ocr", "Claude · нейросеть, платно")]
+               ("gemini_ocr", "Gemini · нейросеть"), ("mistral_ocr", "Mistral · нейросеть"),
+               ("claude_ocr", "Claude · нейросеть, платно")]
 
     def _build_prov_rows(self):
         """Строки «Все переводчики» создаются один раз; дальше меняется только их текст и цвет (без мигания)."""

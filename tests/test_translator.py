@@ -2133,6 +2133,25 @@ def test_ai_editor(monkey):
     editor.reset()
 
 
+def test_no_image_providers(monkey):
+    """Варианта «нейросеть по картинке» больше нет: прежний выбор заменяется на «текст читает программа»."""
+    try:
+        from aac.ui_panel import BY_IMAGE, PROVIDER_LABELS
+    except ImportError:
+        return
+    assert not any(k in PROVIDER_LABELS for k in BY_IMAGE), "в списке только варианты с чтением текста программой"
+    m = importlib.import_module("aac.main")
+    cfg = T._owner("PROVIDER")
+    monkey(cfg, "PROVIDER", cfg.PROVIDER)
+    monkey(cfg, "FALLBACK_PROVIDERS", list(cfg.FALLBACK_PROVIDERS))
+    T.save_settings(provider="groq", fallback=["ollama"])
+    T.set("SETTINGS", T.load_settings())
+    m.apply_saved_provider()
+    assert cfg.PROVIDER == "groq_ocr" and cfg.FALLBACK_PROVIDERS == ["google"], (cfg.PROVIDER, cfg.FALLBACK_PROVIDERS)
+    T.save_settings(provider="google", fallback=[])
+    T.set("SETTINGS", T.load_settings())
+
+
 def test_game_facts(monkey):
     """Groq один раз собирает об игре: словарь, персонажей с полом, описание (для DeepL и нейросетей)."""
     try:
