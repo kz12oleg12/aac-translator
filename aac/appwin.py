@@ -171,6 +171,10 @@ class App:
             return core.active_profile
         exe, pid = game.foreground_exe()
         if not exe or pid == os.getpid():
+            if core.active_profile is None:
+                core.log("Игра не выбрана: обведите область в самой игре или выберите игру в разделе «Области»",
+                         "warn")
+                self.panel.show("areas")
             return core.active_profile
         prof = profiles.for_exe(exe)
         if prof:

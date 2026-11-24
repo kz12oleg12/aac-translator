@@ -87,6 +87,12 @@ T = Target()
 T.set("SETTINGS_FILE", os.path.join(TMP, "settings.json"))
 if hasattr(T._owner("VERSION"), "GAMES_ONLY"):
     T._owner("VERSION").GAMES_ONLY = False     # тесты — не про игры: «переводить в любой программе»
+if hasattr(T._owner("VERSION"), "GAMES_ONLY") and hasattr(T._owner("active_profile"), "default_profiles"):
+    _c = T._owner("active_profile")      # тесты работают «в игре ArcheAge»: пресет выбран
+    _c.active_profile = "archeage"
+    with open(os.path.join(TMP, "settings.json"), "w", encoding="utf-8") as _f:
+        json.dump({"profiles": _c.default_profiles(), "active_profile": "archeage"}, _f)
+    T.set("SETTINGS", T.load_settings())
 T.set("GLOSSARY_FILE", os.path.join(TMP, "glossary.txt"))
 T.set("HISTORY_DIR", os.path.join(TMP, "history"))
 T.set("CACHE_FILE", os.path.join(TMP, "translation_cache.json"))
@@ -2056,6 +2062,27 @@ def test_update_etag(monkey):
     updater.state.update(latest=None, etag=None)
 
 
+def test_new_user_no_presets(monkey):
+    """Новый пользователь: пресетов нет (ArcheAge не создаётся сама), игра не выбрана."""
+    try:
+        from aac import profiles
+    except ImportError:
+        return
+    core_m = T._owner("active_profile")
+    if not hasattr(core_m, "had_old_settings"):
+        return
+    d = tempfile.mkdtemp(dir=TMP)
+    monkey(T._owner("APP_DIR"), "APP_DIR", d)
+    monkey(T._owner("SETTINGS_FILE"), "SETTINGS_FILE", os.path.join(d, "s.json"))
+    monkey(core_m, "active_profile", "archeage")
+    open(os.path.join(d, "s.json"), "w").write('{"font_size": 14}')
+    T.set("SETTINGS", T.load_settings())
+    assert profiles.all_profiles() == {} and core_m.active_profile is None and core_m.region is None
+    assert profiles.name() == "нет игры"
+    T.save_settings(region=(1, 2, 3, 4))
+    assert json.load(open(os.path.join(d, "s.json"))).get("profiles") in (None, {})
+
+
 def test_game_presets(monkey):
     """Пресеты игр: у каждой игры свои области, словарь, персонажи; переключение — по окну на экране."""
     try:
@@ -2073,7 +2100,9 @@ def test_game_presets(monkey):
     T.set("SETTINGS", {"region": [1, 2, 3, 4]})                 # старые настройки до пресетов
     open(os.path.join(d, "s.json"), "w").write('{"region": [1, 2, 3, 4]}')
     T.set("SETTINGS", T.load_settings())
-    profiles.bind("archeage")
+    assert core_m.active_profile is None, "игра не запущена — пресет не выбран"
+    assert list(profiles.all_profiles()) == ["archeage"], "прежние настройки — в пресет ArcheAge"
+    profiles.activate("archeage", announce=False)
     assert profiles.name() == "ArcheAge Chronicles" and core_m.region == (1, 2, 3, 4), "прежние области — в ArcheAge"
     glossary.set_entry("Renald", "Ренальд")
     fg = ["Witcher3.exe"]
@@ -2224,8 +2253,39 @@ def test_game_presets(monkey):
     # переименовать и удалить
     profiles.rename("witcher3", "The Witcher 3")
     assert profiles.name("witcher3") == "The Witcher 3"
-    assert profiles.delete("witcher3") and core_m.active_profile == "archeage"
+    assert profiles.delete("witcher3") and core_m.active_profile is None, "удалили текущую — пресет не выбран"
     assert "witcher3" not in profiles.all_profiles()
+    assert "witcher3.exe" in game.skip_this_run, "игра ещё запущена — сразу заново не добавляем"
+    game.skip_this_run.clear()
+    # ArcheAge — обычный пресет: тоже удаляется, её файлы уходят в backups; потом создаётся заново как знакомая игра
+    if hasattr(profiles, "is_archeage_like"):
+        profiles.activate("archeage", announce=False)
+        assert os.path.exists(os.path.join(d, "glossary.txt"))
+        assert profiles.delete("archeage") and not profiles.all_profiles().get("archeage")
+        assert not os.path.exists(os.path.join(d, "glossary.txt")), "словарь ArcheAge — в backups"
+        assert any(n.startswith("profile_archeage_") for n in os.listdir(os.path.join(d, "backups")))
+        game.skip_this_run.clear()
+        pid = profiles.create("archeagechronicles.exe")
+        assert pid == "archeage" and profiles.name(pid) == "ArcheAge Chronicles"
+        assert profiles.all_profiles()[pid]["desc"] == "the MMORPG ArcheAge Chronicles"
+        core_m.active_profile = None
+        assert "ArcheAge" not in profiles.adapt("You translate the MMORPG ArcheAge Chronicles.")
+        core_m.active_profile = "archeage"
+        assert "ArcheAge" in profiles.adapt("You translate the MMORPG ArcheAge Chronicles.")
+        # игра закрылась — пресет снимается сам; выбранный вручную в панели (настроить) — нет
+        monkey(game, "running_programs", lambda: [])
+        game._scan["t"] = 0
+        game.scan_running()
+        assert core_m.active_profile is None
+        profiles.activate("archeage", announce=False, hold=True)
+        game._scan["t"] = 0
+        game.scan_running()
+        assert core_m.active_profile == "archeage", "выбрали вручную, чтобы настроить, — не снимаем"
+        T.save_settings(region=(9, 9, 9, 9))
+        profiles.activate(None)
+        T.save_settings(region=(5, 5, 5, 5))       # игры нет — области некуда сохранять, пресеты не портятся
+        assert profiles.all_profiles()["archeage"]["region"] == [9, 9, 9, 9] and None not in profiles.all_profiles()
+    profiles.activate("archeage", announce=False)
     # «только игры из списка» выключено — любая программа
     monkey(cfg, "GAMES_ONLY", False)
     assert not game.blocked()

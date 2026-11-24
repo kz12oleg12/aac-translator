@@ -296,8 +296,16 @@ def main():
         print("Переводчик уже запущен — показал его панель.")
         return
     core.SETTINGS = core.load_settings()
-    if "profiles" not in core.SETTINGS or not core.SETTINGS.get("active_profile"):
-        core.save_settings(profiles=profiles.all_profiles(), active_profile=core.active_profile)
+    if "profiles" not in core.SETTINGS:
+        core.save_settings(profiles=profiles.all_profiles())
+    lock = core.SETTINGS.get("profile_lock")
+    if lock in profiles.all_profiles():
+        core.active_profile = lock                # закреплённый пресет — всегда он
+        core.apply_profile_regions(profiles.all_profiles()[lock])
+    elif core.active_profile is not None and not profiles.is_running(core.active_profile):
+        core.active_profile = None                # игра не запущена — пресет не выбран, «ждёт игру»
+        core.apply_profile_regions({})
+    core.save_settings(active_profile=core.active_profile)
     profiles.bind(core.active_profile)          # файлы пресета текущей игры: словарь, персонажи, кэш, меню
     apply_saved_provider()
     if not translate.provider_chain():

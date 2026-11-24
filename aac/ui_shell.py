@@ -385,12 +385,14 @@ class Shell(SectionsMixin, GamesMixin):
         self.hero_dot.set(color)
         self.hero_btn.config(text=btn)
         parts = []
-        if not core.region:
-            parts.append(f"Обведите субтитры: {hotkeys.K('select')}")
+        if core.active_profile is None:
+            parts.append("игра не запущена — запустите игру, программа подхватит её сама")
+        elif not core.region:
+            parts.append(f"{profiles.name()}: обведите субтитры — {hotkeys.K('select')}")
         elif profiles.is_running() or core.SETTINGS.get("profile_lock"):
             parts.append(f"Игра: {profiles.name()}")
         else:
-            parts.append(f"игра не запущена (последняя — {profiles.name()})")
+            parts.append(f"игра не запущена (настраиваете — {profiles.name()})")
         if core.stats["last"] and core.stats["last"] != "—":
             parts.append(f"последний перевод: {core.stats['last']}")
         self.hero_sub.config(text=" · ".join(parts) or "Включите автоперевод, находясь в игре")
@@ -549,8 +551,12 @@ class Shell(SectionsMixin, GamesMixin):
                           cursor="arrow" if on or locked else "hand2")
             lb.pack(side="left", padx=(0, 6))
             if not on and not locked:
-                lb.bind("<Button-1>", lambda e, pid=pid: profiles.activate(pid))
+                lb.bind("<Button-1>", lambda e, pid=pid: profiles.activate(pid, hold=True))
+        if not profs:
+            K.label(row, "пока нет — запустите игру, программа добавит её сама", 10, K.FAINT).pack(side="left")
         hint = ("📌 пресет закреплён — открепите в «Играх», чтобы выбрать другую" if locked else
+                "Игра не выбрана — щёлкните по ней выше, чтобы настроить её области." if core.active_profile is None
+                and profs else
                 "● — игра запущена. Клавиши областей (F9…) в игре сами выбирают её пресет.")
         K.label(self.area_games, hint, 9, K.FAINT).pack(anchor="w", pady=(6, 0))
 

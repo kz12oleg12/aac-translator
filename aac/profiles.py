@@ -1,8 +1,8 @@
 """Пресеты игр: у каждой игры свои области, образец меню, словарь, персонажи с голосами, кэш переводов
 и название игры в подсказке нейросети. Программа сама переключается, когда игра оказывается на экране.
 
-Пресет ArcheAge хранит файлы там же, где раньше (рядом с программой), — ничего не переносится.
-Остальные игры — в папке profiles/<id>/.
+Все пресеты равны: любой можно удалить; пока игра не запущена, пресет не выбран (core.active_profile = None).
+Пресет ArcheAge (id «archeage») хранит файлы там же, где раньше (рядом с программой), остальные — в profiles/<id>/.
 """
 import os
 import re
@@ -16,27 +16,36 @@ GENERIC_GLOSSARY = """# Словарь имён и терминов для эт�
 
 
 def all_profiles():
-    profs = core.SETTINGS.get("profiles")
-    if not isinstance(profs, dict) or not profs:
-        profs = core.default_profiles(core.SETTINGS)
-        core.save_settings(profiles=profs)
+    profs = core.SETTINGS.get("profiles") if isinstance(core.SETTINGS, dict) else None
+    if not isinstance(profs, dict):
+        profs = {}
+        if isinstance(core.SETTINGS, dict):
+            core.SETTINGS["profiles"] = profs
     return profs
 
 
 def active():
-    return all_profiles().get(core.active_profile) or next(iter(all_profiles().values()))
+    return all_profiles().get(core.active_profile) or {}
+
+
+_hold = {"pid": None}     # пресет, выбранный вручную в панели (настроить области без игры) — не снимать сам
+
+
+def is_archeage_like(p):
+    return "archeage" in (p.get("match") or "") or any("archeage" in e for e in p.get("exes", []))
 
 
 def name(pid=None):
-    p = all_profiles().get(pid or core.active_profile) or {}
-    return p.get("name") or (pid or core.active_profile)
+    pid = pid or core.active_profile
+    p = all_profiles().get(pid) or {}
+    return p.get("name") or pid or "нет игры"
 
 
 def folder(pid):
     """Где лежат файлы пресета (словарь, персонажи, кэш, образец меню)."""
     if pid == core.DEFAULT_PROFILE:
         return config.APP_DIR
-    return os.path.join(config.APP_DIR, "profiles", pid)
+    return os.path.join(config.APP_DIR, "profiles", pid or "_none")     # _none — пока игры нет (пусто)
 
 
 def paths(pid):
@@ -69,12 +78,18 @@ def _pretty(exe):
 def create(exe, title=None):
     """Новый пресет для игры exe. Возвращает его id."""
     profs = all_profiles()
-    base = re.sub(r"[^a-z0-9]+", "", re.sub(r"\.exe$", "", exe.lower())) or "game"
-    pid, n = base, 2
-    while pid in profs:
-        pid, n = f"{base}{n}", n + 1
-    title = title or _pretty(exe)
-    profs[pid] = {"name": title, "exes": [exe.lower()], "desc": f"the video game {title}"}
+    if "archeage" in exe.lower() and core.DEFAULT_PROFILE not in profs:
+        # знакомая игра: её название и описание для нейросети; файлы — рядом с программой, как раньше
+        pid = core.DEFAULT_PROFILE
+        profs[pid] = {"name": "ArcheAge Chronicles", "exes": [exe.lower()], "match": "archeage",
+                      "desc": "the MMORPG ArcheAge Chronicles"}
+    else:
+        base = re.sub(r"[^a-z0-9]+", "", re.sub(r"\.exe$", "", exe.lower())) or "game"
+        pid, n = base, 2
+        while pid in profs or pid == core.DEFAULT_PROFILE:
+            pid, n = f"{base}{n}", n + 1
+        title = title or _pretty(exe)
+        profs[pid] = {"name": title, "exes": [exe.lower()], "desc": f"the video game {title}"}
     core.save_settings(profiles=profs)
     os.makedirs(folder(pid), exist_ok=True)
     g = paths(pid)["glossary"]
@@ -129,7 +144,7 @@ def rename(pid, title):
     if not title or pid not in profs:
         return
     profs[pid]["name"] = title
-    if pid != core.DEFAULT_PROFILE:
+    if not is_archeage_like(profs[pid]):
         profs[pid]["desc"] = f"the video game {title}"
     core.save_settings(profiles=profs)
     core.events.put(("panel", None))
@@ -138,24 +153,33 @@ def rename(pid, title):
 def delete(pid):
     """Убрать пресет (файлы пресета переносятся в папку backups, а не стираются)."""
     profs = all_profiles()
-    if pid not in profs or len(profs) < 2 or pid == core.DEFAULT_PROFILE:
-        return False      # ArcheAge — основной пресет: его файлы лежат рядом с программой
+    if pid not in profs:
+        return False
     title = profs[pid].get("name", pid)
     if pid == core.active_profile:
-        activate(next(p for p in profs if p != pid), announce=False)
+        activate(None, announce=False)
+    if _hold["pid"] == pid:
+        _hold["pid"] = None
     profs = all_profiles()
-    profs.pop(pid, None)
+    gone = profs.pop(pid, None) or {}
     core.save_settings(profiles=profs)
+    from . import game
+    game.skip_this_run.update(e.lower() for e in gone.get("exes", []))   # не создавать заново сразу же
     if core.SETTINGS.get("profile_lock") == pid:
         core.save_settings(profile_lock=None)
+    import shutil
+    import time
+    dst = os.path.join(config.APP_DIR, "backups", f"profile_{pid}_{time.strftime('%Y-%m-%d_%H-%M-%S')}")
     if pid != core.DEFAULT_PROFILE:
         src = folder(pid)
         if os.path.isdir(src):
-            import shutil
-            import time
-            dst = os.path.join(config.APP_DIR, "backups", f"profile_{pid}_{time.strftime('%Y-%m-%d_%H-%M-%S')}")
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.move(src, dst)
+    else:                       # ArcheAge: её файлы лежат рядом с программой — переносим их по одному
+        for f in paths(pid).values():
+            if os.path.exists(f):
+                os.makedirs(dst, exist_ok=True)
+                shutil.move(f, os.path.join(dst, os.path.basename(f)))
     core.log(f"Пресет «{title}» удалён (его файлы — в папке backups)", "ok")
     return True
 
@@ -174,7 +198,7 @@ def bind(pid):
         voices._data["loaded"] = False
     glossary.GLOSSARY_FILE = p["glossary"]
     glossary._glossary.update(mtime=None, loaded=False)
-    if pid != core.DEFAULT_PROFILE and not os.path.exists(p["glossary"]):
+    if not os.path.exists(p["glossary"]):
         os.makedirs(folder(pid), exist_ok=True)
         with open(p["glossary"], "w", encoding="utf-8") as f:
             f.write(GENERIC_GLOSSARY)
@@ -182,15 +206,17 @@ def bind(pid):
     menu._ref.update(img=None, loaded=False)
 
 
-def activate(pid, announce=True):
-    """Переключиться на пресет игры pid."""
+def activate(pid, announce=True, hold=False):
+    """Переключиться на пресет игры pid. None — игры нет: никакой пресет не выбран.
+    hold — выбрали вручную в панели (настроить игру, пока она не запущена): программа его сама не снимает."""
     _run_cache["t"] = 0               # список запущенных игр — перепроверить (новый пресет мог только что появиться)
     profs = all_profiles()
-    if pid not in profs:
+    if pid is not None and pid not in profs:
         return
+    _hold["pid"] = pid if hold else None
     core.active_profile = pid
     core.save_settings(active_profile=pid)
-    core.apply_profile_regions(profs[pid])
+    core.apply_profile_regions(profs.get(pid) or {})
     core.in_menu = False
     bind(pid)
     try:
@@ -199,7 +225,7 @@ def activate(pid, announce=True):
     except Exception:
         pass
     core.last_line = None
-    if announce:
+    if announce and pid is not None:
         regs = [n for n, r in (("субтитры", core.region), ("реплики 2", core.region2),
                                ("ответы", core.answers_region), ("чат", core.chat_region)) if r]
         core.log(f"🎮 Игра: {profs[pid].get('name', pid)} — " +
@@ -209,10 +235,10 @@ def activate(pid, announce=True):
 
 def adapt(prompt):
     """Подставить в подсказку нейросети название текущей игры (подсказки написаны для ArcheAge)."""
-    if not prompt or core.active_profile == core.DEFAULT_PROFILE or "ArcheAge" not in prompt:
-        return prompt
     p = active()
-    desc = p.get("desc") or f"the video game {p.get('name', 'game')}"
+    if not prompt or "ArcheAge" not in prompt or (p and is_archeage_like(p)):
+        return prompt
+    desc = p.get("desc") or (f"the video game {p['name']}" if p.get("name") else "a video game")
     title = p.get("name", "the game")
     for old in ("the fantasy MMORPG ArcheAge Chronicles", "the MMORPG ArcheAge Chronicles",
                 "an English-language MMORPG (ArcheAge Chronicles)"):

@@ -226,7 +226,7 @@ def detect_new_game(checks_needed=6):
     """Вызывается 2 раза в секунду, без всяких клавиш. Программа без пресета — игра, если она из папки игр
     (Steam, Epic, GOG…) или 3 секунды подряд открыта на весь экран. Возвращает (exe, название) — пора создать пресет."""
     exe = unknown_game()
-    if not exe:
+    if not exe or exe in skip_this_run:
         _seen_new.update(exe=None, n=0)
         return None
     _, pid = foreground_exe()
@@ -249,6 +249,7 @@ def detect_new_game(checks_needed=6):
     return exe, nice_title(foreground_title(), exe)
 
 
+skip_this_run = set()   # пресет удалили, пока игра запущена — до перезапуска программы сами её не добавляем
 window_pids = {}      # exe → pid процесса с окном (заполняет running_programs)
 _scan = {"t": 0.0}
 
@@ -265,12 +266,16 @@ def scan_running(every=3.0):
     _scan["t"] = now
     progs = running_programs()
     known = [profiles.for_exe(exe) for exe, _ in progs]
-    if core.active_profile not in known:
+    act = core.active_profile
+    if act not in known:
         others = [p for p in known if p]
         if others:
-            profiles.activate(others[0])
+            profiles.activate(others[0])          # запущена другая знакомая игра — её пресет
+        elif act is not None and profiles._hold["pid"] != act:
+            profiles.activate(None)               # игра закрылась — пресет снят, «ждёт игру»
+            core.log("Игра закрыта — жду игру")
     for exe, title in progs:
-        if profiles.for_exe(exe) or exe in not_games() or exe in NOT_GAME_EXE:
+        if profiles.for_exe(exe) or exe in not_games() or exe in NOT_GAME_EXE or exe in skip_this_run:
             continue
         if in_game_folder(window_pids.get(exe)):
             return exe, nice_title(title, exe)

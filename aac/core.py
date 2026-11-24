@@ -33,12 +33,18 @@ SETTINGS = {}
 
 # ---------- настройки (запоминаем область) ----------
 PROFILE_KEYS = ("region", "region2", "answers_region", "chat_region", "menu_region")   # у каждой игры свои
-DEFAULT_PROFILE = "archeage"
-active_profile = DEFAULT_PROFILE
+DEFAULT_PROFILE = "archeage"     # id пресета ArcheAge (его файлы — рядом с программой); не «главный», обычный
+active_profile = None            # пресет игры, которая сейчас запущена; None — игры нет («ждёт игру»)
+
+
+def had_old_settings(data):
+    """Настройки из версий до пресетов (там всё было про ArcheAge)."""
+    return any(data.get(k) for k in PROFILE_KEYS) or any(
+        os.path.exists(os.path.join(config.APP_DIR, f)) for f in ("characters.json", "translation_cache.json"))
 
 
 def default_profiles(data=None):
-    """Первый пресет — ArcheAge Chronicles; области берутся из прежних (общих) настроек."""
+    """Переход со старых версий: всё прежнее — в пресет ArcheAge Chronicles (области из общих настроек)."""
     data = data or {}
     p = {"name": "ArcheAge Chronicles", "exes": ["archeagechronicles.exe"], "match": "archeage",
          "desc": "the MMORPG ArcheAge Chronicles"}
@@ -64,11 +70,11 @@ def load_settings():
             data = json.load(f)
     except Exception:
         return {}
-    if not isinstance(data.get("profiles"), dict) or not data["profiles"]:
-        data["profiles"] = default_profiles(data)       # переход на пресеты: всё прежнее — в пресет ArcheAge
-    active_profile = data.get("active_profile") if data.get("active_profile") in data["profiles"] else \
-        next(iter(data["profiles"]))
-    apply_profile_regions(data["profiles"][active_profile])
+    if not isinstance(data.get("profiles"), dict):
+        # переход на пресеты: у прежнего пользователя всё было про ArcheAge — в её пресет; новый — без пресетов
+        data["profiles"] = default_profiles(data) if had_old_settings(data) else {}
+    active_profile = data.get("active_profile") if data.get("active_profile") in data["profiles"] else None
+    apply_profile_regions(data["profiles"].get(active_profile) or {})
     return data
 
 
@@ -91,14 +97,15 @@ def save_settings(**kw):
             # файл повреждён/недописан — берём то, что загружено в программу, а не пустоту
             data = dict(SETTINGS) if isinstance(SETTINGS, dict) else {}
         prof_kw = {k: kw.pop(k) for k in list(kw) if k in PROFILE_KEYS}
-        if prof_kw:    # области — в пресет текущей игры
+        if prof_kw and active_profile is not None:    # области — в пресет текущей игры (игры нет — некуда)
             profiles = data.get("profiles") if isinstance(data.get("profiles"), dict) else None
             if not profiles:
-                profiles = (SETTINGS.get("profiles") if isinstance(SETTINGS, dict) else None) or default_profiles(data)
-            prof = profiles.setdefault(active_profile, {"name": active_profile, "exes": []})
-            for k, v in prof_kw.items():
-                prof[k] = list(v) if isinstance(v, tuple) else v
-            kw["profiles"] = profiles
+                profiles = (SETTINGS.get("profiles") if isinstance(SETTINGS, dict) else None) or {}
+            prof = profiles.get(active_profile)
+            if prof is not None:
+                for k, v in prof_kw.items():
+                    prof[k] = list(v) if isinstance(v, tuple) else v
+                kw["profiles"] = profiles
         data.update(kw)
         if isinstance(SETTINGS, dict):
             SETTINGS.update(kw)
