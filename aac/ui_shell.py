@@ -37,6 +37,24 @@ KEY_GROUPS = [
 HOME_KEYS = ["auto", "tooltip", "once", "repeat"]
 
 
+_scaled = {"done": False}
+
+
+def _apply_scale(win):
+    """Размеры окна заданы для масштаба 100%. При 125–200% шрифты Windows крупнее — увеличиваем и размеры,
+    иначе надписи не помещаются (боковая колонка, журнал, окно целиком)."""
+    global W, H, SIDE_W, LOG_W, MIN_W, MIN_H, MIN_LOG, MAX_LOG
+    if _scaled["done"]:
+        return
+    _scaled["done"] = True
+    try:
+        s = max(1.0, min(3.0, float(win.winfo_fpixels("1i")) / 96.0))
+    except Exception:
+        s = 1.0
+    W, H, SIDE_W, LOG_W = int(W * s), int(H * s), int(SIDE_W * s), int(LOG_W * s)
+    MIN_W, MIN_H, MIN_LOG, MAX_LOG = int(MIN_W * s), int(MIN_H * s), int(MIN_LOG * s), int(MAX_LOG * s)
+
+
 class Shell(SectionsMixin, GamesMixin, WizardMixin):
     def __init__(self, app, win):
         self.app, self.win = app, win
@@ -44,6 +62,7 @@ class Shell(SectionsMixin, GamesMixin, WizardMixin):
         win.attributes("-topmost", True)
         win.attributes("-alpha", 0.97)
         win.configure(bg=K.BG)
+        _apply_scale(win)                  # масштаб Windows (125%, 150%…) — размеры окна растут вместе со шрифтом
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         size = core.SETTINGS.get("panel_size") or (W, H)          # размер окна, который вы растянули мышкой
         try:
@@ -87,6 +106,8 @@ class Shell(SectionsMixin, GamesMixin, WizardMixin):
         side = tk.Frame(self.win, bg=K.SIDEBAR, width=SIDE_W)
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
+        self.side = side
+        self.win.after_idle(self._fit_sidebar)
         tk.Frame(self.win, bg=K.LINE, width=1).pack(side="left", fill="y")
         head = tk.Frame(side, bg=K.SIDEBAR)
         head.pack(fill="x", padx=14, pady=(16, 10))
@@ -150,6 +171,20 @@ class Shell(SectionsMixin, GamesMixin, WizardMixin):
                  kind="danger").pack(fill="x")
         K.label(bottom, f"версия {config.VERSION}", 8, K.FAINT).pack(anchor="w", padx=10, pady=(6, 0))
         self.bottom = bottom
+
+    def _fit_sidebar(self):
+        """Ширина боковой колонки — по самой длинной надписи (шрифт и масштаб у всех разные)."""
+        side = self.side
+        try:
+            side.pack_propagate(True)
+            side.update_idletasks()
+            need = side.winfo_reqwidth()
+            side.pack_propagate(False)
+        except tk.TclError:
+            return
+        width = max(SIDE_W, need + 8)
+        if int(side.cget("width")) != width:
+            side.config(width=width)
 
     def _hover(self, sid, on):
         if sid == self.current:
@@ -1016,8 +1051,11 @@ class Shell(SectionsMixin, GamesMixin, WizardMixin):
         if self.current == "games" and getattr(self, "_live_seen", None) is not None and live != self._live_seen:
             self._games_render()                 # игру запустили или закрыли — обновить метки в «Играх»
         self._live_seen = live
+        if len(g) > 26:
+            g = g[:25].rstrip() + "…"           # длинное название игры не раздувает колонку
         if self.game_lbl.cget("text") != g:
             self.game_lbl.config(text=g)
+            self.win.after_idle(self._fit_sidebar)
         if self.current in self.HEAVY:
             return
         fn = getattr(self, f"_refresh_{self.current}", None)

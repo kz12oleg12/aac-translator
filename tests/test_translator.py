@@ -2667,6 +2667,12 @@ def test_game_presets(monkey):
                 app.root.update(); time.sleep(0.25); app.root.update()
                 assert core_m.auto_on.is_set()
                 core_m.auto_on.clear()
+            if hasattr(app.panel, "_fit_sidebar"):     # боковая колонка — по самой длинной надписи
+                p = app.panel
+                p._fit_sidebar()
+                app.root.update()
+                need = max(w.winfo_reqwidth() for w in p.side.winfo_children())
+                assert p.side.winfo_width() >= need, (p.side.winfo_width(), need)
             if hasattr(app.panel, "_resize_start"):       # размер окна — тянуть за край, запоминается
                 class E:
                     pass
