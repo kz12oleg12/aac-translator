@@ -1051,7 +1051,71 @@ class Shell(SectionsMixin, GamesMixin, WizardMixin):
             K.label(cell, s, 9, K.DIM, bg=K.SIDEBAR).pack(anchor="w", padx=10, pady=(0, 8))
         self.bk_box_card, self.bk_box = K.card(b, padx=16, pady=10)
         self.bk_box_card.pack(fill="x", pady=(14, 0))
+        c, ci = K.card(b, padx=16, pady=12)
+        c.pack(fill="x", pady=(14, 0))
+        row = tk.Frame(ci, bg=K.CARD)
+        row.pack(fill="x")
+        tb = tk.Frame(row, bg=K.CARD)
+        tb.pack(side="left", fill="x", expand=True)
+        K.label(tb, "Удалить программу", 11, K.TEXT, "bold").pack(anchor="w")
+        K.label(tb, "Удалит программу, её настройки, игры, словари и историю, ярлыки и сохранённые ключи. "
+                    "Перед этим можно сохранить копию на рабочий стол.", 9, K.DIM, wraplength=440).pack(anchor="w")
+        K.button(row, "Удалить…", self._ask_uninstall, kind="danger").pack(side="right")
         return sc
+
+    def _ask_uninstall(self):
+        from . import uninstall
+        opts = {"backup": True, "keys": True}
+        old = getattr(self, "_dialog", None)
+        if old is not None:
+            try:
+                old.destroy()
+            except tk.TclError:
+                pass
+        d = tk.Toplevel(self.win.master)
+        self._dialog = d
+        d.overrideredirect(True)
+        d.attributes("-topmost", True)
+        d.configure(bg=K.RED)
+        box = tk.Frame(d, bg=K.CARD)
+        box.pack(fill="both", expand=True, padx=1, pady=1)
+        inner = tk.Frame(box, bg=K.CARD)
+        inner.pack(fill="both", expand=True, padx=22, pady=18)
+        K.label(inner, "Удалить AAC Translator?", 13, K.TEXT, "bold").pack(anchor="w")
+        K.label(inner, f"Удалится программа из папки {config.APP_DIR} — только её файлы, чужие файлы в этой папке "
+                       "останутся. Вместе с ней: настройки, игры и их области, словари, персонажи, история, "
+                       "офлайн-голоса и ярлыки. Библиотеки Python не трогаю.", 9, K.MUTED,
+                wraplength=440).pack(anchor="w", pady=(6, 12))
+        for key, text in (("backup", "Сначала сохранить резервную копию на рабочий стол"),
+                          ("keys", "Удалить сохранённые ключи переводчиков из Windows")):
+            r = tk.Frame(inner, bg=K.CARD)
+            r.pack(fill="x", pady=(0, 8))
+            K.Toggle(r, True, lambda v, k=key: opts.update({k: bool(v)}), small=True).pack(side="left")
+            K.label(r, text, 9, K.TEXT2).pack(side="left", padx=(8, 0))
+        btns = tk.Frame(inner, bg=K.CARD)
+        btns.pack(fill="x", pady=(8, 0))
+
+        def close():
+            try:
+                d.destroy()
+            except tk.TclError:
+                pass
+            self._dialog = None
+
+        def go():
+            close()
+            ok, msg = uninstall.run(backup_first=opts["backup"], keys_too=opts["keys"])
+            if ok:
+                core.events.put(("quit", None))
+            else:
+                core.log(f"Удаление отменено: {msg}", "error")
+        K.button(btns, "Удалить", go, kind="primary").pack(side="right")
+        K.button(btns, "Отмена", close, kind="ghost").pack(side="right", padx=(0, 8))
+        d.update_idletasks()
+        w, h = d.winfo_reqwidth(), d.winfo_reqheight()
+        sw, sh, ox, oy = self._dialog_area()
+        d.geometry(f"{w}x{h}+{ox + (sw - w) // 2}+{oy + (sh - h) // 3}")
+        d.after(200, lambda: ui_overlay.exclude_from_capture(d))
 
     def _refresh_backup(self):
         from . import backup

@@ -2267,6 +2267,56 @@ def test_problem_report_send(monkey):
     T.save_settings(reports_sent=[])
 
 
+def test_uninstall(monkey):
+    """Удаление: только файлы программы (чужие в той же папке остаются), копия на рабочий стол, ключи."""
+    try:
+        from aac import uninstall
+    except ImportError:
+        return
+    d = tempfile.mkdtemp(dir=TMP)
+    assert not uninstall.is_our_folder(d), "пустая папка — не наша"
+    assert not uninstall.is_our_folder(os.path.expanduser("~")) and not uninstall.is_our_folder("C:\\")
+    os.makedirs(os.path.join(d, "aac"))
+    open(os.path.join(d, "aac_translator.py"), "w").close()
+    assert uninstall.is_our_folder(d)
+    bat = uninstall.script(d, 4242)
+    assert 'rmdir /s /q "' + os.path.join(d, "aac") + '"' in bat and 'del /f /q "' + os.path.join(d, "glossary.txt") in bat
+    assert 'rmdir "' + d + '" 2>nul' in bat, "саму папку — без /s, только если пустая"
+    assert 'rmdir /s /q "' + d + '"' not in bat, "папку целиком не удаляем никогда"
+    # запуск: копия на рабочий стол, ключи, ярлыки; не на Windows — без самого удаления
+    monkey(T._owner("APP_DIR"), "APP_DIR", d)
+    desk = tempfile.mkdtemp(dir=TMP)
+    monkey(uninstall, "desktop", lambda: desk)
+    removed = []
+    from aac import keys
+    monkey(keys, "_write_windows", lambda name, value: removed.append((name, value)))
+    monkey(os, "environ", dict(os.environ, GROQ_API_KEY="gsk_x"))
+    ok, copy = uninstall.run(backup_first=True, keys_too=True)
+    assert ok and copy.startswith(desk) and os.path.exists(copy)
+    assert ("GROQ_API_KEY", None) in removed and "GROQ_API_KEY" not in os.environ
+    monkey(T._owner("APP_DIR"), "APP_DIR", tempfile.mkdtemp(dir=TMP))
+    ok, msg = uninstall.run(backup_first=False, keys_too=False)
+    assert not ok and "не похожа на папку программы" in msg
+    if sys.platform == "win32":      # настоящий bat на Windows: русские буквы в пути, чужой файл рядом
+        for foreign in (True, False):
+            root = os.path.join(tempfile.mkdtemp(dir=TMP), "Программа тест")
+            os.makedirs(os.path.join(root, "aac"))
+            os.makedirs(os.path.join(root, "history"))
+            for f in ("aac_translator.py", "glossary.txt", "aac_translator_settings.json"):
+                open(os.path.join(root, f), "w").close()
+            open(os.path.join(root, "aac", "main.py"), "w").close()
+            if foreign:
+                open(os.path.join(root, "мой файл.docx"), "w").close()
+            batf = os.path.join(tempfile.mkdtemp(dir=TMP), "u.bat")
+            with open(batf, "w", encoding="utf-8") as f:
+                f.write(uninstall.script(root, 999999))
+            subprocess.run(["cmd", "/c", batf], timeout=60, capture_output=True)
+            if foreign:
+                assert os.listdir(root) == ["мой файл.docx"], os.listdir(root)
+            else:
+                assert not os.path.exists(root), os.listdir(root)
+
+
 def z_read(path, name):
     import zipfile
     with zipfile.ZipFile(path) as z:
