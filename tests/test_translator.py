@@ -2457,6 +2457,34 @@ def test_new_user_no_presets(monkey):
     assert json.load(open(os.path.join(d, "s.json"))).get("profiles") in (None, {})
 
 
+def test_web_panel(monkey):
+    """Новая панель на HTML: страница и данные только с ключом, состояние собирается, журнал отдаётся."""
+    try:
+        from aac import web_api, core
+    except ImportError:
+        print("   (в этой версии нет — пропуск)")
+        return
+    import json as _json
+    import urllib.request
+    import urllib.error
+    url = web_api.serve()
+    base, tok = url.split("?")[0], url.split("t=")[1]
+    html = urllib.request.urlopen(url, timeout=5).read().decode("utf-8")
+    assert "__TOKEN__" not in html and tok in html, "в страницу не подставлен ключ"
+    try:
+        urllib.request.urlopen(base + "api/state", timeout=5)
+        raise AssertionError("данные отдаются без ключа")
+    except urllib.error.HTTPError as e:
+        assert e.code == 403
+    req = urllib.request.Request(base + "api/state", headers={"X-Token": tok})
+    st = _json.loads(urllib.request.urlopen(req, timeout=5).read())
+    for k in ("version", "auto", "game", "translator", "modes", "keys"):
+        assert k in st, f"в состоянии нет «{k}»"
+    core.log("проверка журнала панели", "ok")
+    req = urllib.request.Request(base + "api/log", headers={"X-Token": tok})
+    assert any(e["msg"] == "проверка журнала панели" for e in _json.loads(urllib.request.urlopen(req, timeout=5).read()))
+
+
 def test_game_presets(monkey):
     """Пресеты игр: у каждой игры свои области, словарь, персонажи; переключение — по окну на экране."""
     try:

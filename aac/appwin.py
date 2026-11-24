@@ -91,6 +91,11 @@ class App:
         self.busy = set()
         self.panel = ui_shell.Shell(self, tk.Toplevel(self.root))   # главное окно: разделы слева
         self.panel.refresh()
+        try:   # новая панель на HTML (WebView2); не открылась — остаётся эта
+            from . import web_api
+            web_api.start(self)
+        except Exception as e:
+            core.log(f"Новая панель не запустилась: {e}", "warn")
 
         core.log(f"AAC Translator v{config.VERSION} запущен", "ok")
         updater.announce_if_updated()
@@ -1022,8 +1027,15 @@ class App:
                     if sw and sw.alive():
                         sw.fill_voices(payload)
                     self.panel.fill_voices(payload)
+                elif kind == "web_call":
+                    payload()
                 elif kind == "quit":
                     self._closing = True
+                    try:
+                        from . import web_api
+                        web_api.shutdown()
+                    except Exception:
+                        pass
                     tts.shutdown()
                     tcache.save()
                     tray.stop_tray()

@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
       - name: Библиотеки
         run: >
-          python -m pip install --disable-pip-version-check pyinstaller mss pillow keyboard requests pynput pystray
+          python -m pip install --disable-pip-version-check pyinstaller mss pillow keyboard requests pynput pystray pywebview
           edge-tts numpy scipy winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Globalization
           winrt-Windows.Foundation winrt-Windows.Storage.Streams
       - name: Адрес для отчётов о проблемах (из секрета репозитория, в открытый код не попадает)
@@ -35,7 +35,7 @@ jobs:
       - name: Сборка
         run: >
           pyinstaller --noconfirm --windowed --name "AAC Translator" --icon icon.ico
-          --collect-submodules aac --collect-submodules winrt --collect-all edge_tts
+          --collect-submodules aac --collect-submodules winrt --collect-all edge_tts --collect-all webview --add-data "aac/webpanel;aac/webpanel"
           --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 --hidden-import pystray._win32
           --exclude-module torch --exclude-module torchaudio aac_translator.py
       - name: Файлы рядом с программой

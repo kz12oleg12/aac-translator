@@ -293,6 +293,10 @@ def _watchdog():
 
 def main():
     import sys
+    if "--webpanel" in sys.argv:      # окно новой панели (отдельный процесс, см. web_api.py)
+        from . import web_window
+        web_window.run(sys.argv[sys.argv.index("--webpanel") + 1])
+        return
     try:
         from . import keys
         keys.load_from_windows()      # ключи и адрес для отчётов — из Windows, даже после «Перезапустить»
