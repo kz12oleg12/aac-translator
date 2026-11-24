@@ -1,6 +1,6 @@
 {
- "version": "15.0",
+ "version": "15.1",
  "notes": [
-  "Есть версия без Python: AAC Translator.exe (github.com/kz12oleg12/aac-translator/releases) — распаковать и запустить"
+  "Офлайн-голоса Silero ставятся одной кнопкой: «Голос и интонация» → Silero → «Установить офлайн-голоса»"
  ]
 }

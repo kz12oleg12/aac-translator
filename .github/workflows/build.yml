@@ -21,7 +21,7 @@ jobs:
       - name: Библиотеки
         run: >
           python -m pip install --disable-pip-version-check pyinstaller mss pillow keyboard requests pynput pystray
-          edge-tts numpy winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Globalization
+          edge-tts numpy scipy winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Globalization
           winrt-Windows.Foundation winrt-Windows.Storage.Streams
       - name: Сборка
         run: >

@@ -293,6 +293,11 @@ def _watchdog():
 
 def main():
     import sys
+    try:
+        from . import voicepack
+        voicepack.activate()          # скачанные офлайн-голоса (.exe) — подключить до первого голоса
+    except Exception:
+        pass
     try:   # если программа упадёт целиком — причина попадёт в crash.log
         import faulthandler
         faulthandler.enable(open(os.path.join(config.APP_DIR, "crash.log"), "a"))

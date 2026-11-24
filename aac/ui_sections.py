@@ -337,6 +337,9 @@ class SectionsMixin:
         self._voice_rows(ci)
         self.voice_note = K.label(ci, "", 9, K.DIM, wraplength=600)
         self.voice_note.pack(anchor="w", pady=(8, 0))
+        from . import voicepack
+        self.vp_btn = K.button(ci, "Установить офлайн-голоса", voicepack.install, kind="primary", size=9)
+        self._vp_shown = False
         link = K.label(ci, "Голоса персонажей →", 9, K.ACCENT_TEXT)
         link.config(cursor="hand2")
         link.bind("<Button-1>", lambda e: self.show("chars"))
@@ -498,11 +501,27 @@ class SectionsMixin:
         for t in self.voice_tiles:
             t.sync()
         eng = config.TTS_ENGINE
+        from . import voicepack
+        need = eng == "silero" and not tts.tts_silero.installed()
+        if need != self._vp_shown:          # кнопка установки — только пока голосов нет
+            self._vp_shown = need
+            if need:
+                self.vp_btn.pack(anchor="w", pady=(8, 0), after=self.voice_note)
+            else:
+                self.vp_btn.pack_forget()
+        if need:
+            busy = voicepack.state["busy"]
+            txt = f"Устанавливаю… {voicepack.state['progress']}" if busy else "Установить офлайн-голоса"
+            if self.vp_btn.cget("text") != txt:
+                self.vp_btn.config(text=txt, state="disabled" if busy else "normal")
         if eng == "silero":
             note = ("Голоса считаются прямо на компьютере, без интернета — почти без задержки. В первый раз "
                     "скачается модель (~100 МБ) и загрузится за 5–20 с." if tts.tts_silero.installed() else
-                    "Нужна установка: закройте программу и запустите install_silero.bat из папки программы "
-                    "(скачает PyTorch, около 1 ГБ). Пока не установлено — читает голос Windows.")
+                    "Нужна установка одной кнопкой ниже: программа скачает офлайн-голоса (около 250 МБ, "
+                    "один раз) и подключит их сама. Пока не установлено — читает голос Windows."
+                    if config.FROZEN else
+                    "Нужна установка одной кнопкой ниже: откроется окно установки PyTorch (около 1 ГБ на диске), "
+                    "после неё перезапустите программу. Пока не установлено — читает голос Windows.")
             self.voice_note.config(text=note)
         elif eng == "neural":
             self.voice_note.config(text="Бесплатные нейроголоса Microsoft (как «Читать вслух» в Edge). "

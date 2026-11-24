@@ -1,5 +1,5 @@
 """
-Экранный ИИ-переводчик для ArcheAge Chronicles (и любых других игр). Версия 15.0
+Экранный ИИ-переводчик для ArcheAge Chronicles (и любых других игр). Версия 15.1
 
 Горячие клавиши:
   F9           — выделить область СУБТИТРОВ (запоминается навсегда, даже после перезапуска)
@@ -63,6 +63,28 @@ if "--selftest" in sys.argv:
         with open(os.path.join(_HERE, "selftest.txt"), "w", encoding="utf-8") as f:
             f.write(traceback.format_exc())
         sys.exit(2)
+
+if "--selftest-voices" in sys.argv:
+    # проверка пакета офлайн-голосов: подключается, PyTorch грузится, модель говорит фразу; код 0 — всё хорошо
+    import traceback
+    sys.path.insert(0, _HERE)
+    out = []
+    try:
+        from aac import voicepack, tts_silero
+        out.append(f"пакет: {voicepack.activate()}")
+        import torch
+        out.append(f"torch {torch.__version__}: {float(torch.ones(2).sum())}")
+        tts_silero.load()
+        path = os.path.join(_HERE, "selftest_voice.wav")
+        tts_silero.synth_to_wav("Привет! Проверка офлайн-голоса.", path, tts_silero.VOICES[0][0])
+        out.append(f"голос: {os.path.getsize(path)} байт")
+        code = 0 if os.path.getsize(path) > 10000 else 1
+    except Exception:
+        out.append(traceback.format_exc())
+        code = 2
+    with open(os.path.join(_HERE, "selftest.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(out))
+    sys.exit(code)
 
 if sys.stdout is None or sys.stderr is None:
     _log_path = os.path.join(_HERE, "translator.log")

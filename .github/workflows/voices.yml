@@ -1,0 +1,59 @@
+name: Пакет офлайн-голосов
+
+# Пакет пересобирается редко: при изменении этого файла (или вручную). Тег — как PACK_TAG в aac/voicepack.py.
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/voices.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PACK_TAG: voices-1
+
+jobs:
+  voices:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Программа (.exe) — для проверки пакета
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller mss pillow keyboard requests pynput pystray edge-tts numpy scipy winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Globalization winrt-Windows.Foundation winrt-Windows.Storage.Streams
+          pyinstaller --noconfirm --windowed --name "AAC Translator" --icon icon.ico --collect-submodules aac --collect-submodules winrt --collect-all edge_tts --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 --hidden-import pystray._win32 --exclude-module torch --exclude-module torchaudio aac_translator.py
+      - name: Пакет голосов
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check --target pack/site torch scipy silero-stress
+          # numpy — уже внутри программы (той же версии); второй экземпляр не нужен
+          Get-ChildItem pack/site -Directory | Where-Object { $_.Name -like "numpy*" } | Remove-Item -Recurse -Force
+          # модули Python, которых нет в программе, но нужны PyTorch
+          $py = $env:pythonLocation
+          New-Item -ItemType Directory pack/stdlib, pack/dlls | Out-Null
+          robocopy "$py/Lib" pack/stdlib /E /XD site-packages test idlelib ensurepip __pycache__ /NFL /NDL /NJH /NJS
+          robocopy "$py/DLLs" pack/dlls *.pyd /NFL /NDL /NJH /NJS
+          if ($LASTEXITCODE -ge 8) { throw "robocopy $LASTEXITCODE" } else { $global:LASTEXITCODE = 0 }
+          "{0:N0} МБ" -f ((Get-ChildItem pack -Recurse | Measure-Object Length -Sum).Sum / 1MB)
+      - name: Проверка — .exe говорит офлайн-голосом
+        shell: pwsh
+        run: |
+          $d = "dist/AAC Translator"
+          Copy-Item -Recurse pack "$d/voices_pack"
+          $p = Start-Process -FilePath "$d/AAC Translator.exe" -ArgumentList "--selftest-voices" -Wait -PassThru
+          Get-Content "$d/selftest.txt"
+          if ($p.ExitCode -ne 0) { throw "пакет голосов не работает: $($p.ExitCode)" }
+      - name: Архив и релиз
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          7z a -tzip -mx=5 AAC_Voices_Silero_win64.zip ./pack/* | Out-Null
+          "{0:N0} МБ" -f ((Get-Item AAC_Voices_Silero_win64.zip).Length / 1MB)
+          gh release view $env:PACK_TAG *> $null
+          if ($LASTEXITCODE -eq 0) { gh release upload $env:PACK_TAG AAC_Voices_Silero_win64.zip --clobber }
+          else { gh release create $env:PACK_TAG AAC_Voices_Silero_win64.zip --title "Офлайн-голоса Silero" --notes "Пакет офлайн-голосов для AAC Translator.exe. Ставится сам кнопкой «Установить офлайн-голоса» в разделе «Голос и интонация». Вручную: распакуйте в папку программы, в папку voices_pack." --latest=false }
