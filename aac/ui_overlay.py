@@ -6,7 +6,7 @@ import ctypes
 import tkinter as tk
 
 
-from . import config, core
+from . import config, core, screens
 
 
 # ---------- окна ----------
@@ -99,8 +99,7 @@ class Overlay:
         self.width = width
         x, y = core.SETTINGS.get(f"{name}_pos", default_pos)
         # если окно сохранено за краем экрана — возвращаем на место
-        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        if not (0 <= x <= sw - 100 and 0 <= y <= sh - 60):
+        if not screens.on_screen(x, y):          # монитор отключили — окно вернуть на место
             x, y = default_pos
         win.geometry(f"{width}x10+{x}+{y}")
         self._geom = (width, 10, x, y)
@@ -290,31 +289,32 @@ class Overlay:
             reg = self.leader.anchor() if (self.leader.anchor and not self.leader.manual) else None
             if reg and self.leader.visible and y < reg[1] + reg[3] and y + h > reg[1]:
                 y = ly - h        # снизу — субтитры игры: ставим ответы над окном субтитров
-            y = max(0, min(y, self.win.winfo_screenheight() - h))
+            _, y = screens.clamp(lx, y, lw, h, near=(lx + lw // 2, ly))
             self._place(lw, h, lx, y)
             return
         reg = self.anchor() if (self.anchor and not self.manual) else None
         if reg and self.anchor_side in ("left", "right"):
             # окно сбоку от области (для вариантов ответа), верх — на уровне области
             x0, y0, rw, rh = reg
-            sw = self.win.winfo_screenwidth()
+            ml, mt, mr, mb = screens.monitor_at(x0 + rw // 2, y0 + rh // 2)   # монитор, где область
             w = self.width
             self.win.update_idletasks()
             h = self._content_height()
             left_x, right_x = x0 - w - config.ANCHOR_GAP, x0 + rw + config.ANCHOR_GAP
             if self.anchor_side == "left":
-                x = left_x if left_x >= 0 else right_x
+                x = left_x if left_x >= ml else right_x
             else:
-                x = right_x if right_x + w <= sw else left_x
-            x = min(max(0, x), sw - w)
-            y = min(max(0, y0), self.win.winfo_screenheight() - h)
+                x = right_x if right_x + w <= mr else left_x
+            x = min(max(ml, x), mr - w)
+            y = min(max(mt, y0), mb - h)
             self._place(w, h, x, y)
             return
         if reg:
             # окно ровно над выделенной областью и той же ширины
             x0, y0, rw, rh = reg
+            ml, mt, mr, mb = screens.monitor_at(x0 + rw // 2, y0 + rh // 2)   # монитор, где область
             w = max(rw, 300)
-            x = max(0, x0 + (rw - w) // 2)
+            x = max(ml, x0 + (rw - w) // 2)
             if self.width != w:
                 self.width = w
                 self.label.config(wraplength=w - 32)
@@ -323,7 +323,7 @@ class Overlay:
             self.win.update_idletasks()
             h = self._content_height()
             y = y0 - h - config.ANCHOR_GAP
-            if y < 0:  # над областью нет места — ставим под неё
+            if y < mt:  # над областью нет места — ставим под неё
                 y = y0 + rh + config.ANCHOR_GAP
             self._place(w, h, x, y)
             return
@@ -467,8 +467,7 @@ class Indicator:
         self.label = tk.Label(win, text="", fg="#6f6", bg="#111", font=("Segoe UI", 9, "bold"), padx=8, pady=2)
         self.label.pack()
         x, y = core.SETTINGS.get("indicator_pos", (12, 12))
-        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        if not (0 <= x <= sw - 40 and 0 <= y <= sh - 20):
+        if not screens.on_screen(x, y, 40, 20):
             x, y = 12, 12
         win.geometry(f"+{x}+{y}")
         self.label.bind("<ButtonPress-1>", self._start)

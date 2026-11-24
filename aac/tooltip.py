@@ -33,6 +33,14 @@ def screen_size():
         return 1920, 1080
 
 
+def _box_at(pos):
+    """Прямоугольник поиска вокруг курсора — на том мониторе, где мышка (их может быть несколько)."""
+    from . import screens
+    l, t, r, b = screens.monitor_at(*pos)
+    x, y, w, h = search_box(pos[0] - l, pos[1] - t, r - l, b - t)
+    return x + l, y + t, w, h
+
+
 def search_box(cx, cy, sw, sh, box=None):
     """Прямоугольник экрана вокруг курсора, где ищем подсказку: (x, y, w, h)."""
     bw, bh = box or config.TOOLTIP_BOX
@@ -116,8 +124,7 @@ def translate_smart(pos=None):
             core.log("Подсказка: не удалось узнать, где мышка", "error")
             return
         cx, cy = pos
-        sw, sh = screen_size()
-        x, y, w, h = search_box(cx, cy, sw, sh)
+        x, y, w, h = _box_at(pos)
         img = capture.mask_out(capture.grab((x, y, w, h)), (x, y, w, h), list(core.own_rects))
         try:
             lines = ocr.ocr_boxes(img)
@@ -146,8 +153,7 @@ def translate_at_cursor(pos=None):
             core.log("Подсказка: не удалось узнать, где мышка", "error")
             return
         cx, cy = pos
-        sw, sh = screen_size()
-        x, y, w, h = search_box(cx, cy, sw, sh)
+        x, y, w, h = _box_at(pos)
         core.events.put(("tooltip_show", {"text": "⏳ Перевожу подсказку…", "pos": pos, "box": None}))
         img = capture.mask_out(capture.grab((x, y, w, h)), (x, y, w, h), list(core.own_rects))
         try:

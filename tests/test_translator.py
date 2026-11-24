@@ -1532,6 +1532,11 @@ def test_tooltip(monkey):
     from PIL import Image
     monkey(tooltip.capture, "grab", lambda reg: shots.append(reg) or Image.new("RGB", (reg[2], reg[3])))
     monkey(tooltip, "screen_size", lambda: (1920, 1080))
+    try:
+        from aac import screens
+        monkey(screens, "monitor_at", lambda x, y: (0, 0, 1920, 1080))
+    except ImportError:
+        pass
     monkey(tooltip.ocr, "ocr_boxes", lambda img: [(t, (b[0] - 0, b[1], b[2], b[3])) for t, b in lines])
 
     def fake_tr(img, prompt=None):
@@ -2363,6 +2368,33 @@ def test_game_presets(monkey):
                 assert app._area_target() is None, "в браузере области не обводим"
                 profiles.delete("hades")
                 profiles.delete(w3)
+            try:
+                from aac import screens
+            except ImportError:
+                screens = None
+            if screens is not None:            # два монитора: второй слева (x < 0) — обводка на нём тоже работает
+                import tkinter as tk
+                monkey(screens, "virtual", lambda: (-1920, 0, 3840, 1080))
+                monkey(screens, "monitor_at", lambda x, y: (-1920, 0, 0, 1080) if x < 0 else (0, 0, 1920, 1080))
+                got = []
+                app.pick_area("Обведите ЗАДАНИЕ.", got.append)
+                app.root.update()
+                cv = app._picking and [c for w in app.root.winfo_children() if isinstance(w, tk.Toplevel)
+                                       for c in w.winfo_children() if isinstance(c, tk.Canvas)
+                                       and str(c.cget("cursor")) == "cross"][-1]
+                for ev, x, y in (("<ButtonPress-1>", 100, 200), ("<B1-Motion>", 400, 300), ("<ButtonRelease-1>", 400, 300)):
+                    cv.event_generate(ev, x=x, y=y)
+                app.root.update()
+                assert got == [(-1820, 200, 300, 100)], got       # координаты экрана, на левом мониторе
+                from aac import appwin as aw
+                # подсказка у мышки на левом мониторе — окно перевода там же, а не на основном
+                x, y = aw._on_monitor(T._owner("place_word").place_word if hasattr(T, "place_word") else
+                                      __import__("aac.tooltip", fromlist=["x"]).place_word,
+                                      (-1000, 500, 120, 18), (-940, 510), 200, 40)
+                assert -1920 <= x <= -200 and 0 <= y < 1080, (x, y)
+                from aac import tooltip as tt
+                box = tt._box_at((-30, 500))
+                assert box[0] + box[2] <= 0, "поиск подсказки — на мониторе, где мышка"
             if hasattr(app, "_picking"):        # F7 несколько раз — затемнения не накладываются друг на друга
                 import tkinter as tk
                 overlays = lambda: [c for w in app.root.winfo_children() if isinstance(w, tk.Toplevel) and w.winfo_exists()

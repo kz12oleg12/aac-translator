@@ -8,7 +8,7 @@ import threading
 import time
 import tkinter as tk
 
-from . import config, core, game, glossary, hotkeys, limits, menu, profiles, tcache, translate, tts, ui_overlay
+from . import config, core, game, glossary, hotkeys, limits, menu, profiles, screens, tcache, translate, tts, ui_overlay
 from . import ui_kit as K
 from .ui_sections import GamesMixin, SectionsMixin
 from .ui_panel import LOG_COLORS, PROVIDER_LABELS, PROVIDER_NAMES
@@ -56,13 +56,13 @@ class Shell(SectionsMixin, GamesMixin):
             self.log_w = LOG_W
         default = (sw - self.main_w - 20, 40)
         x, y = core.SETTINGS.get("panel_pos", default)
-        if not (0 <= x <= sw - 100 and 0 <= y <= sh - 60):
+        if not screens.on_screen(x, y):        # панель может жить и на втором мониторе
             x, y = default
         self.default_pos = default
         self.height = h
         self.log_on = bool(core.SETTINGS.get("log_visible", True))
         width = self.total_w()
-        x = max(0, min(x, sw - width))
+        x, y = screens.clamp(x, y, width, 200, near=(x + 50, y + 20))   # целиком на своём мониторе
         win.geometry(f"{width}x{h}+{x}+{y}")
         self.visible = True
         self.busy = False
@@ -956,8 +956,8 @@ class Shell(SectionsMixin, GamesMixin):
         K.button(btns, no_text, no, kind="ghost").pack(side="right", padx=(0, 8))
         d.update_idletasks()
         w, h = d.winfo_reqwidth(), d.winfo_reqheight()
-        sw, sh = d.winfo_screenwidth(), d.winfo_screenheight()
-        d.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 3}")
+        sw, sh, ox, oy = self._dialog_area()
+        d.geometry(f"{w}x{h}+{ox + (sw - w) // 2}+{oy + (sh - h) // 3}")
         d.after(200, lambda: ui_overlay.exclude_from_capture(d))
         return d
 
@@ -1010,8 +1010,8 @@ class Shell(SectionsMixin, GamesMixin):
         K.button(btns, "Отмена", close, kind="ghost").pack(side="right")
         d.update_idletasks()
         w, h = d.winfo_reqwidth(), d.winfo_reqheight()
-        sw, sh = d.winfo_screenwidth(), d.winfo_screenheight()
-        d.geometry(f"{w}x{h}+{(sw - w) // 2}+{max(20, (sh - h) // 3)}")
+        sw, sh, ox, oy = self._dialog_area()
+        d.geometry(f"{w}x{h}+{ox + (sw - w) // 2}+{oy + max(20, (sh - h) // 3)}")
         d.after(200, lambda: ui_overlay.exclude_from_capture(d))
         self._pick_rows = lst
         return d
@@ -1080,6 +1080,16 @@ class Shell(SectionsMixin, GamesMixin):
             self.win.deiconify()
             self.refresh()
         self.visible = not self.visible
+
+    def _dialog_area(self):
+        """Вопросы — на том мониторе, где панель (или мышка, если панель скрыта)."""
+        if self.visible:
+            px, py = self.win.winfo_x() + self.total_w() // 2, self.win.winfo_y() + 40
+        else:
+            from . import tooltip
+            px, py = tooltip.cursor_pos() or (0, 0)
+        l, t, r, b = screens.monitor_at(px, py)
+        return r - l, b - t, l, t
 
     def reset_pos(self):
         self.reset_size()
@@ -1255,10 +1265,9 @@ class LogColumn:
         self.shell.log_on = self.visible
         w = self.shell.total_w()
         x, y = self.win.winfo_x(), self.win.winfo_y()
-        sw = self.win.winfo_screenwidth()
         if self.visible:
             self._pack()
-            x = max(0, min(x, sw - w))      # не уезжать за правый край экрана
+            x, _ = screens.clamp(x, y, w, 100, near=(x + 50, y + 20))   # не уезжать за край монитора
         else:
             self.frame.pack_forget()
             self.line.pack_forget()

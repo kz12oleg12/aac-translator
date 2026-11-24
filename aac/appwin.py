@@ -11,12 +11,21 @@ import threading
 import tkinter as tk
 
 
-from . import chat, config, menu, core, game, history, hotkeys, profiles, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_shell, ui_windows, updater, watcher
+from . import chat, config, menu, core, game, history, hotkeys, profiles, screens, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_shell, ui_windows, updater, watcher
+
+
+def _on_monitor(place, box, pos, w, h):
+    """tooltip.place/place_word считают от (0, 0) экрана — пересчитываем для монитора, где мышка."""
+    l, t, r, b = screens.monitor_at(*pos)
+    box2 = (box[0] - l, box[1] - t, box[2], box[3]) if box else None
+    x, y = place(box2, (pos[0] - l, pos[1] - t), w, h, r - l, b - t)
+    return x + l, y + t
 
 
 class App:
     def __init__(self):
         self.root = tk.Tk()
+        screens.set_fallback(self.root.winfo_screenwidth(), self.root.winfo_screenheight())
         ico = os.path.join(config.APP_DIR, "icon.ico")
         try:
             if os.path.exists(ico):
@@ -232,11 +241,14 @@ class App:
         sel.overrideredirect(True)
         sel.attributes("-topmost", True)
         sel.attributes("-alpha", 0.3)
-        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
-        sel.geometry(f"{sw}x{sh}+0+0")
+        vx, vy, vw, vh = screens.virtual()           # все мониторы, а не только основной
+        sel.geometry(f"{vw}x{vh}+{vx}+{vy}")
         cv = tk.Canvas(sel, cursor="cross", bg="black", highlightthickness=0)
         cv.pack(fill="both", expand=True)
-        cv.create_text(sw // 2, 40, text=prompt + "   Esc — отмена.", fill="white", font=("Segoe UI", 18))
+        cur = tooltip.cursor_pos() or (vx + vw // 2, vy)
+        ml, mt, mr, mb = screens.monitor_at(*cur)     # подсказка — на мониторе, где мышка
+        cv.create_text((ml + mr) // 2 - vx, mt + 40 - vy, text=prompt + "   Esc — отмена.", fill="white",
+                       font=("Segoe UI", 18))
         state = {}
 
         def close():
@@ -270,7 +282,7 @@ class App:
                 return
             x0, y0 = min(state["x0"], e.x), min(state["y0"], e.y)
             w, h = abs(e.x - state["x0"]), abs(e.y - state["y0"])
-            finish((x0, y0, w, h) if w > 10 and h > 10 else None)
+            finish((x0 + vx, y0 + vy, w, h) if w > 10 and h > 10 else None)    # в координаты экрана
 
         cv.bind("<ButtonPress-1>", down)
         cv.bind("<B1-Motion>", drag)
@@ -319,8 +331,7 @@ class App:
         self.tip._set_wrap(self.tip.width)
         self.tip.show(data["text"])
         _, h, _, _ = self.tip._pos()
-        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
-        x, y = tooltip.place(data["box"], data["pos"], self.tip.width, h, sw, sh)
+        x, y = _on_monitor(tooltip.place, data["box"], data["pos"], self.tip.width, h)
         self.tip._place(self.tip.width, h, x, y)
         self.tip.win.lift()
         first = self.tip_state is None
@@ -345,8 +356,7 @@ class App:
     # --- лёгкий перевод надписи под мышкой ---
     def show_word(self, data):
         w, h = self.word.show(data["text"], data.get("orig"))
-        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
-        self.word.move(*tooltip.place_word(data["box"], data["pos"], w, h, sw, sh))
+        self.word.move(*_on_monitor(tooltip.place_word, data["box"], data["pos"], w, h))
         first = self.word_state is None
         self.word_state = {"pos": data["pos"], "t": time.time()}
         if first:
@@ -529,9 +539,9 @@ class App:
         w.overrideredirect(True)
         w.attributes("-topmost", True)
         w.configure(bg="#1a1d23", highlightthickness=2, highlightbackground="#4d86ff")
-        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        ml, mt, mr, mb = screens.monitor_at(*(tooltip.cursor_pos() or (0, 0)))   # на мониторе, где мышка
         width = 620
-        w.geometry(f"{width}x86+{(sw - width) // 2}+{sh - 220}")
+        w.geometry(f"{width}x86+{(ml + mr - width) // 2}+{mb - 220}")
         tk.Label(w, text="💬 Напишите по-русски → Enter: английский перевод — в буфер обмена.  Esc — закрыть",
                  fg="#8cf", bg="#1a1d23", font=("Segoe UI", 9), anchor="w").pack(
             fill="x", padx=8, pady=(6, 2))
