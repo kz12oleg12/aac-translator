@@ -86,6 +86,16 @@ if "--selftest-voices" in sys.argv:
         f.write("\n".join(out))
     sys.exit(code)
 
+if "--webpanel" in sys.argv:      # окно новой панели — отдельный процесс, свой журнал не ведёт
+    if sys.stdout is None or sys.stderr is None:
+        sys.stdout = sys.stderr = open(os.devnull, "w")
+    sys.path.insert(0, _HERE)
+    from aac import web_window
+    _a = sys.argv
+    web_window.run(_a[_a.index("--webpanel") + 1],
+                   int(_a[_a.index("--parent") + 1]) if "--parent" in _a else None)
+    sys.exit(0)
+
 if sys.stdout is None or sys.stderr is None:
     _log_path = os.path.join(_HERE, "translator.log")
     try:

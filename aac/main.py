@@ -295,7 +295,8 @@ def main():
     import sys
     if "--webpanel" in sys.argv:      # окно новой панели (отдельный процесс, см. web_api.py)
         from . import web_window
-        web_window.run(sys.argv[sys.argv.index("--webpanel") + 1])
+        a = sys.argv
+        web_window.run(a[a.index("--webpanel") + 1], int(a[a.index("--parent") + 1]) if "--parent" in a else None)
         return
     try:
         from . import keys

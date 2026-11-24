@@ -298,8 +298,8 @@ def serve():
 
 def _window_cmd(url):
     if getattr(sys, "frozen", False):
-        return [sys.executable, "--webpanel", url]
-    return [sys.executable, "-m", "aac.web_window", url]
+        return [sys.executable, "--webpanel", url, "--parent", str(os.getpid())]
+    return [sys.executable, "-m", "aac.web_window", url, str(os.getpid())]
 
 
 def start(app):

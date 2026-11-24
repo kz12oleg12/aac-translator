@@ -39,7 +39,33 @@ class Api:
             self.window.destroy()
 
 
-def run(url):
+def _follow_parent(pid):
+    """Программа закрылась (или её завершили) — окно панели тоже закрывается."""
+    import threading
+
+    def wait():
+        try:
+            import ctypes
+            k = ctypes.windll.kernel32
+            h = k.OpenProcess(0x00100000, False, pid)       # SYNCHRONIZE
+            if not h:
+                return                                       # не удалось следить — окно живёт само
+            k.WaitForSingleObject(h, 0xFFFFFFFF)
+        except Exception:
+            import time
+            while True:                                      # не Windows: проверять раз в 2 с
+                try:
+                    os.kill(pid, 0)
+                except OSError:
+                    break
+                time.sleep(2)
+        os._exit(0)
+    threading.Thread(target=wait, daemon=True).start()
+
+
+def run(url, parent=None):
+    if parent:
+        _follow_parent(parent)
     import webview
     api = Api()
     here = os.path.dirname(os.path.abspath(__file__))
@@ -63,4 +89,4 @@ def run(url):
 
 
 if __name__ == "__main__":
-    run(sys.argv[1])
+    run(sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else None)
