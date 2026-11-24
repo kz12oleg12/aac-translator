@@ -63,9 +63,48 @@ def _follow_parent(pid):
     threading.Thread(target=wait, daemon=True).start()
 
 
+def _unblock(root):
+    """Файлы из скачанного архива Windows помечает «из интернета» — .NET тогда не грузит Python.Runtime.dll
+    и WebView2 («Failed to resolve Python.Runtime.Loader.Initialize»). Снимаем пометку со своих .dll."""
+    if sys.platform != "win32":
+        return
+    for d, _, files in os.walk(root):
+        for f in files:
+            if f.lower().endswith((".dll", ".exe")):
+                try:
+                    os.remove(os.path.join(d, f) + ":Zone.Identifier")
+                except OSError:
+                    pass
+
+
+def _log_path():
+    try:
+        from . import config
+        return os.path.join(config.APP_DIR, "webpanel.log")
+    except Exception:
+        return None
+
+
 def run(url, parent=None):
+    """Открыть окно. Не вышло — причина в webpanel.log, процесс тихо завершается (программа покажет прежнюю панель)."""
+    try:
+        _run(url, parent)
+    except Exception:
+        import traceback
+        p = _log_path()
+        if p:
+            try:
+                with open(p, "w", encoding="utf-8") as f:
+                    f.write(traceback.format_exc())
+            except OSError:
+                pass
+        os._exit(1)
+
+
+def _run(url, parent=None):
     if parent:
         _follow_parent(parent)
+    _unblock(getattr(sys, "_MEIPASS", None) or os.path.dirname(sys.executable))
     import webview
     api = Api()
     here = os.path.dirname(os.path.abspath(__file__))

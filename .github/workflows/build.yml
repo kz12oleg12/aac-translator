@@ -35,7 +35,7 @@ jobs:
       - name: Сборка
         run: >
           pyinstaller --noconfirm --windowed --name "AAC Translator" --icon icon.ico
-          --collect-submodules aac --collect-submodules winrt --collect-all edge_tts --collect-all webview --add-data "aac/webpanel;aac/webpanel"
+          --collect-submodules aac --collect-submodules winrt --collect-all edge_tts --collect-all webview --collect-all pythonnet --collect-all clr_loader --add-data "aac/webpanel;aac/webpanel"
           --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 --hidden-import pystray._win32
           --exclude-module torch --exclude-module torchaudio aac_translator.py
       - name: Файлы рядом с программой
@@ -60,7 +60,9 @@ jobs:
           $alive = -not $p.HasExited
           if ($alive) { Stop-Process -Id $p.Id -Force }
           if (Test-Path "$d/translator.log") { Get-Content "$d/translator.log" -Tail 30 }
-          foreach ($f in "translator.log","aac_translator_settings.json","glossary.txt","characters.json") {
+          if (Test-Path "$d/webpanel.log") { Get-Content "$d/webpanel.log"; throw "новая панель не открылась (webpanel.log выше)" }
+          if (Test-Path "$d/translator.log") { if (Select-String -Path "$d/translator.log" -Pattern "Новая панель" -Quiet) { throw "новая панель не открылась (см. translator.log выше)" } }
+          foreach ($f in "translator.log","webpanel.log","aac_translator_settings.json","glossary.txt","characters.json") {
             if (Test-Path "$d/$f") { Remove-Item "$d/$f" } }
           Get-ChildItem $d -Directory | Where-Object { $_.Name -in "history","profiles","backups","reports" } | Remove-Item -Recurse -Force
           if (-not $alive) { throw "программа закрылась сама (код $($p.ExitCode))" }

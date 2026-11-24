@@ -17,7 +17,7 @@ OWN_FILES = ["AAC Translator.exe", "aac_translator.py", "aac_translator_settings
              "aac_translator_settings.json.tmp", "install.py", "install.bat", "install_silero.py",
              "install_silero.bat", "start_with_console.bat", "README.txt", "version.json", "logo.svg", "icon.ico",
              "icon_22.png", "icon_32.png", "glossary.txt", "characters.json", "characters.json.tmp",
-             "translation_cache.json", "translation_cache.json.tmp", "menu_ref.png", "translator.log",
+             "translation_cache.json", "translation_cache.json.tmp", "menu_ref.png", "translator.log", "webpanel.log",
              "translator.log.old", "crash.log", "update.log", "selftest.txt", "selftest_voice.wav",
              "voices_pack.download.zip"]
 OWN_DIRS = ["aac", "_internal", "tests", "history", "profiles", "backups", "reports", "models", "voices_pack",

@@ -312,6 +312,10 @@ def start(app):
         core.log("Новая панель недоступна (нет pywebview) — открыта прежняя", "warn")
         return False
     _state["app"] = app
+    try:
+        os.remove(os.path.join(config.APP_DIR, "webpanel.log"))   # причина прошлой неудачи — уже не нужна
+    except OSError:
+        pass
     url = serve()
     try:
         flags = 0x08000000 if sys.platform == "win32" else 0   # без окна консоли
@@ -329,7 +333,14 @@ def start(app):
         if _state["connected"]:
             return
         if (p is not None and p.poll() is not None) or time.time() - t0 > WAIT:
-            fallback("окно новой панели не открылось")
+            why = "окно новой панели не открылось"
+            try:
+                with open(os.path.join(config.APP_DIR, "webpanel.log"), encoding="utf-8") as f:
+                    last = [ln.strip() for ln in f if ln.strip()][-1]
+                why += f" ({last[:200]}; подробно — webpanel.log)"
+            except (OSError, IndexError):
+                pass
+            fallback(why)
             return
         app.root.after(300, check)
     app.root.after(300, check)
