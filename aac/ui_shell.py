@@ -695,6 +695,33 @@ class Shell(SectionsMixin, GamesMixin):
                      "ok")
         self.refresh()
 
+    def _ask_key(self, pid):
+        """Окно «Ключ Groq»: вставить ключ → сохранить в Windows, подхватить сразу и проверить."""
+        from . import keys
+        k = keys.kind(pid)
+        env, _, name, where = keys.KEYS[k]
+        have = keys.masked(pid)
+
+        def save(value):
+            err = keys.save(pid, value)
+            if err:
+                core.log(f"Ключ {name}: {err}", "error")
+                return
+            core.log(f"Ключ {name} сохранён в Windows ({env}) — проверяю…", "ok")
+            self.refresh()
+
+            def test():
+                ok, msg = keys.check(pid)
+                core.log(f"Ключ {name}: {msg}", "ok" if ok else "warn")
+                core.events.put(("panel", None))
+            threading.Thread(target=test, daemon=True).start()
+        self.ask(f"Ключ {name}",
+                 (f"Сейчас сохранён ключ {have}. Вставьте новый, чтобы заменить.\n\n" if have else "")
+                 + f"Где взять: {where}.\n\nКлюч сохранится в Windows ({env}) — не в настройках программы, "
+                   "не в резервных копиях и не на GitHub. Перезапуск не нужен.",
+                 "Сохранить", save, no_text="Отмена", entry="", secret=True,
+                 extra=("Удалить ключ", lambda: (keys.remove(pid), self.refresh())) if have else None)
+
     def _clear_cache(self):
         n = tcache.size()
         tcache.clear()
@@ -737,6 +764,10 @@ class Shell(SectionsMixin, GamesMixin):
             role = tk.Label(top, text="", bg=K.ACCENT, fg="#ffffff", font=K.f(8, "bold"), padx=6)
             sub = K.label(t, "", 9, K.DIM)
             sub.pack(anchor="w")
+            from . import keys
+            if keys.kind(pid):
+                kb = K.button(body, "Ключ", lambda pid=pid: self._ask_key(pid), kind="ghost", size=9)
+                kb.pack(side="right", padx=(10, 0))
             info = K.label(body, "", 9, K.MUTED)
             info.pack(side="right")
             if i < len(self.TR_ROWS) - 1:
@@ -763,7 +794,9 @@ class Shell(SectionsMixin, GamesMixin):
             has = translate.provider_has_key(pid)
             role = "основной" if chain[:1] == [pid] else ("запасной" if pid in chain[1:] else "")
             need_key = pid not in ("microsoft", "google")
-            sub = ("ключ сохранён в Windows" if has else "нет ключа") if need_key else "без ключа"
+            from . import keys
+            sub = ((f"ключ {keys.masked(pid)} сохранён в Windows" if has else "нет ключа — кнопка «Ключ» справа")
+                   if need_key else "без ключа")
             info = lim.get(name.split(" ")[0].lower(), "без лимита" if not need_key else "")
             state = (has, role, sub, info)
             if state == w["state"]:
@@ -975,7 +1008,7 @@ class Shell(SectionsMixin, GamesMixin):
             self.update_btn.pack(fill="x", pady=(0, 6), before=self.check_btn)
         self.refresh()
 
-    def ask(self, title, text, yes_text, on_yes, no_text="Позже", on_no=None, entry=None):
+    def ask(self, title, text, yes_text, on_yes, no_text="Позже", on_no=None, entry=None, secret=False, extra=None):
         """Вопрос в стиле программы поверх игры (не забирает фокус у игры). Один вопрос за раз.
         entry — начальный текст поля ввода; тогда on_yes получает введённый текст."""
         old = getattr(self, "_dialog", None)
@@ -998,8 +1031,11 @@ class Shell(SectionsMixin, GamesMixin):
         var = tk.StringVar(value=entry or "")
         if entry is not None:
             e = K.entry(inner, var, width=34)
+            if secret:
+                e.config(show="•")          # ключ на экране не показываем (стрим, запись)
             e.pack(fill="x", pady=(0, 16), ipady=3)
             e.bind("<Return>", lambda ev: yes())
+            e.after(50, e.focus_force)
         btns = tk.Frame(inner, bg=K.CARD)
         btns.pack(fill="x")
 
@@ -1021,6 +1057,8 @@ class Shell(SectionsMixin, GamesMixin):
                 on_no()
         K.button(btns, yes_text, yes, kind="primary").pack(side="right")
         K.button(btns, no_text, no, kind="ghost").pack(side="right", padx=(0, 8))
+        if extra:
+            K.button(btns, extra[0], lambda: (close(), extra[1]()), kind="danger").pack(side="left")
         d.update_idletasks()
         w, h = d.winfo_reqwidth(), d.winfo_reqheight()
         sw, sh, ox, oy = self._dialog_area()

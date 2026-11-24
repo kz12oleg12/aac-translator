@@ -2152,6 +2152,38 @@ def test_no_image_providers(monkey):
     T.set("SETTINGS", T.load_settings())
 
 
+def test_keys_in_app(monkey):
+    """Ключ вводится в программе: сохраняется в Windows, подхватывается сразу, проверяется; не печатается."""
+    try:
+        from aac import keys, translate
+    except ImportError:
+        return
+    written = {}
+    monkey(keys, "_write_windows", lambda name, value: written.update({name: value}) or True)
+    monkey(T._owner("GROQ_API_KEY"), "GROQ_API_KEY", "ВСТАВЬТЕ_СЮДА_КЛЮЧ_GROQ")
+    assert not translate.provider_has_key("groq_ocr")
+    assert keys.save("groq_ocr", "  short ") is not None, "мусор не сохраняем"
+    assert keys.save("groq_ocr", '"gsk_abcdefghijklmnop1234"') is None
+    assert written == {"GROQ_API_KEY": "gsk_abcdefghijklmnop1234"} and os.environ["GROQ_API_KEY"].startswith("gsk_")
+    assert translate.provider_has_key("groq_ocr"), "подхватился без перезапуска"
+    assert keys.masked("groq_ocr") == "gsk_…1234"
+    assert keys.kind("google") is None and keys.has("google")
+
+    class R:
+        def __init__(self, code):
+            self.status_code = code
+    monkey(keys.requests, "get", lambda url, headers=None, timeout=None: R(200 if "groq" in url else 401))
+    assert keys.check("groq_ocr") == (True, "ключ рабочий")
+    monkey(keys.requests, "get", lambda url, headers=None, timeout=None: R(401))
+    ok, msg = keys.check("groq_ocr")
+    assert not ok and "не принял" in msg and "gsk_" not in msg
+    drain()
+    keys.remove("groq_ocr")
+    assert written["GROQ_API_KEY"] is None and not translate.provider_has_key("groq_ocr")
+    assert not any("gsk_" in str(p) for k, p in drain()), "ключ не попадает в журнал"
+    os.environ.pop("GROQ_API_KEY", None)
+
+
 def test_game_facts(monkey):
     """Groq один раз собирает об игре: словарь, персонажей с полом, описание (для DeepL и нейросетей)."""
     try:

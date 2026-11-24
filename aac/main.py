@@ -325,8 +325,8 @@ def main():
         try:
             ctypes.windll.user32.MessageBoxW(
                 0, "Нет ни одного ключа переводчика и не выбран Google/Microsoft.\n"
-                   "Откройте файл aac/config.py и выберите PROVIDER = \"google\" "
-                   "или сохраните ключ (например: setx GROQ_API_KEY \"ключ\").", "AAC Translator", 0x30)
+                   "Откройте в программе «Переводчики»: выберите Google Переводчик (без ключа) "
+                   "или нажмите «Ключ» у нужной нейросети и вставьте ключ.", "AAC Translator", 0x30)
         except Exception:
             pass
         print("Нет ни одного ключа. Впишите ключ хотя бы одного переводчика в aac/config.py или сохраните через setx:")
