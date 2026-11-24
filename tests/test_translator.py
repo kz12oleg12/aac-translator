@@ -2650,6 +2650,41 @@ def test_game_presets(monkey):
                 assert core_m.region is None and profiles.active().get("region") is None, "удалённая не вернулась"
                 assert core_m.answers_region == (50, 450, 320, 100), "новая область не затёрта старой рамкой"
                 core_m.answers_region = None
+            if hasattr(app.panel, "_ask_key"):     # окно ключа: «Вставить» из буфера; Ctrl+V на русской раскладке
+                import tkinter as tk
+                app.root.clipboard_clear()
+                app.root.clipboard_append("  gsk_fromclipboard1234  ")
+                saved = []
+                from aac import keys as keys_m
+                monkey(keys_m, "save", lambda pid, v: saved.append(v) or "тест")
+                app.panel._ask_key("groq_ocr")
+                app.root.update()
+
+                def walk(w):
+                    for c in w.winfo_children():
+                        yield c
+                        yield from walk(c)
+                ws = list(walk(app.panel._dialog))
+                ent = [w for w in ws if isinstance(w, tk.Entry)][0]
+                assert str(ent.cget("show")) == "•", "ключ скрыт"
+                assert ent.winfo_ismapped(), "поле видно"
+                [w for w in ws if isinstance(w, tk.Button) and w.cget("text") == "Вставить"][0].invoke()
+                assert ent.get() == "gsk_fromclipboard1234"
+                ent.delete(0, "end")
+                ent.focus_force()
+                app.root.update()
+                from aac import ui_kit
+                import types as _t
+                for fake in (_t.SimpleNamespace(keysym="Cyrillic_em", char="\x16", keycode=0, widget=ent),
+                             _t.SimpleNamespace(keysym="??", char="м", keycode=0, widget=ent)):
+                    ent.delete(0, "end")
+                    assert ui_kit.on_ctrl_key(fake) == "break"      # Ctrl+V на русской раскладке
+                    app.root.update()
+                    assert "gsk_fromclipboard1234" in ent.get(), ent.get()
+                assert ui_kit.on_ctrl_key(_t.SimpleNamespace(keysym="v", char="\x16", keycode=86, widget=ent)) is None
+                assert "gsk_fromclipboard1234" in ent.get(), ent.get()
+                [w for w in ws if isinstance(w, tk.Button) and w.cget("text") == "Сохранить"][0].invoke()
+                assert saved and saved[0].strip() == "gsk_fromclipboard1234"
             if hasattr(app.panel, "_ask_clear_area"):     # удалить любую область, с вопросом
                 core_m.region, core_m.answers_region = (1, 2, 3, 4), (5, 6, 7, 8)
                 app.panel.show("areas")

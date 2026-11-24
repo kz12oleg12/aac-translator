@@ -2,6 +2,7 @@
 
 Всё на обычном tkinter: плоские цвета, тонкие рамки, переключатели и полоски рисуются на Canvas.
 """
+import sys
 import tkinter as tk
 
 _Canvas = getattr(tk, "Canvas", object)   # в проверках «второй копии» tkinter подменён пустышкой
@@ -304,6 +305,51 @@ class Scroll(_Frame):
 
     def top(self):
         self.canvas.yview_moveto(0)
+
+
+# Windows: физические клавиши V, C, X, A, Z (на любой раскладке)
+_EDIT_KEYS = {86: "<<Paste>>", 67: "<<Copy>>", 88: "<<Cut>>", 65: "<<SelectAll>>", 90: "<<Undo>>"}
+_EDIT_CHARS = {"м": "<<Paste>>", "с": "<<Copy>>", "ч": "<<Cut>>", "ф": "<<SelectAll>>", "я": "<<Undo>>"}
+
+
+def on_ctrl_key(e):
+    """Ctrl+буква в поле ввода: на русской раскладке Tk не узнаёт Ctrl+V и др. — узнаём по коду клавиши."""
+    ev = None
+    if e.keysym.lower() in ("v", "c", "x", "a", "z"):
+        return None                      # английская раскладка — Tk справится сам
+    if sys.platform == "win32" and getattr(e, "keycode", None) in _EDIT_KEYS:    # код клавиши Windows
+        ev = _EDIT_KEYS[e.keycode]
+    elif (e.char or "").lower() in _EDIT_CHARS:
+        ev = _EDIT_CHARS[(e.char or "").lower()]
+    else:
+        ev = {"cyrillic_em": "<<Paste>>", "cyrillic_es": "<<Copy>>", "cyrillic_che": "<<Cut>>",
+              "cyrillic_ef": "<<SelectAll>>", "cyrillic_ya": "<<Undo>>"}.get(e.keysym.lower())
+    if not ev:
+        return None
+    if ev == "<<SelectAll>>" and isinstance(e.widget, tk.Entry):
+        e.widget.select_range(0, "end")
+        e.widget.icursor("end")
+    else:
+        e.widget.event_generate(ev)
+    return "break"
+
+
+def install_clipboard(root):
+    """Ctrl+V / Ctrl+C / Ctrl+X / Ctrl+A в полях ввода на русской раскладке (Tk понимает их только на английской)
+    и меню «Вставить / Копировать» по правой кнопке мыши."""
+    def menu(e):
+        w = e.widget
+        m = tk.Menu(w, tearoff=0, bg=CARD, fg=TEXT, activebackground=ACCENT, activeforeground="#ffffff", bd=0)
+        m.add_command(label="Вставить", command=lambda: w.event_generate("<<Paste>>"))
+        m.add_command(label="Копировать", command=lambda: w.event_generate("<<Copy>>"))
+        m.add_command(label="Вырезать", command=lambda: w.event_generate("<<Cut>>"))
+        try:
+            m.tk_popup(e.x_root, e.y_root)
+        finally:
+            m.grab_release()
+    for cls in ("Entry", "Text"):
+        root.bind_class(cls, "<Control-KeyPress>", on_ctrl_key, add="+")
+        root.bind_class(cls, "<Button-3>", menu, add="+")
 
 
 def install_wheel(toplevel, current_scroll):

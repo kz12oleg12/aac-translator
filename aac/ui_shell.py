@@ -74,6 +74,7 @@ class Shell(SectionsMixin, GamesMixin):
         self.content.pack(side="left", fill="both", expand=True)
         self.show("home")
         K.install_wheel(win, self._current_scroll)     # колесо мыши — где бы ни был курсор в разделе
+        K.install_clipboard(win)                         # Ctrl+V и т.п. на русской раскладке, меню правой кнопкой
         self._build_grips()
         self._compact_nav()
         win.after(200, lambda: ui_overlay.exclude_from_capture(win))
@@ -1033,7 +1034,21 @@ class Shell(SectionsMixin, GamesMixin):
             e = K.entry(inner, var, width=34)
             if secret:
                 e.config(show="•")          # ключ на экране не показываем (стрим, запись)
-            e.pack(fill="x", pady=(0, 16), ipady=3)
+            if secret:          # окно ключа: кнопка «Вставить» — не зависит от раскладки и клавиш
+                prow = tk.Frame(inner, bg=K.CARD)
+                prow.pack(fill="x", pady=(0, 16))
+                e.pack(in_=prow, side="left", fill="x", expand=True, ipady=3)
+                e.lift(prow)
+
+                def paste_clip():
+                    try:
+                        var.set(d.clipboard_get().strip())
+                    except tk.TclError:
+                        pass
+                    e.icursor("end")
+                K.button(prow, "Вставить", paste_clip, kind="ghost", size=9).pack(side="left", padx=(8, 0))
+            else:
+                e.pack(fill="x", pady=(0, 16), ipady=3)
             e.bind("<Return>", lambda ev: yes())
             e.after(50, e.focus_force)
         btns = tk.Frame(inner, bg=K.CARD)
