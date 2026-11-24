@@ -2067,6 +2067,71 @@ def test_update_etag(monkey):
     updater.state.update(latest=None, etag=None)
 
 
+def test_ai_editor(monkey):
+    """ИИ-редактор правит черновик основного переводчика; не успел — черновик, потом тихая подмена."""
+    try:
+        from aac import editor, mt
+    except ImportError:
+        return
+    cfg = T._owner("EDITOR")
+    monkey(cfg, "EDITOR", "groq")
+    monkey(cfg, "EDITOR_WAIT", 0.3)
+    monkey(cfg, "EDITOR_SCENE_EVERY", 2)
+    monkey(T._owner("GROQ_API_KEY"), "GROQ_API_KEY", "gsk_test")
+    editor.reset()
+    asked = []
+
+    def fast(prompt):
+        asked.append(prompt)
+        if "What is happening" not in prompt and prompt.startswith("Here are the latest"):
+            return "The hero talks to the Collector about cells."
+        return "Я встретил Коллекционера."
+    monkey(editor, "_ask", fast)
+    out = editor.improve("I met the Collector.", "Я встретил Коллекционер.", "subs")
+    assert out == "Я встретил Коллекционера.", out
+    p = asked[0]
+    assert "I met the Collector." in p and "Я встретил Коллекционер." in p and "Return ONLY" in p
+    assert editor.improve("I met the Collector.", "Я встретил Коллекционер.", "subs") == out, "из кэша"
+    assert len([a for a in asked if a.startswith("You are")]) == 1, "второй раз — без запроса"
+    time.sleep(0.2)
+    assert editor._state["scene"].startswith("The hero"), "память сцены обновилась"
+    assert "What is happening now: The hero" in editor.build_prompt("Hi", "Привет", "subs")
+    assert "Previous lines" in editor.build_prompt("Hi", "Привет", "subs")
+    # без правок — None (показываем черновик как есть)
+    monkey(editor, "_ask", lambda prompt: "Привет.")
+    assert editor.improve("Hello.", "Привет.", "subs") is None
+    # редактор медленный — сразу None, а поздний ответ приходит в on_late
+    late = []
+
+    def slow(prompt):
+        time.sleep(0.6)
+        return "Ну привет, путник."
+    monkey(editor, "_ask", slow)
+    assert editor.improve("Hi there, traveler.", "Привет, путешественник.", "subs", on_late=late.append) is None
+    time.sleep(0.6)
+    assert late == ["Ну привет, путник."], late
+    # ошибка / ответ не по-русски — None
+    monkey(editor, "_ask", lambda prompt: (_ for _ in ()).throw(T.ApiError("лимит")))
+    assert editor.improve("Bye.", "Пока.", "subs") is None
+    monkey(editor, "_ask", lambda prompt: "Sure! Here is the improved translation in English and more text")
+    assert editor.improve("Bye now.", "Пока-пока.", "subs") is None
+    # выключен — не вызывается
+    monkey(cfg, "EDITOR", "")
+    called = []
+    monkey(editor, "_ask", lambda prompt: called.append(1) or "x")
+    assert editor.improve("Hey.", "Эй.", "subs") is None and not called
+    # связка с машинным переводчиком: Google даёт черновик, редактор — итог
+    monkey(cfg, "EDITOR", "groq")
+    monkey(mt.ocr, "ocr_lines", lambda img: ["I met the Queen."])
+    monkey(mt, "_mt_google", lambda text: "Я встретил Королева.")
+    monkey(editor, "_ask", lambda prompt: "Я встретил Королеву.")
+    from PIL import Image
+    assert mt.ask_ocr_mt("google", Image.new("RGB", (10, 10)), None) == "Я встретил Королеву."
+    assert mt.ask_ocr_mt("google", Image.new("RGB", (10, 10)), "Screenshot of a tooltip …") == "Я встретил Королева.", \
+        "подсказки под мышью редактор не трогает"
+    editor.reset()
+
+
 def test_game_facts(monkey):
     """Groq один раз собирает об игре: словарь, персонажей с полом, описание (для DeepL и нейросетей)."""
     try:

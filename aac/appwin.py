@@ -11,7 +11,7 @@ import threading
 import tkinter as tk
 
 
-from . import chat, config, menu, core, game, gamefacts, history, hotkeys, profiles, screens, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_shell, ui_windows, updater, watcher
+from . import chat, config, menu, core, editor, game, gamefacts, history, hotkeys, profiles, screens, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_shell, ui_windows, updater, watcher
 
 
 def _on_monitor(place, box, pos, w, h):
@@ -751,6 +751,7 @@ class App:
 
     def profile_changed(self):
         """Переключились на другую игру: убрать переводы прежней, перечитать её области."""
+        editor.reset()
         for ov in (self.subs, self.answers, self.quest):
             ov.hide()
         self.subs.clear_history()
@@ -826,6 +827,15 @@ class App:
                 kind, payload = core.events.get_nowait()
                 if kind == "text":
                     self.subs.push(payload)
+                elif kind == "text_improve":
+                    # ИИ-редактор ответил позже — тихо подменяем ещё показанный черновик
+                    draft, better = payload
+                    for ov in (self.subs, self.answers, self.quest):
+                        if ov.visible and ov.label.cget("text") == draft:
+                            ov.label.config(text=better)
+                            ov.fit()
+                    if core.last_line and core.last_line[0] == draft:
+                        core.last_line = (better, core.last_line[1])
                 elif kind == "repeat_line":
                     self.repeat_line()
                 elif kind == "profile_changed":

@@ -192,4 +192,13 @@ def ask_ocr_mt(name, img, prompt):
     print(f"  OCR: {src!r}")
     if config.SHOW_OCR_IN_LOG:
         core.log(f"OCR прочитал: {src.replace(chr(10), ' / ')[:150]}")
-    return "\n".join(out)
+    draft = "\n".join(out)
+    is_tooltip = prompt is not None and prompt.startswith("Screenshot of a tooltip")
+    if not is_tooltip and draft:
+        # ИИ-редактор правит черновик (падежи, род, имена, тон, контекст); не успел — показываем черновик
+        from . import editor
+        better = editor.improve("\n".join(lines), draft, "answers" if is_answers else "subs",
+                                on_late=lambda txt, d=draft: core.events.put(("text_improve", (d, txt))))
+        if better:
+            return better
+    return draft

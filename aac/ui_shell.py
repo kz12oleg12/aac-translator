@@ -610,6 +610,24 @@ class Shell(SectionsMixin, GamesMixin):
             K.label(ci, title, 9, K.DIM).pack(anchor="w", pady=(0, 4))
             K.select(ci, var, opts, self._provider_changed, width=30).pack(fill="x")
 
+        # ИИ-редактор — помощник основного переводчика
+        c, ci = K.card(b, padx=16, pady=12)
+        c.pack(fill="x", pady=(14, 0))
+        top = tk.Frame(ci, bg=K.CARD)
+        top.pack(fill="x")
+        tb = tk.Frame(top, bg=K.CARD)
+        tb.pack(side="left", fill="x", expand=True)
+        K.h2(tb, "✏️ ИИ-редактор").pack(anchor="w")
+        K.label(tb, "Помощник основного переводчика: правит падежи и род, имена по словарю, тон и «ты»/«вы», "
+                    "учитывает прошлые реплики и что происходит в сцене. Ждёт его до секунды — не успел или "
+                    "лимит, покажет обычный перевод. Работает поверх Google, Microsoft и DeepL.",
+                9, K.DIM, wraplength=420).pack(anchor="w", pady=(2, 0))
+        self.ed_var = tk.StringVar(value=self._editor_label(config.EDITOR))
+        self.ed_select = K.select(top, self.ed_var, self._editor_labels(), self._editor_changed, width=30)
+        self.ed_select.pack(side="right", anchor="n", padx=(12, 0))
+        self.ed_stats = K.label(ci, "", 9, K.FAINT, wraplength=640)
+        self.ed_stats.pack(anchor="w", pady=(8, 0))
+
         c, ci = K.card(b, padx=16, pady=8)
         c.pack(fill="x", pady=(14, 0))
         K.h2(ci, "Все переводчики").pack(anchor="w", pady=(4, 2))
@@ -643,6 +661,36 @@ class Shell(SectionsMixin, GamesMixin):
         cb.pack(fill="x", pady=(10, 0))
         K.button(cb, "Очистить кэш переводов", self._clear_cache, kind="ghost", size=9).pack(side="left")
         return sc
+
+    def _editor_label(self, eid):
+        from . import editor
+        title = editor.EDITORS.get(eid, editor.EDITORS[""])[0]
+        if eid and not translate.provider_has_key(eid):
+            title += " (нет ключа)"
+        return title
+
+    def _editor_labels(self):
+        from . import editor
+        return [self._editor_label(e) for e in editor.EDITORS]
+
+    def _editor_changed(self):
+        from . import editor
+        by_label = {self._editor_label(e): e for e in editor.EDITORS}
+        eid = by_label.get(self.ed_var.get(), "")
+        config.EDITOR = eid
+        core.save_settings(editor=eid)
+        editor.reset()
+        if not eid:
+            core.log("ИИ-редактор выключен — показываю перевод основного переводчика как есть", "ok")
+        elif not translate.provider_has_key(eid):
+            core.log(f"ИИ-редактор: у {editor.EDITORS[eid][0].split(' —')[0]} нет ключа — пока не работает", "warn")
+        else:
+            core.log(f"ИИ-редактор: {editor.EDITORS[eid][0].split(' —')[0]} — правит перевод основного переводчика",
+                     "ok")
+        if config.PROVIDER not in ("google", "microsoft", "deepl") and eid:
+            core.log("Основной переводчик — нейросеть: она и так учитывает контекст, редактор нужен только "
+                     "для Google, Microsoft и DeepL", "warn")
+        self.refresh()
 
     def _clear_cache(self):
         n = tcache.size()
@@ -694,6 +742,16 @@ class Shell(SectionsMixin, GamesMixin):
     def _refresh_tr(self):
         if not hasattr(self, "prov_rows"):
             self._build_prov_rows()
+        from . import editor
+        s = editor.stats
+        txt = ("" if not config.EDITOR else
+               f"Поправил: {s['edited']} · без правок: {s['same']} · не успел (подменил позже): {s['late']}"
+               + (f" · ошибок: {s['failed']}" if s["failed"] else ""))
+        if config.EDITOR and config.PROVIDER not in ("google", "microsoft", "deepl"):
+            txt = ("Основной сейчас — нейросеть, ей редактор не нужен: он правит только переводы Google, Microsoft "
+                   "и DeepL (например, когда работает запасной). " + txt)
+        if self.ed_stats.cget("text") != txt:
+            self.ed_stats.config(text=txt)
         chain = translate.provider_chain()
         lim = {n.lower(): t for n, _, t in limits.bars()}
         for pid, name in self.TR_ROWS:

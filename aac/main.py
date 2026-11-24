@@ -23,6 +23,7 @@ def apply_view_settings():
     config.GLOSSARY_AUTO = bool(core.SETTINGS.get("glossary_auto", config.GLOSSARY_AUTO))
     config.GAMES_ONLY = bool(core.SETTINGS.get("games_only", core.SETTINGS.get("only_archeage", config.GAMES_ONLY)))
     config.UPDATE_AUTO = bool(core.SETTINGS.get("update_auto", config.UPDATE_AUTO))
+    config.EDITOR = str(core.SETTINGS.get("editor", config.EDITOR) or "")
     config.SHOW_ON_STREAM = bool(core.SETTINGS.get("show_on_stream", config.SHOW_ON_STREAM))
     config.CACHE_ENABLED = bool(core.SETTINGS.get("cache_enabled", config.CACHE_ENABLED))
     config.SKIP_SYSTEM = bool(core.SETTINGS.get("skip_system", config.SKIP_SYSTEM))
