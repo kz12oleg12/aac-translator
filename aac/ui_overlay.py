@@ -113,8 +113,9 @@ class OutlineLabel(_Canvas):
             tk.Canvas.configure(self, height=1, width=w + 2 * int(o["padx"]))
             return
         x, y = int(o["padx"]), int(o["pady"]) + 2
-        for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-2, -2), (2, 2), (-2, 2), (2, -2),
-                       (-1, -2), (1, 2), (-2, 1), (2, -1)):
+        # контур 1 px со всех сторон + тень вниз-вправо: читается на любом фоне, буквы не слипаются
+        for dx, dy in ((2, 2), (1, 2), (2, 1), (-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1),
+                       (1, 1)):
             self.create_text(x + dx, y + dy, text=o["text"], font=o["font"], fill=o["outline"], anchor="nw", width=w)
         main = self.create_text(x, y, text=o["text"], font=o["font"], fill=o["fg"], anchor="nw", width=w)
         box = self.bbox(main) or (0, 0, w, 20)
