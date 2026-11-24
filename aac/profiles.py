@@ -260,8 +260,11 @@ def activate(pid, announce=True, hold=False):
 
 
 def adapt(prompt):
-    """Подставить в подсказку нейросети название текущей игры (подсказки написаны для ArcheAge)."""
+    """Подставить в подсказку нейросети название текущей игры (подсказки написаны для ArcheAge)
+    и добавить описание мира и тона, если его собрал Groq."""
     p = active()
+    if prompt and p.get("about") and "About this game:" not in prompt:
+        prompt = prompt.rstrip() + "\n\nAbout this game: " + p["about"]
     if not prompt or "ArcheAge" not in prompt or (p and is_archeage_like(p)):
         return prompt
     desc = p.get("desc") or (f"the video game {p['name']}" if p.get("name") else "a video game")

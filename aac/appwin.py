@@ -11,7 +11,7 @@ import threading
 import tkinter as tk
 
 
-from . import chat, config, menu, core, game, history, hotkeys, profiles, screens, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_shell, ui_windows, updater, watcher
+from . import chat, config, menu, core, game, gamefacts, history, hotkeys, profiles, screens, tcache, tooltip, tray, tts, ui_overlay, ui_panel, ui_shell, ui_windows, updater, watcher
 
 
 def _on_monitor(place, box, pos, w, h):
@@ -143,6 +143,7 @@ class App:
     def game_created(self, prof):
         """Программа сама узнала новую игру и завела ей пресет: баннер на Главной и одно уведомление."""
         self.panel.show_new_game(prof)
+        gamefacts.gather(prof)
         tray.notify(f"Новая игра: {profiles.name(prof)}",
                     f"Пресет создан. Обведите субтитры ({hotkeys.K('select')}) — и можно переводить.")
 
@@ -759,6 +760,8 @@ class App:
         self.chat.hide()
         self.panel.profile_changed()
         tray.update()
+        if core.active_profile and profiles.is_running():
+            gamefacts.gather(core.active_profile)      # один раз на игру: Groq собирает имена, термины, персонажей
 
     def repeat_line(self):
         """Клавиша «повторить реплику»: последняя реплика снова на экране и звучит заново."""

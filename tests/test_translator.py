@@ -2067,6 +2067,66 @@ def test_update_etag(monkey):
     updater.state.update(latest=None, etag=None)
 
 
+def test_game_facts(monkey):
+    """Groq один раз собирает об игре: словарь, персонажей с полом, описание (для DeepL и нейросетей)."""
+    try:
+        from aac import gamefacts, profiles, glossary, voices
+    except ImportError:
+        return
+    d = tempfile.mkdtemp(dir=TMP)
+    monkey(T._owner("APP_DIR"), "APP_DIR", d)
+    monkey(T._owner("SETTINGS_FILE"), "SETTINGS_FILE", os.path.join(d, "s.json"))
+    core_m = T._owner("active_profile")
+    open(os.path.join(d, "s.json"), "w").write('{"font_size": 14}')
+    T.set("SETTINGS", T.load_settings())
+    pid = profiles.create("deadcells.exe", "Dead Cells")
+    profiles.activate(pid, announce=False)
+    with open(profiles.paths(pid)["glossary"], "a", encoding="utf-8") as f:
+        f.write("Collector = Мой Коллекционер\n")          # ваша запись — не трогаем
+    reply = """```json
+{"known": true, "description": "Roguelite action platformer; sarcastic, informal tone.",
+ "terms": [{"en": "Collector", "ru": "Коллекционер"}, {"en": "Prisoners' Quarters", "ru": "Тюремные камеры"},
+           {"en": "Cells", "ru": "Клетки"}, {"en": "x", "ru": "x"}, {"en": "", "ru": "пусто"}],
+ "characters": [{"en": "The Collector", "ru": "Коллекционер", "gender": "m"},
+                {"en": "Queen", "ru": "Королева", "gender": "f"}, {"en": "Bob", "gender": "?"}]}
+```"""
+    data = gamefacts.parse(reply)
+    assert data["known"] and len(data["terms"]) == 3 and len(data["characters"]) == 2
+    assert gamefacts.parse('{"known": false}') == {"known": False} and not gamefacts.parse("мусор")["known"]
+    monkey(T._owner("GROQ_API_KEY"), "GROQ_API_KEY", "gsk_test")
+    monkey(gamefacts, "ask", lambda title, exe: data)
+    assert gamefacts.gather(pid, wait=True)
+    glossary._glossary.update(mtime=None, loaded=False)
+    g = dict(glossary.glossary())
+    assert g.get("Collector") == "Мой Коллекционер", "вашу запись не перезаписали"
+    assert g.get("Prisoners' Quarters") == "Тюремные камеры" and g.get("Cells") == "Клетки"
+    with voices._lock:
+        voices._data["loaded"] = False
+    chars = voices.all_chars() if hasattr(voices, "all_chars") else {}
+    queen = [c for c in (chars.values() if isinstance(chars, dict) else [c for _, c in chars]) if c.get("en") == "Queen"]
+    assert queen and voices.gender(queen[0]) == "f", chars
+    assert profiles.active()["about"].startswith("Roguelite")
+    assert "About this game: Roguelite" in profiles.adapt("Translate the subtitles.")
+    assert not gamefacts.gather(pid, wait=True), "второй раз сам не собирает"
+    assert gamefacts.gather(pid, force=True, wait=True), "«Собрать заново» — собирает"
+    content = open(profiles.paths(pid)["glossary"], encoding="utf-8").read()
+    assert content.count("Prisoners' Quarters =") == 1, "повторный сбор не дублирует словарь"
+    # DeepL получает описание как контекст
+    from aac import mt
+    sent = {}
+
+    class R:
+        status_code = 200
+        def json(self):
+            return {"translations": [{"text": "Привет"}]}
+    monkey(mt.requests, "post", lambda url, headers=None, data=None, timeout=None: sent.update(data) or R())
+    monkey(T._owner("DEEPL_API_KEY"), "DEEPL_API_KEY", "k:fx")
+    assert mt._mt_deepl("Hello") == "Привет" and sent.get("context", "").startswith("Roguelite")
+    monkey(T._owner("GROQ_API_KEY"), "GROQ_API_KEY", "ВСТАВЬТЕ_СЮДА_КЛЮЧ_GROQ")
+    assert not gamefacts.available() and not gamefacts.gather(pid, force=True), "без ключа — ничего"
+    profiles.activate(None, announce=False)
+
+
 def test_new_user_no_presets(monkey):
     """Новый пользователь: пресетов нет (ArcheAge не создаётся сама), игра не выбрана."""
     try:

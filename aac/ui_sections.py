@@ -922,12 +922,24 @@ class GamesMixin:
                 K.label(ci, "Игра не запущена — вы выбрали этот пресет, чтобы настроить его (области, словарь, "
                             "персонажи). Переводить он начнёт, когда игра будет запущена.", 9, K.DIM,
                         wraplength=600).pack(anchor="w", pady=(8, 0))
+            from . import gamefacts
+            if p.get("about"):
+                K.label(ci, "🤖 " + p["about"], 9, K.DIM, wraplength=620, justify="left").pack(anchor="w", pady=(8, 0))
+            elif p.get("facts_at") and not p.get("facts_known"):
+                K.label(ci, "🤖 Groq не знает эту игру — словарь пополняется по ходу игры.", 9, K.FAINT).pack(
+                    anchor="w", pady=(8, 0))
             chars, gl = profiles.stats(pid)
             bottom = tk.Frame(ci, bg=K.CARD)
             bottom.pack(fill="x", pady=(10, 0))
             K.label(bottom, f"персонажей: {chars} · в словаре: {gl}", 9, K.MUTED).pack(side="left")
             K.button(bottom, "Удалить", lambda pid=pid: self._game_delete(pid), kind="danger", size=9).pack(
                 side="right")
+            if gamefacts.available():
+                busy = pid in gamefacts._running
+                K.button(bottom, "🤖 собираю…" if busy else ("🤖 Собрать заново" if p.get("facts_at") else
+                                                              "🤖 Собрать данные"),
+                         lambda pid=pid: (gamefacts.gather(pid, force=True), self._games_render()),
+                         kind="ghost", size=9).pack(side="right", padx=(0, 8))
             if not on and not core.SETTINGS.get("profile_lock"):
                 K.button(bottom, "Настроить", lambda pid=pid: (profiles.activate(pid, hold=True), self._games_render()),
                          kind="ghost", size=9).pack(side="right", padx=(0, 8))

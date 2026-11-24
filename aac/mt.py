@@ -134,11 +134,18 @@ def _mt_microsoft(text, sl=None, tl=None):
 
 def _mt_deepl(text):
     host = "api-free.deepl.com" if config.DEEPL_API_KEY.endswith(":fx") else "api.deepl.com"
+    data = {"text": text, "source_lang": config.SOURCE_LANG.upper(), "target_lang": config.TARGET_LANG_CODE.upper(),
+            "preserve_formatting": "1"}
+    try:
+        from . import gamefacts
+        ctx = gamefacts.about()
+    except Exception:
+        ctx = ""
+    if ctx:
+        data["context"] = ctx      # описание игры: DeepL учитывает его (тон, «ты»/«вы»), но не переводит
     r = requests.post(f"https://{host}/v2/translate",
                       headers={"Authorization": f"DeepL-Auth-Key {config.DEEPL_API_KEY}"},
-                      data={"text": text, "source_lang": config.SOURCE_LANG.upper(), "target_lang": config.TARGET_LANG_CODE.upper(),
-                            "preserve_formatting": "1"},
-                      timeout=config.REQUEST_TIMEOUT)
+                      data=data, timeout=config.REQUEST_TIMEOUT)
     if r.status_code == 403:
         raise core.ApiError("Неверный ключ DeepL (DEEPL_API_KEY).")
     if r.status_code == 456:
