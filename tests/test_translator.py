@@ -2310,7 +2310,7 @@ def test_uninstall(monkey):
             batf = os.path.join(tempfile.mkdtemp(dir=TMP), "u.bat")
             with open(batf, "w", encoding="utf-8") as f:
                 f.write(uninstall.script(root, 999999))
-            subprocess.run(["cmd", "/c", batf], timeout=60, capture_output=True)
+            uninstall.run_hidden(batf).wait(60)          # так же, как в программе: без окна
             if foreign:
                 assert os.listdir(root) == ["мой файл.docx"], os.listdir(root)
             else:

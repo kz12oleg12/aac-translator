@@ -86,11 +86,26 @@ def save_backup():
     return path
 
 
+def run_hidden(bat):
+    """Запустить bat-файл без окна консоли и независимо от программы (он переживёт её закрытие).
+    Только CREATE_NO_WINDOW (+ своя группа процессов): с DETACHED_PROCESS Windows этот флаг не учитывает,
+    и команды внутри bat открывают себе видимое окно консоли."""
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= 0x00000001                     # STARTF_USESHOWWINDOW
+    si.wShowWindow = 0                           # SW_HIDE
+    return subprocess.Popen(["cmd", "/c", bat], creationflags=0x08000000 | 0x00000200, startupinfo=si,
+                            close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
+
+
+WAIT = "ping -n 2 127.0.0.1 >nul"                # пауза ~1 с (timeout без консоли не работает)
+
+
 def script(app_dir, pid):
     """bat-файл: дождаться закрытия программы, удалить её файлы и папки, затем саму папку — если пустая."""
     lines = ["@echo off", "chcp 65001 >nul", ":wait",
-             f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && (timeout /t 1 /nobreak >nul & goto wait)',
-             "timeout /t 1 /nobreak >nul"]
+             f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && ({WAIT} & goto wait)',
+             WAIT]
     for f in OWN_FILES:
         lines.append(f'del /f /q "{os.path.join(app_dir, f)}" 2>nul')
     for d in OWN_DIRS:
@@ -122,6 +137,6 @@ def run(backup_first=True, keys_too=True):
     with open(bat, "w", encoding="utf-8") as f:
         f.write(script(d, os.getpid()))
     if sys.platform == "win32":
-        subprocess.Popen(["cmd", "/c", bat], creationflags=0x00000008 | 0x00000200 | 0x08000000, close_fds=True)
+        run_hidden(bat)
     core.log("Программа удаляется — закрываюсь" + (f". Резервная копия: {copy}" if copy else ""), "ok")
     return True, copy or ""

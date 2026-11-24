@@ -230,7 +230,7 @@ def exe_update_script(src, app_dir, pid):
     log = os.path.join(app_dir, "update.log")
     return ("@echo off\r\nchcp 65001 >nul\r\n"
             ":wait\r\n"
-            f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && (timeout /t 1 /nobreak >nul & goto wait)\r\n'
+            f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && (ping -n 2 127.0.0.1 >nul & goto wait)\r\n'
             f'echo Обновление из "{src}" >> "{log}"\r\n'
             f'robocopy "{src}" "{app_dir}" /E /R:5 /W:1 /NFL /NDL /NJH /NP >> "{log}"\r\n'
             f'start "" "{os.path.join(app_dir, EXE_NAME)}"\r\n')
@@ -249,7 +249,8 @@ def install(info):
             bat = os.path.join(tempfile.gettempdir(), f"aac_update_{os.getpid()}.bat")
             with open(bat, "w", encoding="utf-8") as f:
                 f.write(exe_update_script(folder, config.APP_DIR, os.getpid()))
-            subprocess.Popen(["cmd", "/c", bat], creationflags=flags | 0x08000000, close_fds=True)
+            from .uninstall import run_hidden
+            run_hidden(bat)                        # без окна консоли
         else:
             py = sys.executable   # тот же Python, которым запущена программа
             subprocess.Popen([py, os.path.join(folder, "install.py"), "--update", "--wait-pid", str(os.getpid())],
