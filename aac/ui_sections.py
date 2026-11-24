@@ -928,6 +928,17 @@ class GamesMixin:
             elif p.get("facts_at") and not p.get("facts_known"):
                 K.label(ci, "🤖 Groq не знает эту игру — словарь пополняется по ходу игры.", 9, K.FAINT).pack(
                     anchor="w", pady=(8, 0))
+            ar = tk.Frame(ci, bg=K.CARD)
+            ar.pack(fill="x", pady=(10, 0))
+
+            def set_auto(v, pid=pid):
+                profs2 = profiles.all_profiles()
+                if pid in profs2:
+                    profs2[pid]["auto_start"] = bool(v)
+                    core.save_settings(profiles=profs2)
+                    core.log(f"{profiles.name(pid)}: автоперевод при запуске игры — " + ("вкл" if v else "выкл"), "ok")
+            K.Toggle(ar, bool(p.get("auto_start")), set_auto, small=True).pack(side="left")
+            K.label(ar, "Включать автоперевод, когда игра запущена", 9, K.TEXT2).pack(side="left", padx=(8, 0))
             chars, gl = profiles.stats(pid)
             bottom = tk.Frame(ci, bg=K.CARD)
             bottom.pack(fill="x", pady=(10, 0))

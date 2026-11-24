@@ -193,6 +193,32 @@ def foreground_fullscreen():
         return False
 
 
+def exclusive_fullscreen():
+    """Игра в «настоящем» полноэкранном режиме (Direct3D exclusive): окна поверх неё Windows не показывает."""
+    try:
+        state = ctypes.c_int(0)
+        if ctypes.windll.shell32.SHQueryUserNotificationState(ctypes.byref(state)) == 0:
+            return state.value == 3          # QUNS_RUNNING_D3D_FULL_SCREEN
+    except Exception:
+        pass
+    return False
+
+
+_fs_warned = set()
+
+
+def check_fullscreen():
+    """Игра из списка на экране в exclusive fullscreen — один раз за запуск программы вернуть её exe (предупредить)."""
+    from . import profiles
+    exe, pid = foreground_exe()
+    if not exe or pid == os.getpid() or exe in _fs_warned or not profiles.for_exe(exe):
+        return None
+    if not exclusive_fullscreen():
+        return None
+    _fs_warned.add(exe)
+    return exe
+
+
 _seen_new = {"exe": None, "n": 0}
 
 

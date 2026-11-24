@@ -101,6 +101,7 @@ class App:
             core.log(f"Выделите область субтитров ({hotkeys.K('select')}) и ответов ({hotkeys.K('select_answers')}), "
                 f"потом включите автоперевод ({hotkeys.K('auto')}).")
         self.root.after(50, self._poll)
+        self.root.after(2500, self.auto_start_check)    # игра уже была запущена до программы
 
     def _check_game_focus(self):
         self.sync_region_frames()         # расстановка открыта, а область удалили/обвели заново/сменилась игра
@@ -109,6 +110,14 @@ class App:
         if new:
             prof = game.create_profile_for(*new)
             self.game_created(prof)
+        fs = game.check_fullscreen()
+        if fs:
+            name = profiles.name(profiles.for_exe(fs))
+            core.log(f"⚠ {name} запущена в полноэкранном режиме — окна перевода поверх неё не видны. "
+                     "В настройках графики игры выберите «Оконный без рамки» (Borderless / Windowed fullscreen).",
+                     "warn")
+            tray.notify(f"{name}: переводы не видны",
+                        "Игра в полноэкранном режиме. Выберите в её настройках «Оконный без рамки» (Borderless).")
         watch = config.GAMES_ONLY or (config.PAUSE_OUTSIDE_GAME and game.game_exe)
         if not (watch and core.auto_on.is_set()):
             if not game.game_active.is_set():
@@ -763,6 +772,23 @@ class App:
         tray.update()
         if core.active_profile and profiles.is_running():
             gamefacts.gather(core.active_profile)      # один раз на игру: Groq собирает имена, термины, персонажей
+        self.auto_start_check()
+
+    def auto_start_check(self):
+        """Галочка пресета «Автоперевод при запуске игры»: игра запущена — включаем автоперевод сами."""
+        p = profiles.active()
+        done = self.__dict__.setdefault("_auto_done", set())
+        done &= set(profiles.running())          # игру закрыли — при следующем запуске включим снова
+        pid = core.active_profile
+        if not p.get("auto_start") or pid in done or core.auto_on.is_set() or not profiles.is_running():
+            return
+        if not (core.region or core.region2 or core.answers_region or core.chat_region):
+            return                                  # областей ещё нет — включать нечего
+        done.add(pid)                             # один раз за запуск игры: выключили сами — не включаем снова
+        core.auto_on.set()
+        core.log(f"▶ {profiles.name()} запущена — автоперевод включён сам (галочка в «Играх»)", "ok")
+        self.panel.refresh()
+        tray.update()
 
     def repeat_line(self):
         """Клавиша «повторить реплику»: последняя реплика снова на экране и звучит заново."""

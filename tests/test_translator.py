@@ -2650,6 +2650,39 @@ def test_game_presets(monkey):
                 assert core_m.region is None and profiles.active().get("region") is None, "удалённая не вернулась"
                 assert core_m.answers_region == (50, 450, 320, 100), "новая область не затёрта старой рамкой"
                 core_m.answers_region = None
+            if hasattr(app, "auto_start_check"):   # галочка «Автоперевод при запуске игры»
+                profiles.activate("archeage", announce=False)
+                profs = profiles.all_profiles()
+                profs["archeage"]["auto_start"] = True
+                core_m.region = (10, 20, 300, 80)
+                monkey(profiles, "running", lambda: {"archeage"})
+                core_m.auto_on.clear()
+                app._auto_done = set()
+                app.auto_start_check()
+                assert core_m.auto_on.is_set(), "игра запущена — автоперевод включился сам"
+                core_m.auto_on.clear()                     # выключили сами — снова не включаем, пока игра идёт
+                app.auto_start_check()
+                assert not core_m.auto_on.is_set()
+                monkey(profiles, "running", lambda: set())
+                app.auto_start_check()                     # игру закрыли…
+                monkey(profiles, "running", lambda: {"archeage"})
+                app.auto_start_check()                     # …и запустили снова — включился
+                assert core_m.auto_on.is_set()
+                core_m.auto_on.clear()
+                profs["archeage"]["auto_start"] = False
+                app._auto_done = set()
+                app.auto_start_check()
+                assert not core_m.auto_on.is_set(), "галочка выключена — не включаем"
+                core_m.region = None
+                # полноэкранный режим: предупредить один раз за запуск
+                monkey(game, "foreground_exe", lambda: ("archeagechronicles.exe", 4242))
+                monkey(game, "exclusive_fullscreen", lambda: True)
+                game._fs_warned.clear()
+                assert game.check_fullscreen() == "archeagechronicles.exe"
+                assert game.check_fullscreen() is None, "второй раз не повторяем"
+                monkey(game, "foreground_exe", lambda: ("chrome.exe", 4243))
+                game._fs_warned.clear()
+                assert game.check_fullscreen() is None, "не игра — молчим"
             if hasattr(app.panel, "_ask_key"):     # окно ключа: «Вставить» из буфера; Ctrl+V на русской раскладке
                 import tkinter as tk
                 app.root.clipboard_clear()
