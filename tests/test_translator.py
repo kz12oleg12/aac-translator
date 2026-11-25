@@ -2198,6 +2198,7 @@ def test_ai_editor(monkey):
     except ImportError:
         return
     cfg = T._owner("EDITOR")
+    monkey(cfg, "EDITOR_SCENE_IMAGE", False)   # без настоящего скриншота экрана
     monkey(cfg, "EDITOR", "groq")
     monkey(cfg, "EDITOR_ON", True)
     monkey(cfg, "EDITOR_WAIT", 0.3)
