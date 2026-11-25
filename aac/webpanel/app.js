@@ -166,9 +166,15 @@ function edDlg() {
 function voiceDlg() {
   const L = S.voice.list, cur = S.voice.id;
   const groups = [["Женские", v => /женск/i.test(v.name)], ["Мужские", v => /мужск/i.test(v.name)], ["", v => !/женск|мужск/i.test(v.name)]];
-  const item = v => { const [n, d] = v.name.split(" — "); return `<div class="r" style="padding:6px 8px;border-radius:8px;${v.id == cur ? "background:rgba(88,101,242,.16)" : ""}">
-    <button class="gi" style="flex-grow:1;padding:2px 0;background:none" data-pickv="${esc(v.id)}"><span style="display:flex;flex-direction:column;align-items:flex-start"><span style="font-weight:${v.id == cur ? 600 : 400}">${esc(n)}</span>${d ? `<span style="font-size:12px;color:var(--f)">${esc(d)}</span>` : ""}</span></button>
-    ${v.id == cur ? `<span style="color:var(--acc2);display:flex">${svg("check", 16, 2)}</span>` : ""}
+  const item = v => { const [n, d0] = v.name.split(" — "); const d = d0 || "";
+    const g = /женск/i.test(d) ? "f" : /мужск/i.test(d) ? "m" : "";
+    const extra = /доп/i.test(d), rest = d.replace(/(женский|мужской)/i, "").replace(/\(доп\.?\)/i, "").replace(/^[,\s]+|[,\s]+$/g, "");
+    const col = g == "f" ? "#d16ba5" : g == "m" ? "#5865F2" : "#4D4C48";
+    return `<div class="r" style="padding:6px 8px;border-radius:8px;${v.id == cur ? "background:rgba(88,101,242,.16)" : ""}">
+    <span class="av" style="background:${col}">${esc(n[0] || "?")}</span>
+    <button class="gi" style="flex-grow:1;padding:2px 0;background:none" data-pickv="${esc(v.id)}"><span style="display:flex;flex-direction:column;align-items:flex-start"><span style="font-weight:${v.id == cur ? 600 : 400}">${esc(n)}</span>${rest || extra ? `<span style="font-size:12px;color:var(--f)">${esc(rest || "")}${extra ? (rest ? " · " : "") + "дополнительный, офлайн" : ""}</span>` : ""}</span></button>
+    ${g ? `<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:${col}26;color:${g == "f" ? "#f0a6cf" : "#aab2ff"}">${g == "f" ? "женский" : "мужской"}</span>` : ""}
+    <span style="width:20px;display:flex;justify-content:center;color:var(--acc2)">${v.id == cur ? svg("check", 16, 2) : ""}</span>
     <button class="ib" style="color:var(--acc2)" title="Прослушать" data-prev="${esc(v.id)}">${svg("play", 14)}</button></div>`; };
   modal(`<div class="row"><span style="font-size:18px;font-weight:600;flex-grow:1">Основной голос</span><button class="ib" data-close="1">${svg("x", 16)}</button></div>
     <span style="font-size:13px;color:var(--t3)">Им читаются реплики без имени говорящего${S && S.modes ? "" : ""}. Нажмите ▶, чтобы послушать.</span>
