@@ -127,10 +127,10 @@ R.home = () => {
     <div style="display:flex;flex-direction:column;gap:2px;flex-grow:1"><span class="ttl">Автоперевод</span><span class="sub">${esc(a.sub)}</span></div>
     <span class="key">${esc(K.auto)}</span><button class="btnp${a.on ? "" : " off"}" data-act="auto">${a.on ? "Выключить" : "Включить"}</button></div>
   <div class="two">
-    <div class="card tc"><div class="row th"><span class="lbl" style="flex-grow:1">Переводчик</span></div><button class="vbtn" data-go="tr" aria-label="Сменить переводчика"><span>${esc(s.translator.chain.join(" → ") || "Нет ключей")}</span>${svg("end", 14, 2)}</button>${lim(s.limits[0])}</div>
-    <div class="card tc"><div class="row th"><span class="lbl" style="flex-grow:1">ИИ-редактор</span>${sw(s.translator.editor_on, 'data-a="hedon" data-sm="1" title="Включить или выключить ИИ-редактор"')}</div>
+    <div class="card tc"><div class="row th">${ico("tr", true)}<span class="lbl" style="flex-grow:1">Переводчик</span></div><button class="vbtn" data-go="tr" aria-label="Сменить переводчика"><span>${esc(s.translator.chain.join(" → ") || "Нет ключей")}</span>${svg("end", 14, 2)}</button>${lim(s.limits[0])}</div>
+    <div class="card tc"><div class="row th">${ico("spark", s.translator.editor_on)}<span class="lbl" style="flex-grow:1">ИИ-редактор</span>${sw(s.translator.editor_on, 'data-a="hedon" data-sm="1" title="Включить или выключить ИИ-редактор"')}</div>
       ${s.translator.editor_on ? `<button class="vbtn" data-a="eddlg" aria-label="Выбрать нейросеть редактора"><span>${esc((s.translator.editors.find(e => e.id == s.translator.editor_id) || {}).name || "Groq")}</span>${svg("end", 14, 2)}</button>` : `<span style="font-size:16px;color:var(--f);line-height:24px">Выключен</span>`}${s.translator.editor_on ? lim(s.limits[1]) : ""}</div>
-    <div class="card tc"><div class="row th"><span class="lbl" style="flex-grow:1">Основной голос</span></div>
+    <div class="card tc"><div class="row th">${ico("voice", S.modes.tts.on)}<span class="lbl" style="flex-grow:1">Основной голос</span></div>
       <button class="vbtn" data-a="vdlg" aria-label="Выбрать основной голос"><span>${esc(((s.voice.list.find(v => v.id == s.voice.id) || {}).name || "По умолчанию").split(" — ")[0])}</span>${svg("end", 14, 2)}</button></div></div>
   <div class="grid3">
     ${card("select","subs","Субтитры",M.subs.ready ? "Основная область" : "Не обведена — нажмите",M.subs.ready,K.select,false)}
