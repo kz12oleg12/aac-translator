@@ -324,6 +324,35 @@ def line_voice(g, kind, engine=None):
     return (default_voice(engine, g) or pool[0]), shift
 
 
+def set_type_manual(key, kind):
+    """Характер голоса, выбранный вами ("" — снова решает ИИ-редактор)."""
+    with _lock:
+        _load()
+        c = _data["chars"].get(key)
+        if not c:
+            return
+        if kind:
+            c["type"] = "" if kind == "adult" else kind
+            c["type_manual"] = True
+        else:
+            c.pop("type_manual", None)
+        _save()
+
+
+def rename(key, ru):
+    """Вы сами поправили, как персонажа зовут по-русски."""
+    ru = (ru or "").strip()[:40]
+    with _lock:
+        _load()
+        c = _data["chars"].get(key)
+        if not c or not ru:
+            return None
+        c["ru"] = ru
+        c["ru_manual"] = True
+        _save()
+        return c.get("en", "")
+
+
 def set_traits(key, kind=None, address=None):
     """Что заметил ИИ-редактор: характер голоса (старик, ребёнок, чудовище…) и «ты»/«вы» к игроку."""
     if not key:

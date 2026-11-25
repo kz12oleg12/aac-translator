@@ -386,6 +386,11 @@ function voiceTab() {
     ${fl("tts_nowait","wave","Без задержки","Не ждать ИИ-редактора: голос начинает сразу, остальное — уже в его варианте")}
     ${fl("tts_duck","voice","Приглушать игру","Пока звучит озвучка, звук игры тише — потом громкость возвращается")}
     ${fl("tts_cache","hist","Запоминать озвученное","Повторы фраз звучат сразу, без синтеза")}</div>
+  <h2 style="font-size:15px;padding-top:6px">Голос по характеру</h2>
+  <div class="card" style="padding:14px 18px;display:flex;flex-direction:column;gap:10px">
+    <span style="font-size:12px;color:var(--m)">ИИ-редактор замечает, кто говорит, и меняет высоту голоса. Послушайте, как это звучит у текущего движка. Характер персонажа можно поправить на вкладке «Персонажи».</span>
+    ${[["m","Мужчины"],["f","Женщины"]].map(([g, t]) => `<div style="display:grid;grid-template-columns:80px repeat(6,1fr);gap:6px;align-items:center"><span style="font-size:13px;color:var(--t3)">${t}</span>${[["","обычный"],["young","молодой"],["old","пожилой"],["child","ребёнок"],["noble","знатный"],["monster","чудовище"]].map(([k, n]) => `<button class="btn" style="height:30px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;padding:0 6px" data-a="tplay" data-g="${g}" data-k="${k}">${svg("play", 11)}${n}</button>`).join("")}</div>`).join("")}
+  </div>
   <h2 style="font-size:15px;padding-top:6px">Ударения</h2>
   <div class="card" style="padding:14px 18px;display:flex;flex-direction:column;gap:8px">
     <span style="font-size:12px;color:var(--m)">ИИ-редактор запоминает ударения в именах и редких словах — дальше они звучат так всегда. Неверное — поправьте: «+» ставится перед ударной гласной. Работает для голосов Silero.</span>
@@ -397,10 +402,10 @@ function chars() {
   const n = {all: C.length, f: C.filter(c => c.g == "f").length, m: C.filter(c => c.g == "m").length};
   const list = C.filter(c => (G == "all" || c.g == G) && (!q || (c.name + " " + c.en).toLowerCase().includes(q)));
   const seg = c => `<div class="seg" role="group" aria-label="Пол">${[["f","Ж"],["m","М"],["","авто"]].map(([v, t]) => `<button class="${v ? "m" : ""}" aria-pressed="${c.manual_g == v}" data-a="cg" data-k="${esc(c.key)}" data-v="${v}">${t}</button>`).join("")}</div>`;
-  const vs = c => `<select class="sel" style="width:160px;height:32px;font-size:13px" data-c="cv" data-k="${esc(c.key)}"><option value="">авто${c.auto ? " · " + esc(c.auto) : ""}</option>${D.char_voices.map(v => `<option value="${esc(v.id)}" ${v.id == c.voice ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select>`;
+  const vs = c => `<select class="sel" style="width:140px;height:32px;font-size:13px" data-c="cv" data-k="${esc(c.key)}"><option value="">авто${c.auto ? " · " + esc(c.auto) : ""}</option>${D.char_voices.map(v => `<option value="${esc(v.id)}" ${v.id == c.voice ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select>`;
   const row = c => `<div class="r" style="padding:9px 0"><span class="av" style="background:${c.g == "f" ? "#d16ba5" : "#5865F2"}">${esc(c.name[0])}</span>
-    <span class="tx"><span style="font-weight:500">${esc(c.name)}</span><span class="d" style="color:var(--f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.en && c.en != c.name ? esc(c.en) + " · " : ""}${c.g == "f" ? "женский" : "мужской"}, ${esc(c.how)}${c.type ? " · " + esc(c.type) : ""}${c.addr ? " · на «" + esc(c.addr) + "»" : ""}</span></span>
-    ${seg(c)}${vs(c)}<button class="ib" style="color:var(--acc2)" title="Прослушать" data-a="cplay" data-k="${esc(c.key)}" data-n="${esc(c.name)}">${svg("play", 14)}</button><button class="ib" style="color:var(--f)" title="Забыть" data-a="cforget" data-k="${esc(c.key)}" data-n="${esc(c.name)}">${svg("x", 14)}</button></div>`;
+    <span class="tx"><input class="inp nm" value="${esc(c.name)}" title="Нажмите, чтобы исправить имя" data-c="cren" data-k="${esc(c.key)}"><span class="d" style="color:var(--f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.en && c.en != c.name ? esc(c.en) + " · " : ""}${c.g == "f" ? "женский" : "мужской"}, ${esc(c.how)}${c.type ? " · " + esc(c.type) : ""}${c.addr ? " · на «" + esc(c.addr) + "»" : ""}</span></span>
+    ${seg(c)}<select class="sel" style="width:108px;height:32px;font-size:13px" title="Характер голоса (авто — решает ИИ-редактор)" data-c="ctype" data-k="${esc(c.key)}">${[["", c.type ? c.type : "характер"],["adult","обычный"],["young","молодой"],["old","пожилой"],["child","ребёнок"],["noble","знатный"],["monster","чудовище"]].map(([v, n]) => `<option value="${v}" ${v == (c.type_manual ? c.type_id : "") ? "selected" : ""}>${n}</option>`).join("")}</select>${vs(c)}<button class="ib" style="color:var(--acc2)" title="Прослушать" data-a="cplay" data-k="${esc(c.key)}" data-n="${esc(c.name)}">${svg("play", 14)}</button><button class="ib" style="color:var(--f)" title="Забыть" data-a="cforget" data-k="${esc(c.key)}" data-n="${esc(c.name)}">${svg("x", 14)}</button></div>`;
   return `<div class="row" style="gap:8px"><span class="subt" style="flex-grow:1">Имена берутся из субтитров, пол угадывается по речи и по имени. Поправьте, если ошиблось.</span><span class="chip" style="height:32px">${esc(D.game || "")}</span></div>
   <div class="row" style="gap:8px"><label style="display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:8px;background:var(--card);color:var(--f);flex-grow:1">${svg("search", 15)}<input class="inp" style="background:none;padding:0;height:auto" placeholder="Найти персонажа" data-i="cq" value="${esc(SUB.charQ)}"></label>
     ${[["all","Все"],["f","Женщины"],["m","Мужчины"]].map(([k, t]) => `<button class="chip" style="height:34px" aria-pressed="${G == k}" data-a="cgf" data-v="${k}">${t}<span class="c">${n[k]}</span></button>`).join("")}</div>
@@ -422,6 +427,9 @@ HANDLERS.gtest = b => act("gender_test", {g: b.dataset.g});
 HANDLERS.vpack = () => act("voicepack_install");
 HANDLERS.cg = b => act("char_gender", {key: b.dataset.k, v: b.dataset.v});
 HANDLERS.cv = b => act("char_voice", {key: b.dataset.k, v: b.value});
+HANDLERS.tplay = b => act("type_play", {g: b.dataset.g, k: b.dataset.k});
+HANDLERS.ctype = b => act("char_type", {key: b.dataset.k, v: b.value});
+HANDLERS.cren = b => act("char_rename", {key: b.dataset.k, v: b.value});
 HANDLERS.cplay = b => act("char_play", {key: b.dataset.k, name: b.dataset.n});
 HANDLERS.cforget = b => confirmDlg(`Забыть «${b.dataset.n}»?`, "Пол и голос сбросятся; если персонаж снова заговорит, программа угадает их заново.", "Забыть", () => act("char_forget", {key: b.dataset.k}));
 HANDLERS.cq = b => { SUB.charQ = b.value; render(); refocus('[data-i="cq"]'); };

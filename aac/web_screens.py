@@ -197,7 +197,8 @@ def _s_voice():
         chars.append({"key": key, "name": c.get("ru") or c.get("en") or key, "en": c.get("en") or "", "g": g,
                       "how": how, "manual_g": c.get("gender_manual", ""), "voice": manual,
                       "auto": pool.get(auto[0], auto[0]).split(" — ")[0] if auto else "",
-                      "type": voices.TYPE_NAMES.get(c.get("type", ""), ""), "addr": c.get("address", "")})
+                      "type": voices.TYPE_NAMES.get(c.get("type", ""), ""), "addr": c.get("address", ""),
+                      "type_id": c.get("type", ""), "type_manual": bool(c.get("type_manual"))})
     vpool = [{"id": v, "name": pool.get(v, v).split(" — ")[0], "g": g}
              for g in ("f", "m") for v in (voices.SILERO_POOL if e2 == "silero" else voices.NEURAL_POOL)[g]]
     gpool = {g: [{"id": v, "name": pool.get(v, v).split(" — ")[0]}
@@ -596,6 +597,26 @@ def do(name, arg, app):
         from . import voices
         voices.set_manual(a.get("key"), voice=a.get("v") or "", engine="silero" if config.TTS_ENGINE == "silero"
                           else "neural")
+    elif name == "type_play":
+        from . import tts, voices
+        g = a.get("g") if a.get("g") in ("m", "f") else "m"
+        k = a.get("k") or ""
+        vp = voices.line_voice(g, k) or None
+        names = {"": "Обычный", "young": "Молодой", "old": "Пожилой", "child": "Ребёнок", "noble": "Знатный",
+                 "monster": "Чудовище"}
+        _bg(tts.say_test, vp, f"{names.get(k, '')} голос. Путник, постой! Мне нужна твоя помощь.")
+    elif name == "char_type":
+        from . import voices
+        voices.set_type_manual(a.get("key"), a.get("v") or "")
+    elif name == "char_rename":
+        from . import glossary, voices
+        en = voices.rename(a.get("key"), str(a.get("v") or ""))
+        if en:
+            try:
+                glossary.set_entry(en, str(a.get("v")).strip())     # так и переводить дальше
+            except Exception:
+                pass
+            core.log(f"Имя: {en} → {str(a.get('v')).strip()} (и в словаре игры)", "ok")
     elif name == "char_forget":
         from . import voices
         voices.forget(a.get("key"))
