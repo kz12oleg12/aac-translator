@@ -296,7 +296,7 @@ R.tr = () => {
 </div>
   <h2 style="font-size:15px;padding-top:6px">Вид для новых игр</h2>
   <span class="subt" style="margin-top:-10px">Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой — меняется в «Играх».</span>
-  ${styleBlock(D.ds, true)}${extrasCard(D.ds)}`;
+  ${styleBlock(D.ds, true)}${extrasCard(D.ds, true)}`;
 };
 HANDLERS.pmain = b => act("provider_main", b.value);
 HANDLERS.fbadd = b => { if (b.value) act("provider_fallbacks", D.fallback.concat([b.value])); };
@@ -481,9 +481,14 @@ function ansBox(D, fam, sz, out, docked) {
     <div style="font-size:11px;color:#9C9A92;margin-bottom:2px">Варианты ответа</div>
     <div style="font-size:${sz}px;color:${D.color};${sh}">1. Я пойду первым.</div><div style="font-size:${sz}px;color:${D.color};${sh}">2. Что там может быть?</div></div>`;
 }
-function extrasCard(D) {
-  const tg = (k, t, d, on) => `<div class="r"><span class="tx"><span>${t}</span>${d ? `<span class="d">${d}</span>` : ""}</span>${sw(on, `data-a="stt" data-k="${k}"`)}</div>`;
-  return `<div class="card" style="padding:4px 16px"><div class="lst">${tg("keep","Не убирать, пока нет новой реплики","",D.keep)}${tg("orig","Показывать оригинал под переводом","",D.orig)}${tg("docked","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой, двигаются вместе",D.docked)}</div></div>`;
+const rowC = (label, ctrl, desc) => `<div class="r rc"><span class="tx"><span>${label}</span>${desc ? `<span class="d">${desc}</span>` : ""}</span><div class="rcc">${ctrl}</div></div>`;
+const slC = (k, min, max, step, v, fmt) => `<input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-c="st" data-k="${k}"><span class="rv">${fmt(v)}</span>`;
+function extrasCard(D, DEF) {
+  const t = (k, on) => sw(on, `data-a="stt" data-k="${k}"`);
+  return `<div class="card grp"><div class="gh">Показ</div><div class="lst">
+    ${DEF ? "" : rowC("Прошлых реплик над текущей", slC("history", 0, 3, 1, D.history, v => v)) + rowC("Убирать через", slC("delay", 0, 30, 0.5, D.delay, v => v + " с"), "После того как реплика исчезла с экрана")}
+    ${rowC("Не убирать, пока нет новой реплики", t("keep", D.keep))}${rowC("Показывать оригинал под переводом", t("orig", D.orig))}
+    ${rowC("Ответы под субтитрами", t("docked", D.docked), "Одним окном: варианты ответа сразу под репликой, двигаются вместе")}</div></div>`;
 }
 function styleBlock(D, DEF) {
   const sl = (k, t, min, max, step, v, fmt) => `<label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">${t}</span><span style="font-size:12px">${fmt(v)}</span></span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-c="st" data-k="${k}"></label>`;
@@ -497,12 +502,12 @@ function styleBlock(D, DEF) {
       ${D.orig ? `<div style="font-size:11px;color:#9C9A92">Renald: Stay close! Did you hear that?</div>` : ""}
       ${D.docked ? ansBox(D, fam, sz, out, true) : ""}</div>${D.docked ? "" : `<div style="align-self:flex-end;margin-top:4px">${ansBox(D, fam, sz, out, false)}</div>`}</div>`;
   return `${prev}
-    <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
-      <div class="row" style="gap:12px"><span style="flex-grow:1">Шрифт</span><select class="sel" style="width:200px" data-c="stf">${D.fonts.map(f => `<option ${f == fam ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></div>
-      <div class="row" style="gap:8px"><span style="flex-grow:1">Цвет текста</span>${sws("color", D.colors, D.color)}</div>
-      <div class="seg" style="align-self:flex-start"><button aria-pressed="${!out}" class="m" data-a="stm" data-v="box" style="height:30px;padding:0 14px">Плашка</button><button aria-pressed="${out}" class="m" data-a="stm" data-v="outline" style="height:30px;padding:0 14px">Обводка букв</button></div>
-      ${sl("size","Размер шрифта",10,26,1,sz,v => v)}${sl("alpha","Непрозрачность",40,100,5,D.alpha,v => v + "%")}
-      ${DEF ? "" : sl("history","Прошлых реплик над текущей",0,3,1,D.history,v => v) + sl("delay","Убирать через, после того как реплика исчезла",0,30,0.5,D.delay,v => v + " с")}</div>`;
+    <div class="card grp"><div class="gh">Текст</div><div class="lst">
+      ${rowC("Шрифт", `<select class="sel" style="width:220px" data-c="stf">${D.fonts.map(f => `<option ${f == fam ? "selected" : ""}>${esc(f)}</option>`).join("")}</select>`)}
+      ${rowC("Цвет", sws("color", D.colors, D.color))}
+      ${rowC("Подложка", `<div class="seg"><button aria-pressed="${!out}" class="m" data-a="stm" data-v="box" style="height:30px;padding:0 14px">Плашка</button><button aria-pressed="${out}" class="m" data-a="stm" data-v="outline" style="height:30px;padding:0 14px">Обводка букв</button></div>`)}
+      ${rowC("Размер шрифта", slC("size", 10, 26, 1, sz, v => v))}
+      ${rowC("Непрозрачность", slC("alpha", 40, 100, 5, D.alpha, v => v + "%"))}</div></div>`;
 }
 R.win = () => {
   if (!D) return null;
@@ -518,15 +523,17 @@ R.win = () => {
       ${D.docked ? ansBox(D, fam, sz, out, true) : ""}</div>${D.docked ? "" : `<div style="align-self:flex-end;margin-top:4px">${ansBox(D, fam, sz, out, false)}</div>`}</div>`;
   const DEF = !!D.default;
   return `${DEF ? back("tr", "Переводчики") : back("games", "Игры")}<div style="display:flex;flex-direction:column;gap:4px"><h1>${DEF ? "Вид для новых игр" : "Вид перевода"}</h1><span class="subt">${DEF ? "Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой." : D.owner ? "Для игры «" + esc(D.owner) + "». У каждой игры свой вид." : "Вид по умолчанию — игра не выбрана."} Образец меняется сразу.</span></div>
-  ${styleBlock(D, DEF)}${DEF ? "" : extrasCard(D) + `
+  ${styleBlock(D, DEF)}${DEF ? "" : extrasCard(D, false) + `
   <h2 style="font-size:15px;padding-top:6px">Окно чата</h2>
   <div style="background:linear-gradient(160deg,#3a2c20,#1d1712);border-radius:14px;padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;color:#c9b9a6">Образец</span>
     <div style="align-self:flex-start;width:340px;background:rgba(20,20,26,${D.chat_alpha / 100});border-radius:6px;padding:8px 10px;font-size:13px;display:flex;flex-direction:column;gap:3px;color:${D.chat_fg}">
       <div><span style="color:#9C9A92">[Гильдия] Nox:</span> кто идёт в подземелье?</div><div><span style="color:#9C9A92">[Мир] Lira:</span> продам кристаллы, недорого</div><div><span style="color:#9C9A92">[Группа] Ash:</span> жду у портала</div></div></div>
-  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
-    <div class="lst">${tg("chat_cover","Перевод прямо поверх чата игры","Та же область, что и чат",D.chat_cover)}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 20px">${sl("chat_height","Высота, px (0 — по сообщениям)",0,600,20,D.chat_height,v => v)}${sl("chat_history","Хранить сообщений",20,1000,10,D.chat_history,v => v)}${sl("chat_alpha","Непрозрачность",20,100,5,D.chat_alpha,v => v + "%")}</div>
-    <div class="row" style="gap:8px"><span style="flex-grow:1">Цвет текста</span>${sws("chat_fg", D.chat_colors, D.chat_fg)}</div></div>`}`;
+  <div class="card grp"><div class="lst">
+    ${rowC("Перевод прямо поверх чата игры", sw(D.chat_cover, 'data-a="stt" data-k="chat_cover"'), "Та же область, что и чат")}
+    ${rowC("Высота", slC("chat_height", 0, 600, 20, D.chat_height, v => v ? v + " px" : "авто"), "0 — по числу сообщений")}
+    ${rowC("Хранить сообщений", slC("chat_history", 20, 1000, 10, D.chat_history, v => v))}
+    ${rowC("Непрозрачность", slC("chat_alpha", 20, 100, 5, D.chat_alpha, v => v + "%"))}
+    ${rowC("Цвет", sws("chat_fg", D.chat_colors, D.chat_fg))}</div></div>`}`;
 };
 const scope = () => (SCR == "win_default" || SCR == "tr") ? "default" : "game";
 HANDLERS.st = b => act("style", {k: b.dataset.k, v: +b.value, scope: scope()});
