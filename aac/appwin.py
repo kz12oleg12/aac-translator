@@ -90,6 +90,7 @@ class App:
         self.quest.on_hide = tts.stop   # закрыли окно задания (правый клик) — чтение тоже останавливается
         self.quest.hide()
         self.answers.hide()
+        self.recent.hide()  # последние реплики — только по клавише
         self.subs.hide()  # окно субтитров появится с первым переводом
         self.busy = set()
         self.panel = ui_shell.Shell(self, tk.Toplevel(self.root))   # главное окно: разделы слева
@@ -187,6 +188,7 @@ class App:
             self.quest.hide()
             self.answers.hide()
             self.chat.hide()
+            self.recent.hide()
         else:
             if self.subs.label.cget("text"):
                 self.subs.show(self.subs.label.cget("text"))
