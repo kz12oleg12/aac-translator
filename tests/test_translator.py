@@ -2083,7 +2083,8 @@ def test_custom_ai(monkey):
 
 
 def test_update_staged(monkey):
-    """.exe с автообновлением: новая версия скачивается заранее и ставится при выходе — без перезапуска при старте."""
+    """.exe с автообновлением: при запуске (под заставкой) новая версия скачивается и сразу ставится с перезапуском;
+    если поставить не вышло — остаётся скачанной и ставится при выходе."""
     from aac import updater
     if not hasattr(updater, "stage"):
         print("   (в этой версии нет — пропуск)")
@@ -2103,11 +2104,13 @@ def test_update_staged(monkey):
     newer = {"version": "99.0", "notes": "", "asset_url": "x"}
     monkey(updater, "check", lambda quiet=True: newer)
     updater.state.pop("staged", None)
+    applied = []
+    monkey(updater, "apply_staged", lambda restart=True: applied.append(restart) or True)
     drain()
-    assert updater.startup_check() is False, "при запуске не перезапускается"
+    assert updater.startup_check() is True, "при запуске — сразу ставим"
     ev = drain()
-    assert ("update_install", None) not in ev, "сразу не ставится"
-    assert any(k == "update_staged" for k, p in ev), "скачано заранее"
+    assert applied == [True] and ("quit", None) in ev and updater.state["phase"] == "installing"
+    updater.state["phase"] = "done"
     st = updater.staged()
     assert st and st["version"] == "99.0"
     bat = updater.exe_update_script(st["folder"], tmp, 123, start=False)
