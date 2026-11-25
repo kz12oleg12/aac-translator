@@ -2076,6 +2076,8 @@ def test_editor_voice(monkey):
     assert tts.speech_text("Джиелл+ини: Чем могу помочь?", "Джиеллини / May I help you?") == "Чем могу помочь?"
     assert tts.speech_text("Джанеллини, чем помочь?", "Gianellini\nHow can I help?") == "чем помочь?"
     assert tts.speech_text("Привет, как дела?", "Hello\nHow are you?") == "Привет, как дела?"
+    assert tts.speech_text("Джиеллини / Чем могу помочь?", "Giellini\nMay I help you?") == "Чем могу помочь?"
+    assert editor.parse("TEXT:\nДжиеллини / Чем помочь?\nVOICE:\nДжиеллини / Чем помочь?")["text"] == "Джиеллини\nЧем помочь?"
 
 
 def test_tts_upgrade(monkey):

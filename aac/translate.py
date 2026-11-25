@@ -243,6 +243,7 @@ def safe_translate(img, prompt=None):
             text = clean_translation(text, strict=name not in MT_PROVIDERS) if text else text
             if not text or "НЕТ_ТЕКСТА" in text:
                 return None, None
+            text = re.sub(r"[ \t]+/[ \t]+", "\n", text)   # «Имя / Реплика» из истории диалога — это перенос строки
             if name not in MT_PROVIDERS and not prompt.startswith("Screenshot of a tooltip"):
                 # переводила нейросеть — ИИ-редактор всё равно проверяет род, ударения и готовит озвучку
                 from . import editor

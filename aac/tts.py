@@ -222,6 +222,8 @@ def _strip_speaker(text, orig):
 
 def speech_text(translation, orig=None):
     """Что читать вслух: без имени говорящего (если не включено), без служебных значков."""
+    # « / » — так строки склеены в журнале и в истории диалога; нейросеть иногда отвечает так же
+    translation = re.sub(r"\s+/\s+", "\n", translation)
     lines = [ln.strip() for ln in translation.splitlines() if ln.strip()]
     if not config.TTS_READ_NAME and len(lines) > 1:
         first = lines[0]
