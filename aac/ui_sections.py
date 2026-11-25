@@ -385,7 +385,9 @@ class SectionsMixin:
                  ("⏵", "Дочитывать", "новая не обрывает", "TTS_FINISH_LINE", "tts_finish_line", None),
                  ("Аа", "Читать имя", "«Ренальд: …»", "TTS_READ_NAME", "tts_read_name", None),
                  ("RU", "Только русские", "без многоязычных", "TTS_RUSSIAN_ONLY", "tts_russian_only",
-                  lambda: self.after_idle_rebuild("voice"))]
+                  lambda: self.after_idle_rebuild("voice")),
+                 ("⏭", "Не отставать", "листаете — свежая", "TTS_SKIP_FAST", "tts_skip_fast", None),
+                 ("⚡", "Без задержки", "не ждать редактора", "TTS_NO_WAIT", "tts_no_wait", None)]
         self.voice_tiles = []
         for i, (ic, t, s_, attr, key, extra) in enumerate(specs):
             tile = K.Tile(tiles, ic, t, s_, None, lambda a=attr: getattr(config, a), flag(attr, key, extra))

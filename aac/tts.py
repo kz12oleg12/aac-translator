@@ -737,6 +737,11 @@ class _Neural:
             for jb in jobs:
                 if jb and not jb["dead"] and jb.get("key") == key:
                     self._apply_upgrade(jb, text, player)
+                    try:
+                        from . import editor
+                        editor.stats["voice_up"] = editor.stats.get("voice_up", 0) + 1
+                    except Exception:
+                        pass
 
     def _cancel(self, job):
         job["dead"] = True

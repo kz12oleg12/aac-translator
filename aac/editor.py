@@ -67,7 +67,7 @@ _state = {"scene": "", "since_scene": 0, "history": []}
 _speech = {}            # показанный текст → {"voice", "speaker", "gender", "mood"} — для озвучки
 _SPEECH_MAX = 200
 _lock = threading.Lock()
-stats = {"edited": 0, "same": 0, "late": 0, "failed": 0}
+stats = {"edited": 0, "same": 0, "late": 0, "failed": 0, "voice_up": 0, "skipped": 0}
 
 
 def _usable(e):
@@ -161,6 +161,15 @@ def build_prompt(src, draft, kind):
         history=("Previous lines (context only):\n" + "\n".join(f"EN: {a}\nRU: {b}" for a, b in hist) + "\n"
                  if hist and kind == "subs" else ""),
         src=src, draft=draft)
+
+
+def trivial(draft):
+    """Короткая реплика без имён и цифр («Да.», «Хм…», «Спасибо!») — редактору нечего править, бережём лимит."""
+    import re
+    words = re.findall(r"[А-Яа-яЁёA-Za-z]+", draft or "")
+    if len(words) > 2 or sum(map(len, words)) > 12 or re.search(r"\d|[A-Za-z]", draft or ""):
+        return False
+    return not any(w[:1].isupper() for w in words[1:])
 
 
 def _norm(t):
@@ -354,6 +363,10 @@ def improve(src, draft, kind, on_late=None):
     Возвращает исправленный текст, если редактор успел за EDITOR_WAIT с, иначе None (показывайте черновик).
     on_late(текст) — вызовется, если ответ пришёл позже (подменить показанный черновик)."""
     import json
+    if trivial(draft):
+        stats["skipped"] = stats.get("skipped", 0) + 1
+        _remember(src, draft, kind)
+        return None
     src = src or "(original not available — the translator read it from a screenshot)"
     if not ready() or not draft:
         if draft:

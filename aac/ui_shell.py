@@ -663,7 +663,7 @@ class Shell(SectionsMixin, GamesMixin, WizardMixin):
         self.ed_row = K.ToggleRow(ci, "✏️ ИИ-редактор",
                                   "помощник основного переводчика: правит падежи и род, имена по словарю, тон и "
                                   "«ты»/«вы», учитывает прошлые реплики и сцену. Не успел или лимит — покажет "
-                                  "обычный перевод. Работает поверх Google, Microsoft и DeepL.", lambda: config.EDITOR_ON, set_editor_on,
+                                  "обычный перевод. Работает поверх любого переводчика и готовит реплику для озвучки.", lambda: config.EDITOR_ON, set_editor_on,
                                   last=True)
         self.ed_row.pack(fill="x")
         sel = tk.Frame(ci, bg=K.CARD)
@@ -672,6 +672,12 @@ class Shell(SectionsMixin, GamesMixin, WizardMixin):
         self.ed_var = tk.StringVar(value=self._editor_label(config.EDITOR))
         self.ed_select = K.select(sel, self.ed_var, self._editor_labels(), self._editor_changed, width=34)
         self.ed_select.pack(side="right")
+        sel2 = tk.Frame(ci, bg=K.CARD)
+        sel2.pack(fill="x", pady=(8, 0))
+        K.label(sel2, "Запасной — на случай лимита", 9, K.DIM).pack(side="left")
+        self.ed2_var = tk.StringVar(value=self._editor_label(config.EDITOR2) if config.EDITOR2 else "Нет")
+        self.ed2_select = K.select(sel2, self.ed2_var, ["Нет"] + self._editor_labels(), self._editor2_changed, width=34)
+        self.ed2_select.pack(side="right")
         self.ed_stats = K.label(ci, "", 9, K.FAINT, wraplength=640)
         self.ed_stats.pack(anchor="w", pady=(8, 0))
 
@@ -719,6 +725,12 @@ class Shell(SectionsMixin, GamesMixin, WizardMixin):
     def _editor_labels(self):
         from . import editor
         return [self._editor_label(e) for e in editor.EDITORS]
+
+    def _editor2_changed(self):
+        from . import editor
+        by_label = {self._editor_label(e): e for e in editor.EDITORS}
+        config.EDITOR2 = by_label.get(self.ed2_var.get(), "")
+        core.save_settings(editor2=config.EDITOR2)
 
     def _editor_changed(self):
         from . import editor

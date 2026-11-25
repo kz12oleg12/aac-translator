@@ -131,7 +131,8 @@ def _s_tr():
     return {"main": config.PROVIDER, "fallback": list(config.FALLBACK_PROVIDERS),
             "chain": chain, "providers": provs, "editor_on": bool(config.EDITOR_ON), "editor": config.EDITOR,
             "editors": eds, "editor2": config.EDITOR2,
-            "editor_stats": {k: s.get(k, 0) for k in ("edited", "same", "late", "failed")},
+            "bad": [{"en": x.get("en", ""), "ru": x.get("ru", "")} for x in core.SETTINGS.get("bad_lines", [])],
+            "editor_stats": {k: s.get(k, 0) for k in ("edited", "same", "late", "failed", "voice_up", "skipped")},
             "flags": {k: bool(getattr(config, FLAGS[k][0], False))
                       for k in ("cache", "skip_system", "gloss_auto", "save_history")},
             "cache_size": tcache.size(), "gloss_count": _gloss_count(), "default_style": _style_summary(),
@@ -429,6 +430,16 @@ def do(name, arg, app):
     elif name == "stress_play":
         from . import tts
         tts.say_test(text=str(a.get("v") or ""))
+    elif name == "bad_del":
+        b = core.SETTINGS.get("bad_lines", [])
+        i = int(a.get("i", -1)) if isinstance(a, dict) else -1
+        if 0 <= i < len(b):
+            b.pop(i)
+            core.save_settings()
+    elif name == "bad_clear":
+        core.SETTINGS["bad_lines"] = []
+        core.save_settings()
+        core.log("Отметки «плохой перевод» очищены", "ok")
     elif name == "editor2":
         from . import editor
         v = a.get("v") or ""

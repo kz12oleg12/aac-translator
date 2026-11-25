@@ -283,7 +283,10 @@ R.tr = () => {
       ${D.editor_on ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <label style="display:flex;flex-direction:column;gap:6px"><span class="lbl">Кто редактирует</span><select class="sel" data-c="ed">${ed.map(e => `<option value="${e.id}" ${e.id == D.editor ? "selected" : ""} ${e.has ? "" : "disabled"}>${esc(e.name)}${e.has ? "" : " — нужен ключ"}</option>`).join("")}</select></label>
         <label style="display:flex;flex-direction:column;gap:6px"><span class="lbl">Запасной — на случай лимита</span><select class="sel" data-c="ed2"><option value="">Нет</option>${ed.filter(e => e.id != D.editor).map(e => `<option value="${e.id}" ${e.id == D.editor2 ? "selected" : ""} ${e.has ? "" : "disabled"}>${esc(e.name)}${e.has ? "" : " — нужен ключ"}</option>`).join("")}</select></label></div>
-      <span style="font-size:12px;color:var(--f)">Поправил: ${st.edited} · без правок: ${st.same} · не успел: ${st.late}${st.failed ? " · ошибок: " + st.failed : ""}</span>` : ""}
+      <span style="font-size:12px;color:var(--f)">Поправил: ${st.edited} · без правок: ${st.same} · не успел: ${st.late}${st.voice_up ? " · озвучка дочитала его вариантом: " + st.voice_up : ""}${st.skipped ? " · короткие без проверки: " + st.skipped : ""}${st.failed ? " · ошибок: " + st.failed : ""}</span>
+      ${D.bad.length ? `<details><summary style="cursor:pointer;font-size:13px;color:var(--m)">Отмечено «плохой перевод» (Ctrl+Shift+B): ${D.bad.length} — редактор учитывает последние 4</summary>
+        <div class="lst" style="margin-top:6px">${D.bad.map((x, i) => `<div class="row" style="padding:6px 0;gap:10px;align-items:flex-start"><div style="flex-grow:1;display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13px">${esc(x.ru)}</span><span style="font-size:12px;color:var(--f)">${esc(x.en)}</span></div><button class="ib" title="Удалить" data-a="badd" data-i="${i}">${svg("x", 14)}</button></div>`).reverse().join("")}</div>
+        <button class="btn" style="margin-top:6px" data-a="badc">Очистить все</button></details>` : ""}` : ""}
     </div></div>
   <div class="card" style="padding:14px 18px"><div style="display:flex;align-items:baseline;gap:10px"><span style="font-weight:600;font-size:15px;flex-grow:1">Все переводчики</span><span style="font-size:12px;color:var(--f)">ключи хранятся в Windows, не в файлах программы</span></div>
     <div class="sec">Машинный перевод <span style="font-weight:400;color:var(--f)">быстро, без понимания сцены</span></div><div class="lst">${P.filter(p => p.group == "mt").map(row).join("")}</div>
@@ -311,6 +314,8 @@ HANDLERS.ed = b => act("editor", b.value);
 HANDLERS.strs = b => act("stress_set", {k: b.dataset.k, v: b.value});
 HANDLERS.strp = b => act("stress_play", {v: b.dataset.v});
 HANDLERS.strd = b => act("stress_del", {k: b.dataset.k});
+HANDLERS.badd = b => act("bad_del", {i: +b.dataset.i});
+HANDLERS.badc = () => act("bad_clear");
 HANDLERS.ed2 = b => act("editor2", b.value);
 HANDLERS.flag = b => act("flag", {name: b.dataset.n, v: b.getAttribute("aria-checked") != "true"});
 HANDLERS.cclear = () => confirmDlg("Очистить кэш переводов?", "Готовые переводы фраз забудутся — следующие повторы снова пойдут к переводчику.", "Очистить", () => act("cache_clear"));

@@ -2020,6 +2020,8 @@ def test_editor_voice(monkey):
     r = editor.parse("TEXT:\nЯ пришла за тобой.\nVOICE:\nЯ пришл+а за тоб+ой, Арг+ус.\nSPEAKER: Lyra\nGENDER: f\nMOOD: shout")
     assert r["text"] == "Я пришла за тобой." and r["speaker"] == "Lyra" and r["gender"] == "f" and r["mood"] == "shout"
     assert editor.parse("просто текст") == {"text": "просто текст"}
+    assert editor.trivial("Да.") and editor.trivial("Хм… ладно.") and not editor.trivial("Да, Аргус.")
+    assert not editor.trivial("Возьми 3 зелья.") and not editor.trivial("Я пришёл за тобой сегодня вечером.")
     r2 = editor.parse("TEXT:\nА\nVOICE:\nА\nSPEAKER: -\nGENDER: m\nMOOD: -\nTYPE: old\nADDRESS: вы\nTERMS: Dawn Blade = Клинок Рассвета; x")
     assert r2["type"] == "old" and r2["address"] == "вы" and r2["terms"] == [("Dawn Blade", "Клинок Рассвета")]
     monkey(c, "SETTINGS", {})
