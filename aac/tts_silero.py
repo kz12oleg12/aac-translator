@@ -91,7 +91,7 @@ def _load_cis():
         raise
     _cis.update(m=m, acc=acc)
     speakers = [s for s in (getattr(m, "speakers", None) or []) if str(s).startswith("ru_")]
-    core.log(f"Silero: доп. голоса загружены за {time.time() - t0:.1f} с"
+    core.log(f"Silero: доп. голоса готовы (подняты в память с диска) за {time.time() - t0:.1f} с"
              + (f" ({len(speakers)} русских)" if speakers else ""), "ok")
     return m, acc
 
@@ -166,7 +166,7 @@ def _load(time):
             model.to(torch.device("cpu"))
             MODEL_FILE = path
             _model.update(m=model, torch=torch, ver=ver)
-            core.log(f"Silero {ver}: голоса загружены за {time.time() - t0:.1f} с", "ok")
+            core.log(f"Silero {ver}: голоса готовы — подняты в память с диска за {time.time() - t0:.1f} с", "ok")
             return model
         raise RuntimeError(f"модель не загрузилась: {last_err}")
 
