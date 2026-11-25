@@ -171,6 +171,11 @@ body.nav-c #updnav .ui{display:flex}
 .ib[title="Прослушать"]{background:rgba(88,101,242,.16);color:var(--acc2)!important;width:36px;height:36px}
 .ib[title="Прослушать"]:hover{background:rgba(88,101,242,.28)}
 main>*{flex-shrink:0}
+.jlast{display:none;align-items:center;gap:8px;max-width:420px;min-width:0;height:32px;padding:0 12px;border-radius:8px;background:var(--card);border:0;color:var(--t3);font-size:12px;cursor:pointer}
+.jlast:hover{background:#30302E}
+.jlast .t{font-family:var(--mono);font-size:11px;color:var(--f);flex-shrink:0}
+.jlast .m{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.jr-c .jlast{display:flex}
 </style>
 </head>
 <body>
@@ -186,7 +191,7 @@ main>*{flex-shrink:0}
     <button class="ib" title="Выключить программу" aria-label="Выключить программу" data-act="quit" style="color:var(--err)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/></svg></button>
   </div>
 </nav>
-<div class="center"><div class="topbar"><button class="ib" id="navc" title="Свернуть меню" aria-label="Свернуть меню"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button><div id="ttl" class="ttl"></div><button class="ib jtog" id="jro" title="Показать журнал" aria-label="Показать журнал"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg><span class="jn" id="jrn"></span></button></div><main id="main"></main></div>
+<div class="center"><div class="topbar"><button class="ib" id="navc" title="Свернуть меню" aria-label="Свернуть меню"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button><div id="ttl" class="ttl"></div><button class="jlast" id="jrlast" data-jopen="1" aria-label="Последняя запись журнала — открыть журнал"></button><button class="ib jtog" id="jro" title="Показать журнал" aria-label="Показать журнал"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg><span class="jn" id="jrn"></span></button></div><main id="main"></main></div>
 <aside aria-label="Журнал" id="jr">
   <div class="grip" id="grip"></div>
   <div class="jh"><span style="flex-grow:1">Журнал</span><button class="ib" id="jrc" title="Скрыть журнал" aria-label="Скрыть журнал"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button></div>

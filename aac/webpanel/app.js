@@ -351,9 +351,9 @@ function voiceTab() {
   <h2 style="font-size:15px;padding-top:6px">Кто каким голосом</h2>
   <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
     <div class="grid3">${[["one","mon","Один голос для всех","Все реплики — основным голосом"],["gender","people","По полу","Мужчинам мужской голос, женщинам женский"],["each","mix","Каждому свой","У каждого персонажа свой голос, мужской или женский"]].map(([id, ic, t, d]) => `<button class="eng" role="radio" aria-checked="${D.mode == id}" data-a="vmode" data-v="${id}">${ico(ic, D.mode == id)}<div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">${t}</span><span style="font-size:12px;color:var(--m)">${d}</span></div></button>`).join("")}</div>
-    ${D.engine == "windows" && D.mode != "one" ? `<span style="font-size:12px;color:var(--warn);padding:0 12px">С голосом Windows разные голоса не работают — выберите нейроголоса или Silero.</span>` : ""}
-    ${D.mode == "gender" && D.engine != "windows" ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;padding:0 12px">${[["m","Мужской голос"],["f","Женский голос"]].map(([g, t]) => `<div style="display:flex;flex-direction:column;gap:6px"><span class="lbl">${t}</span><div class="row" style="gap:6px"><select class="sel" data-c="gvoice" data-g="${g}">${D.gender_pool[g].map(v => `<option value="${esc(v.id)}" ${v.id == D.gender_voice[g] ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select><button class="ib" style="color:var(--acc2);flex-shrink:0" title="Прослушать" data-a="gtest" data-g="${g}">${svg("play", 14)}</button></div></div>`).join("")}</div>` : ""}
-    ${D.mode == "each" ? `<div class="row" style="font-size:12px;color:var(--m);padding:0 12px"><span style="flex-grow:1">Голос подбирается сам по полу. Поменять пол или голос конкретному персонажу — во вкладке «Персонажи» (${D.chars.length}).</span>${lnk("открыть",'data-a="vtab" data-v="chars"')}</div>` : ""}
+    ${D.engine == "windows" && D.mode != "one" ? `<span style="font-size:12px;color:var(--warn)">С голосом Windows разные голоса не работают — выберите нейроголоса или Silero.</span>` : ""}
+    ${D.mode == "gender" && D.engine != "windows" ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px">${[["m","Мужской голос"],["f","Женский голос"]].map(([g, t]) => `<div style="display:flex;flex-direction:column;gap:6px"><span class="lbl">${t}</span><div class="row" style="gap:6px"><select class="sel" data-c="gvoice" data-g="${g}">${D.gender_pool[g].map(v => `<option value="${esc(v.id)}" ${v.id == D.gender_voice[g] ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select><button class="ib" style="color:var(--acc2);flex-shrink:0" title="Прослушать" data-a="gtest" data-g="${g}">${svg("play", 14)}</button></div></div>`).join("")}</div>` : ""}
+    ${D.mode == "each" ? `<div class="row" style="font-size:12px;color:var(--m)"><span style="flex-grow:1">Голос подбирается сам по полу. Поменять пол или голос конкретному персонажу — во вкладке «Персонажи» (${D.chars.length}).</span>${lnk("открыть",'data-a="vtab" data-v="chars"')}</div>` : ""}
   </div>
   <h2 style="font-size:15px;padding-top:6px">Как читать</h2>
   <div class="grid3" style="grid-template-columns:1fr 1fr">
@@ -633,6 +633,12 @@ function updNav() {
     <button class="ui" data-act="update_install" title="Доступна версия ${esc(v)} — обновить" aria-label="Обновить до ${esc(v)}">${svg("end", 16, 2).replace("M5 12h14M13 6l6 6-6 6", "M12 19V5M6 11l6-6 6 6")}</button>` : "";
 }
 
+function lastLog(e) {
+  const el = $("jrlast"); if (!el) return;
+  el.innerHTML = `<i class="dot" style="width:7px;height:7px;background:${LC[e.level] || LC.info}"></i><span class="t">${esc(e.t)}</span><span class="m">${esc(e.msg)}</span>`;
+  el.title = e.msg;
+}
+
 // ---------- свернуть меню и журнал ----------
 let unread = 0;
 function layout(save) {
@@ -647,15 +653,16 @@ function layout(save) {
 try { const l = JSON.parse(localStorage.getItem("lay") || "{}"); if (l.nc) document.body.classList.add("nav-c"); if (l.jc) document.body.classList.add("jr-c"); } catch (e) {}
 $("navc").onclick = () => { document.body.classList.toggle("nav-c"); layout(true); };
 $("jrc").onclick = () => { document.body.classList.add("jr-c"); layout(true); };
+$("jrlast").onclick = () => $("jro").click();
 $("jro").onclick = () => { document.body.classList.remove("jr-c"); layout(true); const L = $("log"); L.scrollTop = L.scrollHeight; };
 $("jrc").title = "Скрыть журнал";
 
 async function start() {
   nav();
   try { await fetch("/api/hello", {method: "POST", headers: H, body: "{}"}); } catch (e) {}
-  const lg = await get("/api/log"); if (lg) { lg.forEach(e => addLog(e, false)); $("log").scrollTop = 1e9; }
+  const lg = await get("/api/log"); if (lg) { lg.forEach(e => addLog(e, false)); if (lg.length) lastLog(lg[lg.length - 1]); $("log").scrollTop = 1e9; }
   const es = new EventSource("/api/events?t=" + encodeURIComponent(T));
-  es.addEventListener("log", m => { addLog(JSON.parse(m.data)); if (document.body.classList.contains("jr-c")) { unread++; layout(); } refresh(); });
+  es.addEventListener("log", m => { lastLog(JSON.parse(m.data)); addLog(JSON.parse(m.data)); if (document.body.classList.contains("jr-c")) { unread++; layout(); } refresh(); });
   es.addEventListener("toggle", () => { window.pywebview && pywebview.api.toggle(); });
   es.addEventListener("hide", () => { window.pywebview && pywebview.api.hide(); });
   es.addEventListener("show", () => { window.pywebview && pywebview.api.show(); });
