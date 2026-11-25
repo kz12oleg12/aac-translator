@@ -521,8 +521,10 @@ class App:
             if reg:
                 self.root.after(200, lambda: threading.Thread(target=menu.learn, args=(reg,), daemon=True).start())
 
-        self.pick_area("Меню игры должно быть ОТКРЫТО. Обведите кусочек меню, который всегда одинаковый "
-                       "(заголовок или кнопки). Правый клик — забыть меню.", done, menu.forget, game_area=True)
+        what = "заменит выбранный экран" if menu.replace_next["id"] else "добавится к запомненным"
+        self.pick_area("Экран, где переводить не нужно (меню, карта, инвентарь), должен быть ОТКРЫТ. Обведите кусочек, "
+                       f"который на нём всегда одинаковый (заголовок или вкладки) — {what}. Esc — отмена.",
+                       done, None, game_area=True)
 
     def menu_state(self, opened):
         """Меню игры открыли/закрыли: прячем/возвращаем окна перевода."""

@@ -229,7 +229,7 @@ def bind(pid):
         with open(p["glossary"], "w", encoding="utf-8") as f:
             f.write(GENERIC_GLOSSARY)
     menu.REF_FILE = p["menu"]
-    menu._ref.update(img=None, loaded=False)
+    menu._ref.update(img=None, loaded=False, screens=[])
 
 
 def activate(pid, announce=True, hold=False):

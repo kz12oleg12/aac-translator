@@ -995,8 +995,12 @@ def test_game_menu_pause(monkey):
         print("   (в этой версии нет — пропуск)")
         return
     from PIL import Image, ImageDraw
-    monkey(menu, "REF_FILE", os.path.join(TMP, "menu_ref.png"))
-    monkey(menu, "_ref", {"img": None, "loaded": False})
+    d = os.path.join(TMP, "menu_pause")
+    import shutil
+    shutil.rmtree(d, ignore_errors=True)
+    os.makedirs(d)
+    monkey(menu, "REF_FILE", os.path.join(d, "menu_ref.png"))
+    monkey(menu, "_ref", {"img": None, "loaded": False, "screens": []})
     core_m = T._owner("menu_region")
     monkey(core_m, "menu_region", None)
     monkey(core_m, "in_menu", False)
@@ -1007,7 +1011,7 @@ def test_game_menu_pause(monkey):
     monkey(menu.capture, "grab", lambda reg: shots["img"])
     drain()
     menu.learn((10, 10, 200, 100))
-    assert core_m.menu_region == (10, 10, 200, 100) and os.path.exists(menu.REF_FILE)
+    assert core_m.menu_region == (10, 10, 200, 100) and os.path.exists(menu._img_file("s1"))
     assert menu.is_menu(menu_img) and not menu.is_menu(game_img)
     noisy = menu_img.copy()
     ImageDraw.Draw(noisy).point([(5, 5), (190, 90)], fill=(255, 255, 255))           # мелкие отличия — всё равно меню
@@ -1020,10 +1024,29 @@ def test_game_menu_pause(monkey):
         x, y = rnd.randrange(200), rnd.randrange(100)
         dd.ellipse([x, y, x + rnd.randrange(5, 30), y + rnd.randrange(5, 30)], fill=(rnd.randrange(20, 90),) * 3)
     assert not menu.is_menu(dark), menu.similarity(dark)
-    menu._ref.update(img=None, loaded=False)                                         # после перезапуска — из файла
+    menu._ref.update(img=None, loaded=False, screens=[])                             # после перезапуска — из файла
     assert menu.is_menu(menu_img)
+    # несколько экранов: второй (карта) тоже ставит на паузу
+    map_img = Image.new("RGB", (200, 100), (10, 60, 90))
+    ImageDraw.Draw(map_img).ellipse([60, 20, 140, 80], outline=(250, 250, 250), width=4)
+    shots["img"] = map_img
+    menu.learn((300, 10, 200, 100))
+    assert [x["name"] for x in menu.screens()] == ["Меню", "Экран 2"]
+    menu.rename("s2", "Карта")
+    menu._ref.update(img=None, loaded=False, screens=[])
+    assert [x["name"] for x in menu.screens()] == ["Меню", "Карта"]
+    monkey(menu.capture, "mask_out", lambda img, reg, rects: img)
+    assert menu.any_screen()
+    shots["img"] = game_img
+    assert not menu.any_screen()
+    menu.replace_next["id"] = "s2"                                                   # «Заменить» — не добавляет новый
+    shots["img"] = map_img
+    menu.learn((300, 10, 200, 100))
+    assert len(menu.screens()) == 2
+    menu.forget("s1")
+    assert [x["id"] for x in menu.screens()] == ["s2"] and core_m.menu_region == (300, 10, 200, 100)
     menu.forget()
-    assert core_m.menu_region is None and not os.path.exists(menu.REF_FILE)
+    assert core_m.menu_region is None and not menu.screens()
 
 
 def test_chat(monkey):

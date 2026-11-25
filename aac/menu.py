@@ -14,9 +14,26 @@ from PIL import Image, ImageChops, ImageFilter, ImageStat
 
 from . import capture, config, core
 
-REF_FILE = os.path.join(config.APP_DIR, "menu_ref.png")
+REF_FILE = os.path.join(config.APP_DIR, "menu_ref.png")   # указывает на папку пресета (меняет profiles.bind)
 MAX_W = 240                     # образец храним уменьшенным (по ширине), сравниваем в том же размере
-_ref = {"img": None, "loaded": False}
+_ref = {"img": None, "loaded": False, "screens": []}     # screens: [{"id","name","region","img"}]
+replace_next = {"id": None}     # «Заменить» в панели: следующее запоминание заменит этот экран
+
+
+def _dir():
+    return os.path.dirname(REF_FILE)
+
+
+def _list_file():
+    return os.path.join(_dir(), "screens.json")
+
+
+def _img_file(sid):
+    return os.path.join(_dir(), f"screen_{sid}.png")
+
+
+def preview_file(sid):
+    return os.path.join(_dir(), f"screen_{sid}_view.jpg")
 
 
 def _ref_size(w, h):
@@ -29,15 +46,52 @@ def _prep(img, size=None):
     return g.resize(size or _ref_size(*g.size))
 
 
-def _load_ref():
-    if not _ref["loaded"]:
-        _ref["loaded"] = True
+def screens():
+    """Запомненные экраны текущей игры (загружаются один раз; старое «одно меню» переносится сюда само)."""
+    import json
+    if _ref["loaded"]:
+        return _ref["screens"]
+    _ref["loaded"] = True
+    out = []
+    try:
+        if os.path.exists(_list_file()):
+            with open(_list_file(), encoding="utf-8") as f:
+                out = json.load(f)
+        elif core.menu_region and os.path.exists(REF_FILE):      # было одно «меню» — делаем его первым экраном
+            out = [{"id": "m1", "name": "Меню", "region": list(core.menu_region)}]
+            Image.open(REF_FILE).save(_img_file("m1"))
+            _save_list(out)
+    except Exception as e:
+        print("screens:", e)
+        out = []
+    for sc in out:
         try:
-            if os.path.exists(REF_FILE):
-                _ref["img"] = Image.open(REF_FILE).convert("L")
+            sc["img"] = Image.open(_img_file(sc["id"])).convert("L")
         except Exception:
-            _ref["img"] = None
-    return _ref["img"]
+            sc["img"] = None
+    _ref["screens"] = [sc for sc in out if sc.get("img") is not None and sc.get("region")]
+    _ref["img"] = _ref["screens"][0]["img"] if _ref["screens"] else None
+    return _ref["screens"]
+
+
+def _save_list(items):
+    import json
+    os.makedirs(_dir(), exist_ok=True)
+    with open(_list_file(), "w", encoding="utf-8") as f:
+        json.dump([{"id": x["id"], "name": x["name"], "region": list(x["region"])} for x in items], f,
+                  ensure_ascii=False, indent=1)
+
+
+def _sync_core():
+    """core.menu_region — «есть ли хоть один экран» для старых частей программы."""
+    sc = _ref["screens"]
+    core.menu_region = tuple(sc[0]["region"]) if sc else None
+    core.save_settings(menu_region=list(core.menu_region) if core.menu_region else None)
+
+
+def _load_ref():
+    sc = screens()
+    return sc[0]["img"] if sc else None
 
 
 def _edges(g):
@@ -66,44 +120,88 @@ def detail(img):
     return ImageStat.Stat(_edges(img.convert("L"))).stddev[0]
 
 
-def learn(reg):
-    """Запомнить, как выглядит меню в области reg (меню сейчас открыто)."""
+def learn(reg, sid=None):
+    """Запомнить экран, где переводить не нужно, по области reg (экран сейчас открыт).
+    sid — заменить этот экран; иначе добавить новый."""
+    sid = sid or replace_next["id"]
+    replace_next["id"] = None
+    full = capture.grab(None)
     img = _prep(capture.grab(reg))
     if detail(img) < 4:
-        core.log("Меню: в обведённом месте почти нет надписей и рамок — по нему меню не узнать. "
+        core.log("Экран: в обведённом месте почти нет надписей и рамок — по нему экран не узнать. "
                  "Обведите строку вкладок или кнопки с текстом.", "warn")
+    items = list(screens())
+    old = next((x for x in items if x["id"] == sid), None)
+    if old is None:
+        n = 1
+        while any(x["id"] == f"s{n}" for x in items):
+            n += 1
+        sid = f"s{n}"
+        old = {"id": sid, "name": "Меню" if not items else f"Экран {len(items) + 1}"}
+        items.append(old)
+    old.update(region=list(reg), img=img)
     try:
-        img.save(REF_FILE)
+        img.save(_img_file(sid))
+        view = full.convert("RGB")
+        view.thumbnail((320, 180))
+        view.save(preview_file(sid), quality=82)
+        _save_list(items)
     except Exception as e:
-        core.log(f"Меню: не удалось сохранить образец: {e}", "error")
-    _ref.update(img=img, loaded=True)
-    core.menu_region = tuple(reg)
-    core.save_settings(menu_region=list(reg))
-    core.log("Меню игры запомнено. Пока оно открыто, автоперевод на паузе и окна перевода скрыты.", "ok")
+        core.log(f"Экран: не удалось сохранить образец: {e}", "error")
+    _ref["screens"] = items
+    _ref["img"] = items[0]["img"]
+    _sync_core()
+    core.log(f"Экран «{old['name']}» запомнен. Пока он на экране, автоперевод на паузе и окна перевода скрыты. "
+             f"Всего экранов: {len(items)}.", "ok")
+    core.events.put(("panel", None))
 
 
-def forget():
-    core.menu_region = None
-    core.save_settings(menu_region=None)
-    _ref.update(img=None, loaded=True)
+def rename(sid, name):
+    items = screens()
+    for x in items:
+        if x["id"] == sid and name.strip():
+            x["name"] = name.strip()[:40]
+    _save_list(items)
+
+
+def forget(sid=None):
+    """Забыть экран sid (без sid — все)."""
+    items = screens()
+    gone = [x for x in items if sid is None or x["id"] == sid]
+    for x in gone:
+        for f in (_img_file(x["id"]), preview_file(x["id"])):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+    items = [x for x in items if x not in gone]
+    _ref["screens"] = items
+    _ref["img"] = items[0]["img"] if items else None
     try:
-        os.remove(REF_FILE)
+        _save_list(items)
+        if sid is None and os.path.exists(REF_FILE):
+            os.remove(REF_FILE)
     except OSError:
         pass
-    if core.in_menu:
+    _sync_core()
+    if core.in_menu and not items:
         core.in_menu = False
         core.events.put(("menu_state", False))
-    core.log("Пауза в меню игры выключена")
+    core.log("Экран забыт" if sid else "Пауза на экранах игры выключена")
 
 
-def similarity(img):
-    """(похожесть очертаний 0..1, разница яркости 0..255) текущего вида и запомненного меню."""
-    ref = _load_ref()
-    if ref is None:
-        return 0.0, 255.0
+def _match(img, ref):
     cur = _prep(img, ref.size)
     bright = ImageStat.Stat(ImageChops.difference(cur, ref)).mean[0]
     return _corr(_edges(cur), _edges(ref)), bright
+
+
+def similarity(img):
+    """(похожесть очертаний 0..1, разница яркости 0..255) с первым запомненным экраном."""
+    ref = _load_ref()
+    if ref is None:
+        return 0.0, 255.0
+    return _match(img, ref)
 
 
 def difference(img):   # для совместимости: 0 — один в один
@@ -111,18 +209,30 @@ def difference(img):   # для совместимости: 0 — один в о
     return b if c >= config.MENU_CORR else 255.0
 
 
-def is_menu(img):
-    c, b = similarity(img)
+def is_menu(img, ref=None):
+    ref = ref or _load_ref()
+    if ref is None:
+        return False
+    c, b = _match(img, ref)
     return c >= config.MENU_CORR and b < config.MENU_MATCH
+
+
+def any_screen():
+    """Открыт ли сейчас хоть один из запомненных экранов."""
+    for sc in screens():
+        reg = tuple(sc["region"])
+        shot = capture.mask_out(capture.grab(reg), reg, list(core.own_rects))
+        if is_menu(shot, sc["img"]):
+            return True
+    return False
 
 
 def run():
     streak = 0                  # меняем состояние, только если 2 проверки подряд (1 с) говорят одно и то же
     while True:
         try:
-            if core.menu_region and core.auto_on.is_set() and _load_ref() is not None:
-                shot = capture.mask_out(capture.grab(core.menu_region), core.menu_region, list(core.own_rects))
-                now = is_menu(shot)
+            if core.auto_on.is_set() and screens():
+                now = any_screen()
                 streak = streak + 1 if now != core.in_menu else 0
                 if streak >= 2:
                     streak = 0

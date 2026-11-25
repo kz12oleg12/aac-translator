@@ -93,7 +93,7 @@ def _s_games():
         out.append({
             "id": pid, "name": _clean(p.get("name") or pid), "free": free, "running": pid in run,
             "active": pid == core.active_profile, "locked": lock == pid,
-            "exes": list(p.get("exes", [])), "regions": regs, "menu": bool(p.get("menu_region")), "menu_thumb": _menu_thumb(pid) if p.get("menu_region") else "",
+            "exes": list(p.get("exes", [])), "regions": regs, "menu": bool(p.get("menu_region")), "screens": _screens(pid),
             "icon": _icon(pid),
             "auto_start": bool(p.get("auto_start")), "about": p.get("about") or "",
             "facts_busy": pid in gamefacts._running, "facts_ok": gamefacts.available(),
@@ -237,23 +237,33 @@ def _icon(pid):
         return ""
 
 
-def _menu_thumb(pid):
-    """Миниатюра запомненного экрана (data:image) — чтобы было видно, что именно запомнено."""
+def _screens(pid):
+    """Запомненные экраны без перевода у игры pid: имя и миниатюра."""
     import base64
-    import io
-    from . import menu
+    import json
+    from . import menu, profiles
+    d = profiles.folder(pid)
+    out = []
     try:
-        path = profiles.paths(pid)["menu"]
-        if not os.path.exists(path) and pid == core.active_profile:
-            path = menu.REF_FILE
-        from PIL import Image
-        im = Image.open(path).convert("RGB")
-        im.thumbnail((128, 72))
-        buf = io.BytesIO()
-        im.save(buf, "JPEG", quality=80)
-        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
-    except Exception:
-        return ""
+        if pid == core.active_profile:
+            items = [{"id": x["id"], "name": x["name"]} for x in menu.screens()]
+        else:
+            f = os.path.join(d, "screens.json")
+            items = json.load(open(f, encoding="utf-8")) if os.path.exists(f) else (
+                [{"id": "m1", "name": "Меню"}] if profiles.all_profiles().get(pid, {}).get("menu_region") else [])
+        for x in items:
+            thumb = ""
+            for f in (os.path.join(d, f"screen_{x['id']}_view.jpg"), os.path.join(d, f"screen_{x['id']}.png"),
+                      os.path.join(d, "menu_ref.png")):
+                if os.path.exists(f):
+                    with open(f, "rb") as fh:
+                        mime = "jpeg" if f.endswith(".jpg") else "png"
+                        thumb = f"data:image/{mime};base64," + base64.b64encode(fh.read()).decode()
+                    break
+            out.append({"id": x["id"], "name": x["name"], "thumb": thumb})
+    except Exception as e:
+        print("screens:", e)
+    return out
 
 
 def _s_start():
@@ -405,9 +415,18 @@ def do(name, arg, app):
     elif name == "unmark_not_game":
         from . import game
         game.unmark_not_game(a.get("v"))
-    elif name == "menu_forget":
+    elif name == "screen_del":
         from . import menu
-        menu.forget()
+        menu.forget(a.get("id"))
+    elif name == "screen_rename":
+        from . import menu
+        menu.rename(a.get("id"), str(a.get("v") or ""))
+    elif name == "screen_replace":
+        from . import menu
+        menu.replace_next["id"] = a.get("id")
+    elif name == "screen_new":
+        from . import menu
+        menu.replace_next["id"] = None
     elif name == "area_draw" and a.get("key") in REGION_EVENTS:
         if a.get("id") and a["id"] != core.active_profile:
             profiles.activate(a["id"], hold=True)

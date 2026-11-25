@@ -104,7 +104,7 @@ def _reload_memory():
         tcache._dirty = False
     with voices._lock:
         voices._data["loaded"] = False
-    menu._ref.update(img=None, loaded=False)
+    menu._ref.update(img=None, loaded=False, screens=[])
     core.SETTINGS.clear()
     core.SETTINGS.update(core.load_settings())
     try:
