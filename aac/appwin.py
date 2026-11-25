@@ -22,6 +22,26 @@ def _on_monitor(place, box, pos, w, h):
     return x + l, y + t
 
 
+def split_options(payload):
+    """Варианты ответа склеились в одну строку («1. Что такое поселение? Есть ли что-то…? Уйти»),
+    а в оригинале их несколько строк — разбиваем по предложениям, если их столько же, и нумеруем."""
+    import re
+    text, orig = payload if isinstance(payload, tuple) else (payload, None)
+    if not orig or not text:
+        return payload
+    ol = [ln.strip() for ln in orig.splitlines() if ln.strip()]
+    tl = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if len(ol) < 2 or len(tl) >= len(ol):
+        return payload
+    body = re.sub(r"^\s*1[.)]\s*", "", " ".join(tl))
+    parts = [p for p in re.split(r"(?<=[.!?…])\s+(?=[«\"A-ZА-ЯЁ0-9])", body) if p.strip()]
+    if len(parts) != len(ol):
+        return payload
+    numbered = re.match(r"\s*1[.)]", text) or re.match(r"\s*1[.)]", ol[0])
+    out = "\n".join((f"{i}. " if numbered else "") + re.sub(r"^\d+[.)]\s*", "", p) for i, p in enumerate(parts, 1))
+    return (out, orig) if isinstance(payload, tuple) else out
+
+
 class App:
     def __init__(self):
         self.root = tk.Tk()
@@ -40,18 +60,18 @@ class App:
             self.subs.anchor = lambda: (core.region2 if self.subs_src == "subs2_hide" and core.region2 else core.region)
         # отдельное окно для разового перевода заданий (F7)
         self.quest = ui_overlay.Overlay(tk.Toplevel(self.root), "quest", (20, 60), config.QUEST_WIDTH,
-                             title="📜 Задание (правый клик — закрыть)")
+                             title="Задание · правый клик — закрыть")
         # последние реплики поверх игры (Ctrl+Shift+H) — перечитать пропущенное, не выходя из игры
         self.recent = ui_overlay.Overlay(tk.Toplevel(self.root), "recent", (20, 120), config.QUEST_WIDTH,
-                              title="🕘 Последние реплики (правый клик — закрыть)")
+                              title="Последние реплики · правый клик — закрыть")
         # окно перевода вариантов ответа — рядом с их областью
         self.answers = ui_overlay.Overlay(tk.Toplevel(self.root), "answers", (20, 300), config.ANSWERS_WIDTH,
-                               title="💬 Варианты ответа")
+                               title="Варианты ответа")
         self.answers.anchor = lambda: core.answers_region
         self.answers.anchor_side = config.ANSWERS_SIDE
         # перевод подсказки под мышкой (предметы, навыки)
         self.tip = ui_overlay.Overlay(tk.Toplevel(self.root), "tooltip", (20, 60), config.TOOLTIP_WIDTH,
-                                      title="🔎 Подсказка (правый клик — закрыть)")
+                                      title="Подсказка · правый клик — закрыть")
         self.tip.manual = True     # ставится рядом с подсказкой, а не в сохранённое место
         self.tip.hide()
         self.tip_state = None
@@ -59,7 +79,7 @@ class App:
         self.word_state = None
         # перевод игрового чата — над областью чата
         self.chat = ui_overlay.Overlay(tk.Toplevel(self.root), "chat", (20, max(60, self.root.winfo_screenheight() // 2)), config.CHAT_WIDTH,
-                                       title="💬 Чат (правый клик — скрыть)")
+                                       title="Чат · правый клик — скрыть")
         self.chat.anchor = lambda: core.chat_region
         self.chat.cover = lambda: core.chat_region if config.CHAT_COVER else None
         self.chat.max_height = lambda: (core.chat_region[3] if (config.CHAT_COVER and core.chat_region)
@@ -970,7 +990,7 @@ class App:
                     self.panel.busy = bool(self.busy)
                     self.panel.refresh()
                 elif kind == "answers":
-                    self.answers.show(payload)
+                    self.answers.show(split_options(payload))
                 elif kind == "answers_hide":
                     self.answers.hide()
                 elif kind == "select_answers":
@@ -1144,4 +1164,4 @@ class App:
         if self._tick % 20 == 0:  # раз в секунду обновляем панель (обратный отсчёт пауз моделей)
             self.panel.refresh()
         self.subs.set_status("⏳" if "Субтитры" in self.busy else "")
-        self.answers.set_status("💬 Варианты ответа" + ("  ⏳" if "Ответы" in self.busy else ""))
+        self.answers.set_status("Варианты ответа" + ("  ⏳" if "Ответы" in self.busy else ""))

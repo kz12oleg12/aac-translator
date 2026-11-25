@@ -2141,6 +2141,18 @@ def test_steam_about(monkey):
     assert gamefacts.steam_about("ArcheAge Chronicles") == "An action RPG & open world. Genres: RPG."
 
 
+def test_split_options():
+    """Варианты ответа склеились в одну строку — разбиваем по строкам оригинала."""
+    from aac.appwin import split_options
+    orig = "What is the settlement?\nIs there anything I should remember?\nLeave"
+    t, o = split_options(("1. Что такое поселение? Есть ли что-то, о чём мне стоит помнить? Уйти", orig))
+    assert t == "1. Что такое поселение?\n2. Есть ли что-то, о чём мне стоит помнить?\n3. Уйти", t
+    same = ("1. Да.\n2. Нет.", "Yes.\nNo.")
+    assert split_options(same) == same
+    odd = ("Что? Где? Когда?", "What?\nWhere?")
+    assert split_options(odd) == odd
+
+
 def test_custom_ai(monkey):
     """Свои ИИ-переводчики: добавить, подключиться к цепочке и редактору, удалить."""
     try:

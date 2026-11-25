@@ -10,6 +10,8 @@ from . import config, core, screens
 
 
 # ---------- окна ----------
+BOX_BG = "#14141a"            # фон окон перевода — как в образце «Вид перевода»
+TITLE_FG = "#9c9a92"          # заголовок окна: мелкий серый, без цвета
 _exclude_warned = False
 
 
@@ -130,7 +132,7 @@ class Overlay:
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.attributes("-alpha", config.OVERLAY_ALPHA)
-        win.configure(bg="#111")
+        win.configure(bg=BOX_BG)
         self.default_pos = default_pos
         self.anchor = None  # функция, возвращающая область, к которой «прилипает» окно
         self.anchor_side = "above"
@@ -160,8 +162,8 @@ class Overlay:
         self.grip.bind("<ButtonPress-1>", self._grip_start)
         self.grip.bind("<B1-Motion>", self._grip_move)
         self.grip.bind("<ButtonRelease-1>", lambda e: self._save_layout())
-        self.status = tk.Label(win, text=title, fg="#8cf", bg="#111", font=("Segoe UI", 10), anchor="w")
-        self.status.pack(fill="x", padx=10)
+        self.status = tk.Label(win, text=title, fg=TITLE_FG, bg=BOX_BG, font=("Segoe UI", 9), anchor="w")
+        self.status.pack(fill="x", padx=12, pady=(6, 0))
         # предыдущие реплики — бледным текстом над текущей (показывается, когда есть история)
         self.history = []
         self.mode = None
@@ -194,7 +196,7 @@ class Overlay:
         if mode == "outline":
             mk = lambda **kw: OutlineLabel(self.win, **kw)
         else:
-            mk = lambda **kw: tk.Label(self.win, bg="#111", justify="left", anchor="w", **kw)
+            mk = lambda **kw: tk.Label(self.win, bg=BOX_BG, justify="left", anchor="w", **kw)
         self.hist_label = mk(text=texts[1], fg="#9a9a9a", font=config.HISTORY_FONT, wraplength=wrap, padx=12, pady=2)
         self.label = mk(text=texts[0], fg="#eee", font=config.FONT, wraplength=wrap, padx=12, pady=6)
         # оригинал — мелким серым под переводом (если включено в настройках)
@@ -207,7 +209,7 @@ class Overlay:
             self.orig_label.pack(fill="x", after=self.label, pady=(0, 6))
         for w in (self.label, self.hist_label, self.orig_label):
             self._bind_mouse(w)
-        bg = KEY_BG if mode == "outline" else "#111"
+        bg = KEY_BG if mode == "outline" else BOX_BG
         self.win.configure(bg=bg)
         self.status.configure(bg=bg)
         if not getattr(self, "_grip_on", False):
@@ -553,8 +555,8 @@ class Indicator:
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.attributes("-alpha", 0.85)
-        win.configure(bg="#111")
-        self.label = tk.Label(win, text="", fg="#6f6", bg="#111", font=("Segoe UI", 9, "bold"), padx=8, pady=2)
+        win.configure(bg=BOX_BG)
+        self.label = tk.Label(win, text="", fg="#6f6", bg=BOX_BG, font=("Segoe UI", 9, "bold"), padx=8, pady=2)
         self.label.pack()
         x, y = core.SETTINGS.get("indicator_pos", (12, 12))
         if not screens.on_screen(x, y, 40, 20):
