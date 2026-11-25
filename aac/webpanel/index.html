@@ -15,7 +15,7 @@ a{color:var(--acc2);text-decoration:none;cursor:pointer}a:hover{color:#b5baf9}
 nav{width:220px;flex-shrink:0;background:var(--side);border-right:.5px solid var(--line);display:flex;flex-direction:column}
 .brand{padding:18px 16px 10px;display:flex;align-items:center;gap:10px;font-size:16px;font-weight:600}
 .brand img{width:34px;height:34px;border-radius:9px}
-.items{padding:8px 10px 0;display:flex;flex-direction:column;gap:1px;flex-grow:1}
+.items{padding:14px 10px 0;display:flex;flex-direction:column;gap:1px;flex-grow:1}
 .it{display:flex;align-items:center;gap:12px;height:34px;padding:0 10px;border-radius:8px;color:var(--t3);background:none;border:0;text-align:left;width:100%}
 .it svg{color:var(--f);flex-shrink:0}.it:hover{background:rgba(255,255,255,.04)}
 .it[aria-current]{background:rgba(88,101,242,.16);color:var(--t);font-weight:600}.it[aria-current] svg{color:var(--acc2)}
@@ -125,7 +125,6 @@ textarea.inp{height:96px;padding:10px 12px;resize:none;background:var(--side);bo
 <body>
 <div class="app">
 <nav aria-label="Разделы">
-  <div class="brand"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Crect x='10' y='10' width='236' height='236' rx='64' fill='%235865F2'/%3E%3Cg transform='translate(0 6)'%3E%3Cpath d='M67 188A14.79 14.79 0 0 1 52.2 173L53.7 64.3A9 9 0 0 1 68.3 57.3L99.3 81.8A10 10 0 0 0 105.5 84H150.5A10 10 0 0 0 156.7 81.8L187.7 57.3A9 9 0 0 1 202.3 64.3L203.6 159.6A28 28 0 0 1 175.6 188H111.4A4 4 0 0 0 108.9 188.8L85.5 207.1A4.76 4.76 0 0 1 78 202L80.5 193.1A4 4 0 0 0 76.7 188Z' fill='%23fff'/%3E%3Crect x='87' y='120' width='22' height='28' rx='8' fill='%235865F2'/%3E%3Crect x='147' y='120' width='22' height='28' rx='8' fill='%235865F2'/%3E%3C/g%3E%3C/svg%3E" alt="">AAC Translator</div>
   <div class="items" id="nav"></div>
   <div style="padding:0 10px 6px"><button class="it" data-report="1"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v4M12 14h.01"/></svg><span style="white-space:nowrap">Сообщить о проблеме</span></button></div>
   <div class="foot">
