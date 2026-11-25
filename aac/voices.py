@@ -367,6 +367,7 @@ def set_traits(key, kind=None, address=None):
         ch = False
         if kind and not c.get("type_manual") and c.get("type") != kind:
             c["type"], ch = kind, True
+            core.log(f"🎭 {c.get('ru') or c.get('en') or key}: {TYPE_NAMES.get(kind, kind)} — голос подстроен", "ok")
         if address and c.get("address") != address:
             c["address"], ch = address, True
         if ch:

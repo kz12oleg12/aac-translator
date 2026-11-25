@@ -56,7 +56,9 @@ VOICE:
 SPEAKER: <speaker's name in English as in the original, or ->
 GENDER: <m, f or ->
 MOOD: <calm, shout, whisper, question, sad or ->
-TYPE: <young, adult, old, child, monster, noble or ->
+TYPE: <young, adult, old, child, monster, noble or -> (judge by name/title, the scene and speech manner:
+      elder, grandma, old archivist → old; beast, demon, undead, golem → monster; baron, queen, lord → noble;
+      kid, boy, girl → child; youthful recruit, apprentice → young)
 ADDRESS: <ты, вы or ->
 TERMS: <English = Русский; English = Русский … or ->"""
 
@@ -239,14 +241,21 @@ def parse(out):
     return res
 
 
-def _note_traits(info):
+def _note_traits(info, shown=None):
     """Пол и характер говорящего — сразу в карточку персонажа (даже если ответ редактора опоздал к озвучке)."""
-    sp = info.get("speaker")
-    if not sp or not (info.get("gender") or info.get("type") or info.get("address")):
+    if not (info.get("gender") or info.get("type") or info.get("address")):
         return
     try:
-        found = voices.speaker("", f"{sp}\n…")
-        key = found[0] if found else None
+        key = None
+        try:
+            from . import tts
+            key = tts.char_of_line(shown)          # кого озвучка уже узнала в этой реплике
+        except Exception:
+            pass
+        sp = info.get("speaker")
+        if not key and sp:
+            found = voices.speaker("", f"{sp}\nHello there.")
+            key = found[0] if found else None
         if key:
             voices.set_ai_gender(key, info.get("gender"))
             voices.set_traits(key, info.get("type"), info.get("address"))
@@ -258,7 +267,7 @@ def _keep_speech(shown, info):
     if not shown or not info.get("voice"):
         return
     if _norm(shown) not in _speech:
-        _note_traits(info)
+        _note_traits(info, shown)
     with _lock:
         _speech[_norm(shown)] = info
         while len(_speech) > _SPEECH_MAX:

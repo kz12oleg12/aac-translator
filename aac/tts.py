@@ -271,6 +271,10 @@ def speak_subtitle(translation, seen=None, orig=None):
         if info and info.get("speaker") and not voices.speaker(translation, orig):
             orig = f"{info['speaker']}\n{orig or translation}"      # редактор понял, кто говорит
         key = voices.note_line(translation, orig)
+        if key:
+            _line_chars[_line_key(translation)] = key
+            while len(_line_chars) > 100:
+                _line_chars.pop(next(iter(_line_chars)))
         if info and key:
             voices.set_ai_gender(key, info.get("gender"))
             voices.set_traits(key, info.get("type"), info.get("address"))
@@ -287,6 +291,13 @@ def speak_subtitle(translation, seen=None, orig=None):
         _say(text, seen, vp)
     finally:
         _key_box["key"] = None
+
+
+_line_chars = {}       # реплика → персонаж, которого озвучка в ней узнала (для поздних подсказок редактора)
+
+
+def char_of_line(translation):
+    return _line_chars.get(_line_key(translation)) if translation else None
 
 
 def _line_key(translation):
