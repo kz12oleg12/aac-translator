@@ -208,8 +208,8 @@ R.games = () => {
   const g = sel, activeHere = g.active, K = D.keys;
   const regRow = r => `<div class="r"><span style="width:30px;display:flex;justify-content:center"><span class="sq" style="${r.has ? "background:" + ({region:"#5865F2",region2:"#949cf7",answers_region:"#23a55a",chat_region:"#f0b232"}[r.key]) : "border:1.5px dashed var(--f)"}"></span></span>
     <span class="tx"><span>${r.title}</span><span class="d">${r.has ? esc(r.size) : "Не обведена"}</span></span>
-    ${r.has && activeHere ? `<a data-a="aclear" data-k="${r.key}" title="Удалить область" style="color:var(--f)">${svg("x", 14)}</a>` : ""}
-    <button class="${r.has ? "btn" : "btnp"}" style="${r.has ? "" : "padding:4px 12px;font-size:12px;border-radius:6px"}" data-a="adraw" data-k="${r.key}">${r.has ? "Перерисовать" : "Обвести"}</button></div>`;
+    <button class="${r.has ? "btn" : "btnp"}" style="${r.has ? "" : "padding:4px 12px;font-size:12px;border-radius:6px"}" data-a="adraw" data-k="${r.key}">${r.has ? "Перерисовать" : "Обвести"}</button>
+    <span style="width:22px;display:flex;justify-content:center;flex-shrink:0">${r.has && activeHere ? `<a data-a="aclear" data-k="${r.key}" title="Удалить область" style="color:var(--f);display:flex">${svg("x", 14)}</a>` : ""}</span></div>`;
   const n = g.regions.filter(r => r.has).length;
   const detail = `<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:8px">
     <div class="card" style="padding:14px;display:flex;align-items:center;gap:14px;background:rgba(88,101,242,.12)">
