@@ -55,7 +55,8 @@ function nav() {
   $("nav").innerHTML = NAV.map(([id, t]) => `<button class="it" data-go="${id}" title="${t}" ${cur == id ? 'aria-current="page"' : ""}>${svg(id)}<span>${t}</span>${id == "games" ? '<span class="n" id="gcount"></span>' : ""}</button>`).join("");
   $("gear").style.background = SCR == "settings" ? "rgba(88,101,242,.16)" : "";
 }
-function go(s) { SCR = s; nav(); $("main").innerHTML = ""; D = null; refresh(true); $("main").scrollTop = 0; }
+function go(s) { SCR = s; nav(); $("main").innerHTML = ""; $("main").dataset.last = "";
+  $("ttl").textContent = ({home: "Главная", settings: "Настройки", win: "Вид перевода", gloss: "Словарь"})[s] || (NAV.find(n => n[0] == s) || ["", ""])[1]; D = null; refresh(true); $("main").scrollTop = 0; }
 
 // ---------- общие клики ----------
 document.addEventListener("click", e => {
@@ -92,8 +93,14 @@ async function refresh(force) {
 function render() {
   const f = R[SCR]; if (!f || !S) return;
   const m = $("main"), y = m.scrollTop;
-  const html = f();
-  if (html != null && m.dataset.last !== html) { m.innerHTML = html; m.dataset.last = html; m.scrollTop = y; }
+  let html = f();
+  if (html == null) return;
+  const TT = {home: "Главная"};
+  const h = html.match(/<h1>([\s\S]*?)<\/h1>/);       // заголовок экрана — в верхнюю строку
+  const title = h ? h[1] : (TT[SCR] || "");
+  if (h) html = html.replace(h[0], "");
+  if ($("ttl").innerHTML !== title) $("ttl").innerHTML = title;
+  if (m.dataset.last !== html) { m.innerHTML = html; m.dataset.last = html; m.scrollTop = y; }
 }
 const R = {};
 
@@ -525,13 +532,14 @@ function layout(save) {
   $("ver").textContent = S ? "v " + S.version : "v";
   $("gear").title = nc && S ? `Настройки · версия ${S.version}` : "Настройки";
   if (!jc) { unread = 0; }
-  $("jrn").textContent = unread; $("jrn").style.display = jc && unread ? "inline-block" : "none";
+  $("jrn").textContent = unread > 99 ? "99+" : unread; $("jrn").style.display = jc && unread ? "inline-block" : "none";
   if (save) try { localStorage.setItem("lay", JSON.stringify({nc, jc})); } catch (e) {}
 }
 try { const l = JSON.parse(localStorage.getItem("lay") || "{}"); if (l.nc) document.body.classList.add("nav-c"); if (l.jc) document.body.classList.add("jr-c"); } catch (e) {}
 $("navc").onclick = () => { document.body.classList.toggle("nav-c"); layout(true); };
 $("jrc").onclick = () => { document.body.classList.add("jr-c"); layout(true); };
 $("jro").onclick = () => { document.body.classList.remove("jr-c"); layout(true); const L = $("log"); L.scrollTop = L.scrollHeight; };
+$("jrc").title = "Скрыть журнал";
 
 async function start() {
   nav();
