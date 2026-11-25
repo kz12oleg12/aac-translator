@@ -606,7 +606,7 @@ class App:
             self._menu_hidden = [ov for ov in (self.subs, self.answers, self.chat) if ov.visible]
             for ov in self._menu_hidden:
                 ov.hide()
-            core.log("Меню игры — автоперевод на паузе")
+            core.log(f"⏸ Экран «{menu._ref.get('open') or 'меню'}» — автоперевод и озвучка на паузе")
         else:
             for ov in getattr(self, "_menu_hidden", []):
                 if ov is self.chat:
@@ -614,7 +614,7 @@ class App:
                 else:
                     ov.show(ov.label.cget("text"))
             self._menu_hidden = []
-            core.log("Меню закрыто — продолжаю переводить")
+            core.log("▶ Экран закрыт — продолжаю переводить")
         self.panel.refresh()
 
     def show_chat_window(self):

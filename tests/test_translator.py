@@ -1037,6 +1037,11 @@ def test_game_menu_pause(monkey):
     assert [x["name"] for x in menu.screens()] == ["Меню", "Карта"]
     monkey(menu.capture, "mask_out", lambda img, reg, rects: img)
     assert menu.any_screen()
+    covered = map_img.copy()                                      # поверх лежит окно субтитров программы
+    ImageDraw.Draw(covered).rectangle([0, 50, 200, 100], fill=(0, 0, 0))
+    shots["img"] = covered
+    monkey(T._owner("own_rects"), "own_rects", [(300, 60, 200, 50)])
+    assert menu.any_screen() == "Карта", "окна программы поверх экрана не мешают узнать его"
     shots["img"] = game_img
     assert not menu.any_screen()
     menu.replace_next["id"] = "s2"                                                   # «Заменить» — не добавляет новый

@@ -143,6 +143,14 @@ def learn(reg, sid=None):
     try:
         img.save(_img_file(sid))
         view = full.convert("RGB")
+        from PIL import ImageDraw
+        whole = reg[2] >= view.size[0] - 4 and reg[3] >= view.size[1] - 4
+        if not whole:                                  # обведённое место — рамкой, остальное притемнить
+            dim = Image.new("RGB", view.size, (0, 0, 0))
+            view = Image.blend(view, dim, 0.55)
+            view.paste(full.convert("RGB").crop((reg[0], reg[1], reg[0] + reg[2], reg[1] + reg[3])), (reg[0], reg[1]))
+            ImageDraw.Draw(view).rectangle([reg[0], reg[1], reg[0] + reg[2], reg[1] + reg[3]],
+                                           outline=(88, 101, 242), width=max(4, view.size[0] // 300))
         view.thumbnail((320, 180))
         view.save(preview_file(sid), quality=82)
         _save_list(items)
@@ -151,8 +159,22 @@ def learn(reg, sid=None):
     _ref["screens"] = items
     _ref["img"] = items[0]["img"]
     _sync_core()
-    core.log(f"Экран «{old['name']}» запомнен. Пока он на экране, автоперевод на паузе и окна перевода скрыты. "
-             f"Всего экранов: {len(items)}.", "ok")
+    core.log(f"Экран «{old['name']}» запомнен ({'весь экран' if reg[2] * reg[3] > 0.8 * full.size[0] * full.size[1] else 'обведённое место'}). "
+             f"Пока он на экране, автоперевод на паузе и окна перевода скрыты. Всего экранов: {len(items)}.", "ok")
+
+    def selfcheck(sc=old):                             # тот же экран ещё открыт — узнаём ли мы его?
+        time.sleep(1.2)
+        try:
+            c, b = _check(sc)
+            if c >= config.MENU_CORR and b < config.MENU_MATCH:
+                core.log(f"Проверка: «{sc['name']}» узнаю (совпадение {c:.0%}).", "ok")
+            else:
+                core.log(f"Проверка: «{sc['name']}» узнаю плохо (совпадение {c:.0%}, нужно {config.MENU_CORR:.0%}). "
+                         "Обведите кусочек, который не двигается: заголовок, вкладки, рамку — а не весь экран "
+                         "с движущейся картинкой.", "warn")
+        except Exception as e:
+            print("menu check:", e)
+    threading.Thread(target=selfcheck, daemon=True).start()
     core.events.put(("panel", None))
 
 
@@ -217,14 +239,37 @@ def is_menu(img, ref=None):
     return c >= config.MENU_CORR and b < config.MENU_MATCH
 
 
+def _shot_like_ref(reg, ref):
+    """Снимок области в размере образца. Где поверх лежат окна программы (субтитры, индикатор),
+    подставляем образец — эти места не сравниваем (на образце их не было, а сейчас могут быть)."""
+    shot = capture.grab(reg)
+    cur = _prep(shot, ref.size)
+    x0, y0, w, h = reg
+    kx, ky = ref.size[0] / max(1, w), ref.size[1] / max(1, h)
+    for (rx, ry, rw, rh) in list(core.own_rects):
+        a, b = int((rx - x0) * kx), int((ry - y0) * ky)
+        c, d = int((rx + rw - x0) * kx) + 1, int((ry + rh - y0) * ky) + 1
+        a, b, c, d = max(0, a), max(0, b), min(ref.size[0], c), min(ref.size[1], d)
+        if c > a and d > b:
+            cur.paste(ref.crop((a, b, c, d)), (a, b))
+    return cur
+
+
+def _check(sc):
+    """(похожесть очертаний, разница яркости) экрана sc с тем, что сейчас на экране."""
+    ref = sc["img"]
+    cur = _shot_like_ref(tuple(sc["region"]), ref)
+    bright = ImageStat.Stat(ImageChops.difference(cur, ref)).mean[0]
+    return _corr(_edges(cur), _edges(ref)), bright
+
+
 def any_screen():
-    """Открыт ли сейчас хоть один из запомненных экранов."""
+    """Какой из запомненных экранов сейчас открыт (имя) или None."""
     for sc in screens():
-        reg = tuple(sc["region"])
-        shot = capture.mask_out(capture.grab(reg), reg, list(core.own_rects))
-        if is_menu(shot, sc["img"]):
-            return True
-    return False
+        c, b = _check(sc)
+        if c >= config.MENU_CORR and b < config.MENU_MATCH:
+            return sc["name"]
+    return None
 
 
 def run():
@@ -232,11 +277,13 @@ def run():
     while True:
         try:
             if core.auto_on.is_set() and screens():
-                now = any_screen()
+                name = any_screen()
+                now = bool(name)
                 streak = streak + 1 if now != core.in_menu else 0
                 if streak >= 2:
                     streak = 0
                     core.in_menu = now
+                    _ref["open"] = name
                     core.events.put(("menu_state", now))
             else:
                 streak = 0
