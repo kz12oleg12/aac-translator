@@ -316,3 +316,16 @@ def running():
 
 def is_running(pid=None):
     return (pid or core.active_profile) in running()
+
+
+def drop_self():
+    """Убрать пресет, который по ошибке завели на саму программу (окно её панели приняли за игру)."""
+    from . import game
+    for pid, p in list(all_profiles().items()):
+        exes = [e.lower() for e in p.get("exes", [])]
+        if exes and all(e in game.NOT_GAME_EXE for e in exes) and not p.get("free"):
+            try:
+                delete(pid)
+                core.log(f"Убрал ошибочный пресет «{p.get('name', pid)}» — это сама программа, а не игра", "ok")
+            except Exception:
+                pass

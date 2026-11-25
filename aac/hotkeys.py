@@ -29,6 +29,7 @@ HOTKEY_DEFS = [  # (id, что делает, клавиша по умолчан�
     ("tts", "озвучка вкл/выкл", config.HOTKEY_TTS, "tts_toggle"),
     ("flip_gender", "сменить пол говорящего", config.HOTKEY_FLIP_GENDER, "flip_gender"),
     ("bad_line", "плохой перевод — отметить", config.HOTKEY_BAD_LINE, "bad_line"),
+    ("recent", "последние реплики поверх игры", config.HOTKEY_RECENT, "recent"),
     ("select_chat", "область чата", config.HOTKEY_SELECT_CHAT, "select_chat"),
     ("chat_once", "перевести чат", config.HOTKEY_CHAT_ONCE, "chat_once"),
     ("chat_compose", "написать в чат (рус→англ)", config.HOTKEY_CHAT_COMPOSE, "chat_compose"),

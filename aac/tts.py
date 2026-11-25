@@ -586,6 +586,63 @@ def _make_player():
     return _Mci() if sys.platform == "win32" else None
 
 
+# ---------- готовый звук фраз: повторы («Привет, путник», торговцы, бой) звучат сразу и без запросов ----------
+CACHE_DIR = os.path.join(tempfile.gettempdir(), "aac_translator_tts", "cache")
+CACHE_MAX = 3000
+
+
+def _cache_key(text, faster, voice_pitch):
+    import hashlib
+    raw = repr((config.TTS_ENGINE, text, voice_pitch, bool(faster), config.TTS_RATE, config.TTS_SILERO_VOICE,
+                config.TTS_NEURAL_VOICE, config.TTS_EXPRESSIVE))
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _cache_get(key, base):
+    if not config.TTS_CACHE:
+        return None
+    import shutil
+    for ext in (".mp3", ".wav"):
+        src = os.path.join(CACHE_DIR, key + ext)
+        if os.path.exists(src) and os.path.getsize(src) > 100:
+            try:
+                shutil.copyfile(src, base + ext)
+                return base + ext
+            except Exception:
+                return None
+    return None
+
+
+def _cache_put(key, path):
+    if not config.TTS_CACHE or not path or not os.path.exists(path):
+        return
+    import shutil
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        shutil.copyfile(path, os.path.join(CACHE_DIR, key + os.path.splitext(path)[1]))
+        _cache_put.n = getattr(_cache_put, "n", 0) + 1
+        if _cache_put.n % 100 == 1:
+            _cache_prune()
+    except Exception:
+        pass
+
+
+def _cache_prune():
+    try:
+        files = [os.path.join(CACHE_DIR, f) for f in os.listdir(CACHE_DIR)]
+        if len(files) > CACHE_MAX:
+            files.sort(key=os.path.getmtime)
+            for f in files[:len(files) - CACHE_MAX]:
+                os.remove(f)
+    except Exception:
+        pass
+
+
+def cache_clear():
+    import shutil
+    shutil.rmtree(CACHE_DIR, ignore_errors=True)
+
+
 class _Neural:
     """Очередь озвучки.
     Реплика режется на фразы, все фразы синтезируются параллельно; первая — самая короткая,
@@ -689,11 +746,15 @@ class _Neural:
         return run()
 
     def _synth_futs(self, chunks, tag, faster, voice_pitch):
-        async def timed(coro):
-            path = await coro
+        async def timed(c, base):
+            key = _cache_key(c, faster, voice_pitch)
+            hit = _cache_get(key, base)
+            if hit:
+                return hit, time.time()
+            path = await self._synth_coro(c, base, faster, voice_pitch)
+            _cache_put(key, path)
             return path, time.time()
-        return [asyncio.run_coroutine_threadsafe(
-                    timed(self._synth_coro(c, os.path.join(self.dir, f"{tag}_{i}"), faster, voice_pitch)), self.loop)
+        return [asyncio.run_coroutine_threadsafe(timed(c, os.path.join(self.dir, f"{tag}_{i}")), self.loop)
                 for i, c in enumerate(chunks)]
 
     def _new_job(self, text, seen, gen, faster=False, voice_pitch=None, key=None):
@@ -701,6 +762,29 @@ class _Neural:
         futs = self._synth_futs(chunks, f"g{gen % 4}", faster, voice_pitch)
         return {"gen": gen, "chunks": chunks, "futs": futs, "idx": 0, "cur": None, "next": None,
                 "seen": seen, "t0": time.time(), "dead": False, "faster": faster, "vp": voice_pitch, "key": key}
+
+    def _duck(self, speaking):
+        """Игра тише, пока звучит голос; громкость возвращается через полсекунды тишины (без «качелей» между фразами)."""
+        now = time.time()
+        if speaking:
+            self.quiet_since = None
+            if not getattr(self, "ducked", False):
+                self.ducked = True
+                try:
+                    from . import duck
+                    duck.set(True)
+                except Exception:
+                    pass
+        elif getattr(self, "ducked", False):
+            if self.quiet_since is None:
+                self.quiet_since = now
+            elif now - self.quiet_since > 0.6:
+                self.ducked = False
+                try:
+                    from . import duck
+                    duck.set(False)
+                except Exception:
+                    pass
 
     def _apply_upgrade(self, job, text, player):
         """Фразы, которые ещё не начали звучать, заменить вариантом редактора (уже прозвучавшее — не трогаем)."""
@@ -857,6 +941,7 @@ class _Neural:
                 job, waiting = waiting, None
                 if job:
                     job["t0"] = min(job["t0"], time.time())
+            self._duck(job is not None and (job["cur"] is not None or job["idx"] > 0))
 
 
 _neural = _Neural()

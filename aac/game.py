@@ -4,6 +4,7 @@ import ctypes
 
 
 import os
+import sys
 
 
 import threading
@@ -15,7 +16,9 @@ from . import config, core
 game_exe = None                # имя .exe игры — запоминается, когда вы включаете автоперевод из игры
 game_active = threading.Event()
 game_active.set()
-NOT_GAME_EXE = {"python.exe", "pythonw.exe", "explorer.exe", "py.exe", "pyw.exe", "cmd.exe",
+NOT_GAME_EXE = {"aac translator.exe", "aac_translator.exe",   # сама программа и окно её панели
+                (os.path.basename(sys.executable) or "").lower(),
+                "python.exe", "pythonw.exe", "explorer.exe", "py.exe", "pyw.exe", "cmd.exe",
                 "windowsterminal.exe", "searchhost.exe", "shellexperiencehost.exe", "startmenuexperiencehost.exe",
                 # браузеры, мессенджеры, лаунчеры — не игры (для них пресет не создаётся)
                 "chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "browser.exe", "brave.exe", "vivaldi.exe",

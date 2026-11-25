@@ -2066,6 +2066,23 @@ def test_tts_upgrade(monkey):
     assert job["chunks"] == ["Ред+актор."]
 
 
+def test_tts_cache(monkey):
+    """Готовый звук фразы сохраняется: повтор не синтезируется заново."""
+    from aac import tts
+    import tempfile as _tf
+    d = _tf.mkdtemp()
+    monkey(tts, "CACHE_DIR", os.path.join(d, "cache"))
+    monkey(tts.config, "TTS_CACHE", True)
+    k = tts._cache_key("Привет, путник.", False, None)
+    assert tts._cache_get(k, os.path.join(d, "a")) is None
+    src = os.path.join(d, "s.mp3")
+    open(src, "wb").write(b"x" * 500)
+    tts._cache_put(k, src)
+    got = tts._cache_get(k, os.path.join(d, "b"))
+    assert got and got.endswith(".mp3") and os.path.getsize(got) == 500
+    assert tts._cache_key("Привет, путник.", True, None) != k, "ускоренная — другой звук"
+
+
 def test_custom_ai(monkey):
     """Свои ИИ-переводчики: добавить, подключиться к цепочке и редактору, удалить."""
     try:

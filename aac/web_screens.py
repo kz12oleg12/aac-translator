@@ -25,7 +25,7 @@ KEY_GROUPS = [
     ("Перевести по области", ["subs_once", "answers_once", "chat_once", "once_tts"]),
     ("Обвести область", ["select", "select_answers", "select_subs2", "select_chat"]),
     ("Окна и области", ["toggle", "layout", "reset", "panel"]),
-    ("Озвучка и чат", ["tts", "flip_gender", "bad_line", "chat_compose", "menu_learn"]),
+    ("Озвучка и чат", ["tts", "flip_gender", "bad_line", "recent", "chat_compose", "menu_learn"]),
     ("Программа", ["quit"]),
 ]
 FLAGS = {  # переключатели: имя → (атрибут config, ключ настроек, что сделать после)
@@ -42,6 +42,8 @@ FLAGS = {  # переключатели: имя → (атрибут config, кл
     "tts_finish": ("TTS_FINISH_LINE", "tts_finish_line", "tts"),
     "tts_skip": ("TTS_SKIP_FAST", "tts_skip_fast", "tts"),
     "tts_nowait": ("TTS_NO_WAIT", "tts_no_wait", "tts"),
+    "tts_duck": ("TTS_DUCK", "tts_duck", "tts"),
+    "tts_cache": ("TTS_CACHE", "tts_cache", "tts"),
     "ed_shot": ("EDITOR_SCENE_IMAGE", "editor_scene_image", None),
     "tts_read_name": ("TTS_READ_NAME", "tts_read_name", "tts"),
     "tts_russian_only": ("TTS_RUSSIAN_ONLY", "tts_russian_only", "tts"),

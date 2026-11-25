@@ -41,6 +41,9 @@ class App:
         # отдельное окно для разового перевода заданий (F7)
         self.quest = ui_overlay.Overlay(tk.Toplevel(self.root), "quest", (20, 60), config.QUEST_WIDTH,
                              title="📜 Задание (правый клик — закрыть)")
+        # последние реплики поверх игры (Ctrl+Shift+H) — перечитать пропущенное, не выходя из игры
+        self.recent = ui_overlay.Overlay(tk.Toplevel(self.root), "recent", (20, 120), config.QUEST_WIDTH,
+                              title="🕘 Последние реплики (правый клик — закрыть)")
         # окно перевода вариантов ответа — рядом с их областью
         self.answers = ui_overlay.Overlay(tk.Toplevel(self.root), "answers", (20, 300), config.ANSWERS_WIDTH,
                                title="💬 Варианты ответа")
@@ -809,6 +812,20 @@ class App:
         self.panel.refresh()
         tray.update()
 
+    def toggle_recent(self):
+        if self.recent.visible:
+            self.recent.hide()
+            return
+        from . import history
+        rows = [e for e in history.translation_history if e[1] in ("Субтитры", "Ответы") or e[1].startswith("Субтитры")][-8:] \
+            or history.translation_history[-8:]
+        if not rows:
+            core.log("Последних реплик пока нет.", "warn")
+            return
+        text = "\n\n".join(f"{t[3]}" + (f"\n   {t[2].replace(chr(10), ' / ')[:160]}" if config.RECENT_ORIG and t[2] else "")
+                           for t in rows)
+        self.recent.show(text)
+
     def repeat_line(self):
         """Клавиша «повторить реплику»: последняя реплика снова на экране и звучит заново."""
         if not core.last_line:
@@ -993,6 +1010,8 @@ class App:
                     self.chat_compose()
                 elif kind == "chat_out":
                     self.chat_out_ready(*payload)
+                elif kind == "recent":
+                    self.toggle_recent()
                 elif kind == "bad_line":
                     from . import editor
                     if core.last_line and editor.mark_bad(core.last_line[1], core.last_line[0]):

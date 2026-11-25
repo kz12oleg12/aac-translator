@@ -43,6 +43,8 @@ def apply_view_settings():
     config.SUBS_HISTORY = int(core.SETTINGS.get("subs_history", config.SUBS_HISTORY))
     config.TTS_ENABLED = bool(core.SETTINGS.get("tts_enabled", config.TTS_ENABLED))
     config.TTS_VOICE = str(core.SETTINGS.get("tts_voice", config.TTS_VOICE))
+    config.TTS_DUCK = bool(core.SETTINGS.get("tts_duck", config.TTS_DUCK))
+    config.TTS_CACHE = bool(core.SETTINGS.get("tts_cache", config.TTS_CACHE))
     config.TTS_NO_WAIT = bool(core.SETTINGS.get("tts_no_wait", config.TTS_NO_WAIT))
     config.TTS_SKIP_FAST = bool(core.SETTINGS.get("tts_skip_fast", config.TTS_SKIP_FAST))
     config.TTS_FINISH_LINE = bool(core.SETTINGS.get("tts_finish_line", config.TTS_FINISH_LINE))
@@ -329,7 +331,12 @@ def main():
     core.SETTINGS = core.load_settings()
     try:              # свои ИИ-переводчики: ключи из Windows и подключение к остальной программе
         from . import custom_ai
-        custom_ai.load_keys_from_windows()
+        try:
+        from . import profiles as _pr
+        _pr.drop_self()
+    except Exception:
+        pass
+    custom_ai.load_keys_from_windows()
         custom_ai.register()
     except Exception as e:
         print(f"Свои переводчики не подключились: {e}")
