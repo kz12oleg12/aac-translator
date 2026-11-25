@@ -287,11 +287,13 @@ R.tr = () => {
     ${flag("gloss_auto","book","Пополнять словарь","Имена, предметы и места из переводов",`${D.gloss_count} записей`,lnk("открыть",'data-go="gloss"'))}
     ${flag("save_history","hist","История в файл","По файлу на каждый день","папка history",lnk("открыть",'data-a="hfolder"'))}
     ${flag("skip_system","mute","Пропускать системные","Сообщения игры не переводить и не озвучивать")}
-    ${(() => { const st = D.ds || {}; const c = (k, ic, t, d, on) => `<div class="mode${on ? " on" : ""}" style="cursor:default"><div class="row">${ico(ic, on)}<span style="flex-grow:1"></span>${sw(on, `data-a="stt" data-k="${k}"`)}</div><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">${t}</span><span style="font-size:12px;color:var(--m)">${d}</span></div></div>`;
-      return c("keep","subs","Не убирать перевод","Пока нет новой реплики — старая остаётся на экране",st.keep) + c("orig","lines","Показывать оригинал","Под переводом мелко — текст, как в игре",st.orig) + c("docked","ans","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой",st.docked); })()}
 </div>
   <h2 style="font-size:15px;padding-top:6px">Вид для новых игр</h2>
   <span class="subt" style="margin-top:-10px">Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой — меняется в «Играх».</span>
+  <div class="grid3">
+    ${(() => { const st = D.ds || {}; const c = (k, ic, t, d, on) => `<div class="mode${on ? " on" : ""}" style="cursor:default"><div class="row">${ico(ic, on)}<span style="flex-grow:1"></span>${sw(on, `data-a="stt" data-k="${k}"`)}</div><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">${t}</span><span style="font-size:12px;color:var(--m)">${d}</span></div></div>`;
+      return c("keep","subs","Не убирать перевод","Пока нет новой реплики — старая остаётся на экране",st.keep) + c("orig","lines","Показывать оригинал","Под переводом мелко — текст, как в игре",st.orig) + c("docked","ans","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой",st.docked); })()}
+  </div>
   ${styleBlock(D.ds, true)}`;
 };
 HANDLERS.pmain = b => act("provider_main", b.value);
@@ -510,8 +512,8 @@ R.win = () => {
       ${D.docked ? ansBox(D, fam, sz, out, true) : ""}</div>${D.docked ? "" : `<div style="align-self:flex-end;margin-top:4px">${ansBox(D, fam, sz, out, false)}</div>`}</div>`;
   const DEF = !!D.default;
   return `${DEF ? back("tr", "Переводчики") : back("games", "Игры")}<div style="display:flex;flex-direction:column;gap:4px"><h1>${DEF ? "Вид для новых игр" : "Вид перевода"}</h1><span class="subt">${DEF ? "Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой." : D.owner ? "Для игры «" + esc(D.owner) + "». У каждой игры свой вид." : "Вид по умолчанию — игра не выбрана."} Образец меняется сразу.</span></div>
+  ${DEF ? "" : `<div class="card" style="padding:4px 16px"><div class="lst">${tg("keep","Не убирать, пока нет новой реплики","",D.keep)}${tg("orig","Показывать оригинал под переводом","",D.orig)}${tg("docked","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой, двигаются вместе",D.docked)}</div></div>`}
   ${styleBlock(D, DEF)}${DEF ? "" : `
-  <div class="card" style="padding:4px 16px"><div class="lst">${tg("keep","Не убирать, пока нет новой реплики","",D.keep)}${tg("orig","Показывать оригинал под переводом","",D.orig)}${tg("docked","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой, двигаются вместе",D.docked)}</div></div>
   <h2 style="font-size:15px;padding-top:6px">Окно чата</h2>
   <div style="background:linear-gradient(160deg,#3a2c20,#1d1712);border-radius:14px;padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;color:#c9b9a6">Образец</span>
     <div style="align-self:flex-start;width:340px;background:rgba(20,20,26,${D.chat_alpha / 100});border-radius:6px;padding:8px 10px;font-size:13px;display:flex;flex-direction:column;gap:3px;color:${D.chat_fg}">
