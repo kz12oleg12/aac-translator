@@ -117,9 +117,18 @@ def state():
             "tts": {"on": bool(config.TTS_ENABLED)},
         },
         "stream": bool(config.SHOW_ON_STREAM),
+        "new_game": _new_game(app),
         "update_auto": bool(getattr(config, "UPDATE_AUTO", False)),
         "keys": keys, "key_desc": descs,
     }
+
+
+def _new_game(app):
+    from . import profiles
+    pid = getattr(getattr(app, "panel", None), "new_prof", None) if app else None
+    if pid and pid in profiles.all_profiles():
+        return {"id": pid, "name": _clean(profiles.name(pid))}
+    return None
 
 
 def _clean(name):
@@ -193,14 +202,17 @@ def _call(name, arg):
 
     def run():
         try:
-            res["ok"] = _do(name, arg)
+            r = _do(name, arg)
+            res["ok"] = bool(r)
+            if isinstance(r, dict):
+                res["data"] = r
         except Exception as e:      # ошибка действия — в журнал, панель не падает
             core.log(f"Панель: «{name}» не выполнено: {e}", "error")
         finally:
             done.set()
     core.events.put(("web_call", run))
-    done.wait(5)
-    return res["ok"]
+    done.wait(8)
+    return res
 
 
 # ---------- HTTP ----------
@@ -270,8 +282,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return self._send(400, {"error": "bad json"})
         if self.path.split("?")[0] == "/api/action":
-            ok = _call(str(data.get("name", "")), data.get("arg"))
-            return self._send(200, {"ok": ok})
+            return self._send(200, _call(str(data.get("name", "")), data.get("arg")))
         if self.path.split("?")[0] == "/api/hello":
             _state["connected"] = True
             return self._send(200, {"ok": True})

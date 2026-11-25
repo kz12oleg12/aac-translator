@@ -217,7 +217,34 @@ def _s_settings():
         names = []
     return {"version": config.VERSION, "update_auto": bool(getattr(config, "UPDATE_AUTO", False)),
             "indicator": bool(getattr(config, "SHOW_INDICATOR", True)), "autobackups": names,
+            "backup_name": backup.default_name(),
             "app_dir": config.APP_DIR}
+
+
+def _s_win():
+    from . import style
+    return {"owner": _clean(style.owner() or "") or None, "font": config.FONT[0], "size": config.FONT[1],
+            "fonts": list(style.FONTS), "color": str(config.TEXT_COLOR), "colors": list(style.COLORS),
+            "mode": config.TEXT_MODE, "alpha": int(round(config.OVERLAY_ALPHA * 100)),
+            "history": config.SUBS_HISTORY, "delay": config.HIDE_DELAY,
+            "keep": bool(config.KEEP_UNTIL_NEXT), "orig": bool(config.SHOW_ORIGINAL),
+            "chat_cover": bool(config.CHAT_COVER), "chat_height": config.CHAT_HEIGHT,
+            "chat_history": config.CHAT_HISTORY, "chat_alpha": int(round(config.CHAT_ALPHA * 100)),
+            "chat_fg": str(config.CHAT_FG), "chat_colors": ["#eeeeee", "#ffe08a", "#8cf0ff", "#9dff9d", "#ffb3e6"]}
+
+
+def _s_gloss():
+    from . import glossary
+    return {"auto": bool(config.GLOSSARY_AUTO), "game": _clean(_safe(lambda: __import__(
+                "aac.profiles", fromlist=["x"]).name()) or ""),
+            "items": [{"en": en, "ru": ru, "auto": bool(a)} for en, ru, a in glossary.entries()[:2000]],
+            "ignore": [{"w": w, "builtin": bool(b)} for w, b in glossary.ignore_entries()]}
+
+
+def _s_programs():
+    from . import game, profiles
+    return {"items": [{"exe": e, "title": (t or "")[:80], "known": bool(profiles.for_exe(e))}
+                      for e, t in game.running_programs()][:30]}
 
 
 def _s_report():
@@ -408,6 +435,83 @@ def do(name, arg, app):
         p._ask_uninstall()
     elif name == "open_folder":
         _open(config.APP_DIR)
+    # --- вид перевода ---
+    elif name == "style":
+        _style(a)
+    # --- словарь ---
+    elif name == "gloss_set":
+        from . import glossary
+        en, ru = str(a.get("en") or "").strip(), str(a.get("ru") or "").strip()
+        if en and ru and glossary.set_entry(en, ru):
+            core.log(f"📖 Словарь: {en} = {ru}", "ok")
+    elif name == "gloss_remove":
+        from . import glossary
+        glossary.remove_entry(a.get("v"))
+    elif name == "ignore_add":
+        from . import glossary
+        w = str(a.get("v") or "").strip()
+        if w and glossary.add_ignore(w):
+            core.log(f"Не переводить: {w}", "ok")
+    elif name == "ignore_remove":
+        from . import glossary
+        glossary.remove_ignore(a.get("v"))
+    elif name == "gloss_file":
+        from . import glossary
+        glossary.open_glossary()
+    # --- выбор программы («Добавить игру», «ещё файл») ---
+    elif name == "pick_game":
+        from . import game
+        exe = str(a.get("v") or "")
+        if profiles.for_exe(exe):
+            core.log(f"{exe} уже есть в списке игр — «{profiles.name(profiles.for_exe(exe))}»", "warn")
+        elif exe:
+            if exe in game.not_games():
+                game.unmark_not_game(exe)
+            game.create_profile_for(exe, profiles._pretty(exe))
+    elif name == "pick_exe" and a.get("id") in profiles.all_profiles():
+        profiles.add_exe(a["id"], str(a.get("v") or ""))
+    # --- новая игра (баннер на главной) ---
+    elif name == "new_dismiss" and p is not None:
+        p.show_new_game(None)
+    elif name == "new_not_game" and p is not None:
+        p._new_not_game()
+    # --- резервная копия из файла ---
+    elif name == "backup_save_to":
+        from . import backup
+        path = str(a.get("v") or "")
+        if path:
+            try:
+                saved = backup.export(path)
+                core.log(f"Резервная копия сохранена: {path} ({backup.describe(saved)})", "ok")
+            except Exception as e:
+                core.log(f"Не удалось сохранить копию: {e}", "error")
+    elif name == "backup_info":
+        from . import backup
+        try:
+            info = backup.read_manifest(str(a.get("v") or ""))
+            return {"created": info.get("created", "?"), "version": info.get("version", "?"),
+                    "what": backup.describe(info.get("files", []))}
+        except Exception as e:
+            return {"error": str(e)}
+    elif name == "backup_restore_from" and app is not None:
+        from . import backup
+        path = str(a.get("v") or "")
+        if os.path.basename(path) == path:                  # автокопия — по имени
+            path = os.path.join(backup.BACKUP_DIR, path)
+        try:
+            restored, before = backup.restore(path)
+        except Exception as e:
+            core.log(f"Не удалось восстановить: {e}", "error")
+            return True
+        core.log(f"Восстановлено: {backup.describe(restored)}. Прежние настройки — в {before}", "ok")
+        app.restart()
+    elif name == "uninstall_run":
+        from . import uninstall
+        ok, msg = uninstall.run(backup_first=bool(a.get("backup", True)), keys_too=bool(a.get("keys", True)))
+        if ok:
+            core.events.put(("quit", None))
+        else:
+            core.log(f"Удаление отменено: {msg}", "error")
     # --- сообщить о проблеме ---
     elif name == "report":
         _bg(_report, str(a.get("text") or "").strip(), str(a.get("contact") or "").strip()[:200],
@@ -416,6 +520,67 @@ def do(name, arg, app):
         return False
     core.events.put(("panel", None))
     return True
+
+
+def _style(a):
+    """Вид перевода: шрифт/цвет/подложка — в пресет игры; остальное — общие настройки."""
+    from . import chat, style
+    app = None
+    try:
+        from . import web_api
+        app = web_api._state["app"]
+    except Exception:
+        pass
+    k, v = a.get("k"), a.get("v")
+    if k == "font":
+        style.save(font_family=str(v))
+    elif k == "color":
+        style.save(text_color=str(v))
+    elif k == "mode" and v in ("box", "outline"):
+        style.save(text_mode=v)
+    elif k == "size":
+        config.FONT = (config.FONT[0], max(10, min(26, int(v))))
+        config.HISTORY_FONT = (config.FONT[0], max(8, config.FONT[1] - 2))
+        style.save(font_size=config.FONT[1])
+    elif k == "alpha":
+        config.OVERLAY_ALPHA = max(40, min(100, int(v))) / 100
+        style.save(overlay_alpha=config.OVERLAY_ALPHA)
+    elif k == "history":
+        config.SUBS_HISTORY = max(0, min(3, int(v)))
+        core.save_settings(subs_history=config.SUBS_HISTORY)
+    elif k == "delay":
+        config.HIDE_DELAY = max(0.0, min(30.0, float(v)))
+        config.MAX_SHOW_TIME = max(60, config.HIDE_DELAY + 30)
+        core.save_settings(hide_delay=config.HIDE_DELAY)
+    elif k == "keep":
+        config.KEEP_UNTIL_NEXT = bool(v)
+        core.save_settings(keep_until_next=config.KEEP_UNTIL_NEXT)
+    elif k == "orig":
+        config.SHOW_ORIGINAL = bool(v)
+        core.save_settings(show_original=config.SHOW_ORIGINAL)
+    elif k == "chat_cover":
+        config.CHAT_COVER = bool(v)
+        chat._state["cover_mode"] = None
+        core.save_settings(chat_cover=config.CHAT_COVER)
+    elif k == "chat_height":
+        config.CHAT_HEIGHT = max(0, min(600, int(v)))
+        core.save_settings(chat_height=config.CHAT_HEIGHT)
+    elif k == "chat_history":
+        config.CHAT_HISTORY = max(20, min(1000, int(v)))
+        core.save_settings(chat_history=config.CHAT_HISTORY)
+        lines = getattr(app, "chat_lines", None)
+        if lines is not None and len(lines) > config.CHAT_HISTORY:
+            del lines[:-config.CHAT_HISTORY]
+    elif k == "chat_alpha":
+        config.CHAT_ALPHA = max(20, min(100, int(v))) / 100
+        core.save_settings(chat_alpha=config.CHAT_ALPHA)
+    elif k == "chat_fg":
+        config.CHAT_FG = str(v)
+        core.save_settings(chat_fg=config.CHAT_FG)
+    else:
+        return
+    if app is not None:
+        app.panel._apply_overlays()
 
 
 def _open(path):

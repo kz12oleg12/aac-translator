@@ -40,6 +40,19 @@ class Api:
             self._window.hide()
             self._hidden = True
 
+    def save_file(self, name):
+        """Окно Windows «Сохранить как» для резервной копии. Возвращает путь или пустую строку."""
+        import webview
+        r = self._window.create_file_dialog(webview.SAVE_DIALOG, save_filename=name,
+                                            file_types=("Резервная копия AAC (*.zip)",))
+        return (r[0] if isinstance(r, (list, tuple)) else r) or ""
+
+    def open_file(self):
+        import webview
+        r = self._window.create_file_dialog(webview.OPEN_DIALOG, file_types=("Резервная копия AAC (*.zip)",
+                                                                             "Все файлы (*.*)"))
+        return (r[0] if r else "") or ""
+
     def quit(self):
         self._quitting = True
         if self._window is not None:
