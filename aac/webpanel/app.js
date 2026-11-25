@@ -52,7 +52,7 @@ const NAV = [["home","Главная"],["games","Игры"],["tr","Перево�
 let SCR = "home", SUB = {voice: "voice", game: null, histKind: "Все", histQ: "", charQ: "", charG: "all"};
 function nav() {
   const cur = {win: "games", gloss: "tr"}[SCR] || SCR;
-  $("nav").innerHTML = NAV.map(([id, t]) => `<button class="it" data-go="${id}" ${cur == id ? 'aria-current="page"' : ""}>${svg(id)}<span>${t}</span>${id == "games" ? '<span class="n" id="gcount"></span>' : ""}</button>`).join("");
+  $("nav").innerHTML = NAV.map(([id, t]) => `<button class="it" data-go="${id}" title="${t}" ${cur == id ? 'aria-current="page"' : ""}>${svg(id)}<span>${t}</span>${id == "games" ? '<span class="n" id="gcount"></span>' : ""}</button>`).join("");
   $("gear").style.background = SCR == "settings" ? "rgba(88,101,242,.16)" : "";
 }
 function go(s) { SCR = s; nav(); $("main").innerHTML = ""; D = null; refresh(true); $("main").scrollTop = 0; }
@@ -84,7 +84,7 @@ async function refresh(force) {
   if (busy) return; busy = true;
   try {
     const s = await get("/api/state");
-    if (s) { S = s; $("ver").textContent = "v " + s.version; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
+    if (s) { S = s; $("ver").textContent = (document.body.classList.contains("nav-c") ? "" : "v ") + s.version; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
     if (SCR != "home") D = await get("/api/screen?name=" + SCR);
     if ((force || !typing()) && !$("modal").classList.contains("on")) render();
   } finally { busy = false; }
@@ -517,16 +517,32 @@ $("flt").onclick = e => { const b = e.target.closest("button"); if (!b) return; 
   g.onmousedown = e => { x0 = e.clientX; w0 = j.offsetWidth; document.onmousemove = m => { j.style.width = Math.max(260, Math.min(700, w0 + x0 - m.clientX)) + "px"; };
     document.onmouseup = () => { document.onmousemove = null; try { localStorage.setItem("jw", j.offsetWidth); } catch (e) {} }; }; })();
 
+// ---------- свернуть меню и журнал ----------
+let unread = 0;
+function layout(save) {
+  const nc = document.body.classList.contains("nav-c"), jc = document.body.classList.contains("jr-c");
+  $("navc").title = nc ? "Развернуть меню" : "Свернуть меню"; $("navc").setAttribute("aria-label", $("navc").title);
+  $("ver").textContent = S ? (nc ? S.version : "v " + S.version) : "v";
+  if (!jc) { unread = 0; }
+  $("jrn").textContent = unread; $("jrn").style.display = jc && unread ? "inline-block" : "none";
+  if (save) try { localStorage.setItem("lay", JSON.stringify({nc, jc})); } catch (e) {}
+}
+try { const l = JSON.parse(localStorage.getItem("lay") || "{}"); if (l.nc) document.body.classList.add("nav-c"); if (l.jc) document.body.classList.add("jr-c"); } catch (e) {}
+$("navc").onclick = () => { document.body.classList.toggle("nav-c"); layout(true); };
+$("jrc").onclick = () => { document.body.classList.add("jr-c"); layout(true); };
+$("jro").onclick = () => { document.body.classList.remove("jr-c"); layout(true); const L = $("log"); L.scrollTop = L.scrollHeight; };
+
 async function start() {
   nav();
   try { await fetch("/api/hello", {method: "POST", headers: H, body: "{}"}); } catch (e) {}
   const lg = await get("/api/log"); if (lg) { lg.forEach(e => addLog(e, false)); $("log").scrollTop = 1e9; }
   const es = new EventSource("/api/events?t=" + encodeURIComponent(T));
-  es.addEventListener("log", m => { addLog(JSON.parse(m.data)); refresh(); });
+  es.addEventListener("log", m => { addLog(JSON.parse(m.data)); if (document.body.classList.contains("jr-c")) { unread++; layout(); } refresh(); });
   es.addEventListener("toggle", () => { window.pywebview && pywebview.api.toggle(); });
   es.addEventListener("hide", () => { window.pywebview && pywebview.api.hide(); });
   es.addEventListener("show", () => { window.pywebview && pywebview.api.show(); });
   es.addEventListener("quit", () => { window.pywebview && pywebview.api.quit(); });
   refresh(true); setInterval(refresh, 1200);
 }
+layout();
 start();
