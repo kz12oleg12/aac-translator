@@ -2088,6 +2088,27 @@ def test_tts_cache(monkey):
     assert tts._cache_key("Привет, путник.", True, None) != k, "ускоренная — другой звук"
 
 
+def test_steam_about(monkey):
+    """Новая игра, которую ИИ не знает: описание берётся со страницы Steam."""
+    from aac import gamefacts
+    import requests
+
+    class R:
+        def __init__(self, d):
+            self.d = d
+
+        def json(self):
+            return self.d
+
+    def fake(url, params=None, timeout=None):
+        if "storesearch" in url:
+            return R({"items": [{"id": 1, "name": "Other"}, {"id": 42, "name": "ArcheAge Chronicles"}]})
+        return R({"42": {"data": {"short_description": "An <b>action</b> RPG &amp; open world.",
+                                  "genres": [{"description": "RPG"}]}}})
+    monkey(requests, "get", fake)
+    assert gamefacts.steam_about("ArcheAge Chronicles") == "An action RPG & open world. Genres: RPG."
+
+
 def test_custom_ai(monkey):
     """Свои ИИ-переводчики: добавить, подключиться к цепочке и редактору, удалить."""
     try:

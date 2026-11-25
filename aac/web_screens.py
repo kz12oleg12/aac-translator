@@ -94,6 +94,7 @@ def _s_games():
             "id": pid, "name": _clean(p.get("name") or pid), "free": free, "running": pid in run,
             "active": pid == core.active_profile, "locked": lock == pid,
             "exes": list(p.get("exes", [])), "regions": regs, "menu": bool(p.get("menu_region")), "menu_thumb": _menu_thumb(pid) if p.get("menu_region") else "",
+            "icon": _icon(pid),
             "auto_start": bool(p.get("auto_start")), "about": p.get("about") or "",
             "facts_busy": pid in gamefacts._running, "facts_ok": gamefacts.available(),
             "chars": chars, "gloss": gl,
@@ -226,6 +227,14 @@ def _s_hist():
     from . import history
     items = [{"t": t, "kind": k, "orig": o, "tr": r} for t, k, o, r in history.translation_history[-500:]]
     return {"items": items[::-1]}
+
+
+def _icon(pid):
+    try:
+        from . import gameicon
+        return gameicon.data_url(pid)
+    except Exception:
+        return ""
 
 
 def _menu_thumb(pid):

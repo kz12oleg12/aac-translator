@@ -162,7 +162,17 @@ def gather(pid, force=False, wait=False):
                 core.log(f"🤖 Для «{title}» собрано: терминов в словарь — {n_terms}, новых персонажей — {n_chars}"
                          + (", описание мира и тона — есть" if data.get("description") else ""), "ok")
             else:
-                core.log(f"🤖 Groq не знает игру «{title}» — словарь будет пополняться по ходу игры", "warn")
+                desc = steam_about(title)
+                if desc:
+                    profs = profiles.all_profiles()
+                    if pid in profs and not profs[pid].get("about"):
+                        profs[pid]["about"] = desc
+                        core.save_settings(profiles=profs)
+                    core.log(f"🤖 Groq пока не знает «{title}» (новая игра?) — взял описание из Steam, оно поможет "
+                             "переводу. Имена и термины словарь соберёт по ходу игры.", "ok")
+                else:
+                    core.log(f"🤖 Groq не знает игру «{title}» — ничего страшного: словарь и персонажи соберутся по ходу "
+                             "игры. Можно помочь — впишите пару строк в «Об игре» на странице игры.", "warn")
         except Exception as e:
             core.log(f"🤖 Не удалось собрать данные об игре «{title}»: {e}", "warn")
         finally:
@@ -173,6 +183,30 @@ def gather(pid, force=False, wait=False):
     else:
         threading.Thread(target=run, daemon=True).start()
     return True
+
+
+def steam_about(title):
+    """Короткое описание игры со страницы Steam (английское) или "" — для новых игр, которых ИИ ещё не знает."""
+    import html
+    import requests
+    try:
+        r = requests.get("https://store.steampowered.com/api/storesearch/",
+                         params={"term": title, "l": "english", "cc": "US"}, timeout=8)
+        items = (r.json() or {}).get("items") or []
+        want = re.sub(r"[^a-z0-9]", "", title.lower())
+        app = next((i for i in items if re.sub(r"[^a-z0-9]", "", i.get("name", "").lower()) == want), None) \
+            or next((i for i in items if want and want in re.sub(r"[^a-z0-9]", "", i.get("name", "").lower())), None)
+        if not app:
+            return ""
+        d = requests.get("https://store.steampowered.com/api/appdetails",
+                         params={"appids": app["id"], "l": "english"}, timeout=8).json()
+        info = (d.get(str(app["id"])) or {}).get("data") or {}
+        text = html.unescape(re.sub(r"<[^>]+>", " ", info.get("short_description") or ""))
+        text = re.sub(r"\s+", " ", text).strip()
+        genres = ", ".join(g.get("description", "") for g in info.get("genres") or [])
+        return (text + (f" Genres: {genres}." if genres else ""))[:600]
+    except Exception:
+        return ""
 
 
 def about():

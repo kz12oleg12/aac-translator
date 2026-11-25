@@ -90,7 +90,7 @@ def state():
         if profiles.is_free(pid):
             continue
         games.append({"id": pid, "name": _clean(p.get("name") or pid), "running": pid in run,
-                      "active": pid == core.active_profile})
+                      "active": pid == core.active_profile, "icon": _icon(pid)})
     games.sort(key=lambda g: (not g["running"], not g["active"]))
     keys = {hid: _safe(lambda h=hid: hotkeys.K(h), "") for hid, *_ in hotkeys.HOTKEY_DEFS}
     descs = {hid: d for hid, d, *_ in hotkeys.HOTKEY_DEFS}
@@ -101,7 +101,8 @@ def state():
         "update": getattr(getattr(app, "panel", None), "update_version", None) if app else None,
         "auto": {"on": on, "paused": paused, "sub": sub},
         "game": {"name": _clean(profiles.name()) if core.active_profile else None,
-                 "running": _safe(profiles.is_running, False), "free": _safe(profiles.is_free, False)},
+                 "running": _safe(profiles.is_running, False), "free": _safe(profiles.is_free, False),
+                 "icon": _icon(core.active_profile)},
         "games": games[:6],
         "translator": {"chain": [PROVIDER_NAMES.get(p) or _custom_name(p) for p in chain[:3]], "editor": editor_name,
                        "editor_on": bool(getattr(config, "EDITOR_ON", False)), "editor_id": config.EDITOR,
@@ -135,6 +136,14 @@ def _custom_name(pid):
         return x["name"] if x else pid
     except Exception:
         return pid
+
+
+def _icon(pid):
+    try:
+        from . import gameicon
+        return gameicon.data_url(pid)
+    except Exception:
+        return ""
 
 
 def _boot():

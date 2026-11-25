@@ -103,6 +103,7 @@ function render() {
   if (m.dataset.last !== html) { m.innerHTML = html; m.dataset.last = html; m.scrollTop = y; }
 }
 const R = {};
+const gimg = (g, txt) => g && g.icon ? `<img src="${g.icon}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:inherit">` : txt;
 
 // ---------- главная ----------
 R.home = () => {
@@ -116,11 +117,11 @@ R.home = () => {
   const show = ["once","repeat","tooltip","once_tts","subs_once","answers_once","chat_once","chat_compose","layout","reset","panel","flip_gender","menu_learn","quit"];
   const ng = s.new_game ? `<div class="upd" style="display:flex"><span style="flex-grow:1">Новая игра: <b>${esc(s.new_game.name)}</b> — пресет создан сам. Обведите субтитры (${esc(K.select)}) — и можно переводить.</span><button class="btnp" style="padding:6px 14px" data-a="ngareas" data-id="${esc(s.new_game.id)}">Области</button><button class="btn" style="height:32px" data-a="ngno">Это не игра</button></div>` : "";
   return ng + `
-  <div class="games"><div class="gnow"><span class="logo">${cur.free ? svg("mon", 26) : esc((cur.name || "?")[0])}</span><div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+  <div class="games"><div class="gnow"><span class="logo">${cur.free ? svg("mon", 26) : gimg(cur, esc((cur.name || "?")[0]))}</span><div style="display:flex;flex-direction:column;gap:2px;min-width:0">
     <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--m)"><span class="dot" style="background:${cur.running ? "var(--ok)" : "var(--f)"}"></span>${cur.free ? "В любом окне" : cur.running ? "Запущена" : cur.name ? "Не запущена" : "Ждёт игру"}</span>
     <span style="font-size:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(cur.name || "Игра не выбрана")}</span>
     ${cur.name ? `<a data-go="games" style="font-size:12px">Настройки игры</a>` : ""}</div></div>
-    ${others.map(x => `<button class="gt" data-a="game" data-id="${esc(x.id)}" title="${esc(x.name)}" aria-label="${esc(x.name)}">${esc(x.name[0])}</button>`).join("")}
+    ${others.map(x => `<button class="gt" data-a="game" data-id="${esc(x.id)}" title="${esc(x.name)}" aria-label="${esc(x.name)}">${gimg(x, esc(x.name[0]))}</button>`).join("")}
     ${cur.free ? "" : `<button class="gt tool" data-a="free" title="Переводить без игры: в любом окне, по пресету «Без игры» со своими областями">${svg("mon", 20)}Без игры</button>`}
     <button class="gt tool" data-go="games">${svg("grid", 20)}Все игры</button></div>
   <div class="card auto"><span class="dot" style="width:10px;height:10px;border-radius:5px;background:${!a.on ? "var(--f)" : a.paused ? "var(--warn)" : "var(--acc)"}"></span>
@@ -194,7 +195,7 @@ R.games = () => {
   const G = D.games, sel = G.find(g => g.id == SUB.game) || G.find(g => g.active) || G.find(g => !g.free) || G[0];
   if (sel) SUB.game = sel.id;
   const item = g => `<button class="gi" data-a="gpick" data-id="${esc(g.id)}" ${sel && g.id == sel.id ? 'aria-current="true"' : ""}>
-    <span class="lg" style="${g.free ? "background:#30302E" : ""}">${g.free ? svg("mon", 18) : esc(g.name[0])}</span>
+    <span class="lg" style="${g.free ? "background:#30302E" : ""}">${g.free ? svg("mon", 18) : gimg(g, esc(g.name[0]))}</span>
     <span style="display:flex;flex-direction:column;min-width:0;gap:1px"><span style="font-weight:${sel && g.id == sel.id ? 600 : 500};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.name)}</span>
     ${g.free ? `<span style="font-size:12px;color:var(--f)">В любом окне</span>` : g.running ? `<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--m)"><span class="dot" style="width:7px;height:7px;background:var(--ok)"></span>Запущена</span>` : !g.configured ? `<span style="font-size:12px;color:var(--warn)">Не настроена</span>` : ""}</span></button>`;
   const free = G.filter(g => g.free), games = G.filter(g => !g.free);
@@ -212,7 +213,7 @@ R.games = () => {
   const n = g.regions.filter(r => r.has).length;
   const detail = `<div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:8px">
     <div class="card" style="padding:14px;display:flex;align-items:center;gap:14px;background:rgba(88,101,242,.12)">
-      <span class="logo" style="width:72px;height:72px;border-radius:12px">${g.free ? svg("mon", 28) : esc(g.name[0])}</span>
+      <span class="logo" style="width:72px;height:72px;border-radius:12px">${g.free ? svg("mon", 28) : gimg(g, esc(g.name[0]))}</span>
       <div style="display:flex;flex-direction:column;gap:2px;flex-grow:1;min-width:0">
         <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--m)"><span class="dot" style="background:${g.running ? "var(--ok)" : "var(--f)"}"></span>${g.free ? "В любом окне" : g.running ? "Запущена" : "Не запущена"}${g.locked ? " · закреплена" : ""}${activeHere && !g.running && !g.free ? " · настраиваете" : ""}</span>
         ${g.free ? `<span style="font-size:20px;font-weight:600">${esc(g.name)}</span>` : `<input class="inp" style="font-size:20px;font-weight:600;background:none;padding:0;height:30px" value="${esc(g.name)}" data-c="grename" aria-label="Название игры">`}

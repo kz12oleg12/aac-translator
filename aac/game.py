@@ -412,6 +412,9 @@ def follow_foreground():
     if not exe or pid == os.getpid():
         return
     prof = profiles.for_exe(exe)
+    if prof:
+        from . import gameicon
+        gameicon.ensure(prof, pid)
     if prof and prof != core.active_profile:
         profiles.activate(prof)
 
@@ -467,6 +470,8 @@ def remember_game_window():
         prof = create_profile_for(exe, nice_title(foreground_title(), exe))
         core.events.put(("game_created", prof))
         return "new"
+    from . import gameicon
+    gameicon.ensure(prof, pid)
     if prof != core.active_profile:
         profiles.activate(prof)
     if exe != game_exe:
