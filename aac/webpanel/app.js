@@ -85,7 +85,7 @@ async function refresh(force) {
   if (busy) return; busy = true;
   try {
     const s = await get("/api/state");
-    if (s) { S = s; $("ver").textContent = "v " + s.version; $("gear").title = document.body.classList.contains("nav-c") ? `Настройки · версия ${s.version}` : "Настройки"; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
+    if (s) { S = s; updNav(); $("ver").textContent = "v " + s.version; $("gear").title = document.body.classList.contains("nav-c") ? `Настройки · версия ${s.version}` : "Настройки"; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
     if (SCR != "home") D = await get("/api/screen?name=" + SCR);
     if ((force || !typing()) && !$("modal").classList.contains("on")) render();
   } finally { busy = false; }
@@ -115,7 +115,7 @@ R.home = () => {
   const lim = b => b ? `<div class="bar"><i style="width:${b.frac == null ? 0 : Math.round(b.frac * 100)}%"></i></div><span class="lbl" style="margin-top:4px;display:block">${esc(b.name)}: ${esc(b.text)}</span>` : "";
   const show = ["once","repeat","tooltip","once_tts","subs_once","answers_once","chat_once","chat_compose","layout","reset","panel","flip_gender","menu_learn","quit"];
   const ng = s.new_game ? `<div class="upd" style="display:flex"><span style="flex-grow:1">Новая игра: <b>${esc(s.new_game.name)}</b> — пресет создан сам. Обведите субтитры (${esc(K.select)}) — и можно переводить.</span><button class="btnp" style="padding:6px 14px" data-a="ngareas" data-id="${esc(s.new_game.id)}">Области</button><button class="btn" style="height:32px" data-a="ngno">Это не игра</button></div>` : "";
-  return ng + `<div class="upd" style="display:${s.update ? "flex" : "none"}"><span style="flex-grow:1">Доступна новая версия ${esc(s.update)}</span><button class="btnp" data-act="update_install">Обновить</button></div>
+  return ng + `
   <div class="games"><div class="gnow"><span class="logo">${cur.free ? svg("mon", 26) : esc((cur.name || "?")[0])}</span><div style="display:flex;flex-direction:column;gap:2px;min-width:0">
     <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--m)"><span class="dot" style="background:${cur.running ? "var(--ok)" : "var(--f)"}"></span>${cur.free ? "В любом окне" : cur.running ? "Запущена" : cur.name ? "Не запущена" : "Ждёт игру"}</span>
     <span style="font-size:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(cur.name || "Игра не выбрана")}</span>
@@ -523,6 +523,15 @@ $("flt").onclick = e => { const b = e.target.closest("button"); if (!b) return; 
 (() => { let x0, w0; const g = $("grip"), j = $("jr"); try { const w = localStorage.getItem("jw"); if (w) j.style.width = w + "px"; } catch (e) {}
   g.onmousedown = e => { x0 = e.clientX; w0 = j.offsetWidth; document.onmousemove = m => { j.style.width = Math.max(260, Math.min(700, w0 + x0 - m.clientX)) + "px"; };
     document.onmouseup = () => { document.onmousemove = null; try { localStorage.setItem("jw", j.offsetWidth); } catch (e) {} }; }; })();
+
+// ---------- новая версия — в боковой колонке ----------
+let updShown = null;
+function updNav() {
+  const v = S && S.update || "";
+  if (v === updShown) return; updShown = v;
+  $("updnav").innerHTML = v ? `<div class="uc"><span>Доступна версия ${esc(v)}</span><button data-act="update_install">Обновить</button></div>
+    <button class="ui" data-act="update_install" title="Доступна версия ${esc(v)} — обновить" aria-label="Обновить до ${esc(v)}">${svg("end", 16, 2).replace("M5 12h14M13 6l6 6-6 6", "M12 19V5M6 11l6-6 6 6")}</button>` : "";
+}
 
 // ---------- свернуть меню и журнал ----------
 let unread = 0;
