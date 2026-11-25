@@ -221,7 +221,8 @@ R.games = () => {
     <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
       <div class="hdr">${ico("eye", g.menu)}<span style="display:flex;flex-direction:column;flex-grow:1"><span style="font-weight:600">Экраны без перевода</span><span style="font-size:12px;color:var(--m)">На них автоперевод встаёт на паузу</span></span></div>
       <div class="lst">${g.menu ? `<div class="r"><span class="thumb"></span><span class="tx"><span>Меню</span></span><button class="btn" data-act="menu_learn">Перезапомнить</button></div>` : `<div class="empty">Пока нет.</div>`}</div>
-      <div class="row" style="gap:12px"><span style="font-size:12px;color:var(--f);flex-grow:1">Откройте экран в игре и нажмите <span class="key">${esc(K.menu_learn)}</span></span><button class="btn" style="height:30px;display:flex;align-items:center;gap:6px" data-a="scradd">${svg("plus", 13)}Добавить</button></div></div>
+      <button class="btn" style="height:32px;display:flex;align-items:center;justify-content:center;gap:6px" data-a="scradd">${svg("plus", 13)}Добавить</button>
+      <span style="font-size:12px;color:var(--f)">Откройте экран в игре и нажмите <span class="key">${esc(K.menu_learn)}</span></span></div>
     <div class="grid3" style="grid-template-columns:1fr 1fr">
       <div class="card tc" style="gap:10px"><div class="hdr">${ico("font")}<span style="flex-grow:1"></span>${lnk("изменить", 'data-go="win"')}</div><div><div style="font-weight:600">Вид перевода</div><div style="font-size:12px;color:var(--m)">Шрифт, размер, фон</div></div></div>
       <div class="card tc" style="gap:10px"><div class="hdr">${ico("people")}<span style="flex-grow:1"></span>${lnk("открыть", 'data-a="gochars"')}</div><div><div style="font-weight:600">Имена и голоса</div><div style="font-size:12px;color:var(--m)">${g.chars} персонажей · ${g.gloss} в словаре</div></div></div></div>
