@@ -2079,6 +2079,9 @@ def test_editor_voice(monkey):
     assert tts.speech_text("Привет, как дела?", "Hello\nHow are you?") == "Привет, как дела?"
     assert tts.speech_text("Джиеллини / Чем могу помочь?", "Джиеллини / May Ай help you?") == "Чем могу помочь?"
     assert tts.speech_text("Джиелл+ини / Чем могу пом+очь?") == "Чем могу пом+очь?"
+    info = {"voice": "Ит+ан, нужн+а ар+ендная пл+ата.", "speaker": "Ethan"}
+    assert tts._prepare(info, "Итан\nA rental fee is required.").startswith("нужн+а")
+    assert tts._prepare({"voice": "Ит+ан: Нужн+а пл+ата.", "speaker": "Итан"}, "A rental fee is required.").startswith("Нужн+а")
     assert tts.speech_text("Джиеллини / Чем могу помочь?", "Giellini\nMay I help you?") == "Чем могу помочь?"
     assert editor.parse("TEXT:\nДжиеллини / Чем помочь?\nVOICE:\nДжиеллини / Чем помочь?")["text"] == "Джиеллини\nЧем помочь?"
 

@@ -29,7 +29,7 @@ PROMPT = """You are a professional video game localization editor (English → R
 - if the draft is already good, keep it unchanged.
 
 2) VOICE — the same line prepared for a Russian text-to-speech voice (it reads letters literally):
-- no speaker name prefix, no brackets, no markup, no emoji;
+- never include the speaker's name (not as a prefix, not on its own line); no brackets, no markup, no emoji;
 - write numbers, fractions, percents, "x2", "HP", "lvl", "3/5" etc. as Russian words, correctly declined;
 - write any remaining Latin words in Russian letters the way they are pronounced;
 - put "+" right before the stressed vowel in names, invented/fantasy words, rare words and homographs
@@ -456,7 +456,7 @@ def improve(src, draft, kind, on_late=None):
             if info and info.get("voice") and kind == "subs":
                 try:      # реплика уже звучит черновиком — оставшиеся фразы дочитать вариантом редактора
                     from . import tts
-                    tts.upgrade(draft, info)
+                    tts.upgrade(draft, info, src)
                 except Exception:
                     pass
             _remember(src, out or draft, kind)

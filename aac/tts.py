@@ -258,7 +258,7 @@ def speak_subtitle(translation, seen=None, orig=None):
         from . import editor
         info = editor.speech_for(translation)
         if info and info.get("voice"):
-            text = _with_mood(speech_text(info["voice"], orig), info.get("mood"))   # имя — только если включено
+            text = _with_mood(speech_text(info["voice"], _with_speaker(info, orig)), info.get("mood"))   # имя — по настройке
         text = editor.apply_stress(text)
     except Exception:
         info = None
@@ -289,16 +289,24 @@ def _line_key(translation):
         return None
 
 
-def _prepare(info):
+def _with_speaker(info, orig):
+    """Оригинал для вырезания имени: если редактор понял, кто говорит, а в оригинале имени нет — добавим его."""
+    sp = (info or {}).get("speaker") or ""
+    if sp and sp.lower() not in (orig or "").lower()[:len(sp) + 5]:
+        return f"{sp}\n{orig or ''}"
+    return orig
+
+
+def _prepare(info, orig=None):
     from . import editor
-    return editor.apply_stress(_with_mood(speech_text(info["voice"]), info.get("mood")))
+    return editor.apply_stress(_with_mood(speech_text(info["voice"], _with_speaker(info, orig)), info.get("mood")))
 
 
-def upgrade(translation, info):
+def upgrade(translation, info, orig=None):
     """ИИ-редактор ответил, когда реплика уже читается черновиком: ещё не прозвучавшие фразы — его вариантом."""
     if not config.TTS_ENABLED or not info or not info.get("voice") or not engine_ready():
         return
-    _neural.upgrade(_line_key(translation), _prepare(info))
+    _neural.upgrade(_line_key(translation), _prepare(info, orig))
 
 
 def _with_mood(text, mood):
