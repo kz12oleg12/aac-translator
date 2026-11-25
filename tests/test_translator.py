@@ -2128,6 +2128,23 @@ def test_tts_cache(monkey):
     assert tts._cache_key("Привет, путник.", True, None) != k, "ускоренная — другой звук"
 
 
+def test_scene_on_new_npc(monkey):
+    """Снимок сцены — когда заговорил другой персонаж, а не только раз в 6 реплик."""
+    from aac import editor
+    import threading as _th
+    calls = []
+    monkey(editor, "_update_scene", lambda: calls.append(1))
+    monkey(_th, "Thread", lambda target=None, daemon=None, **k: type("T", (), {"start": lambda s: target()})())
+    editor._state.update(since_scene=0, history=[], last_speaker=None, last_line_at=0, scene_at=0)
+    editor._remember("Rotild\nHello there.", "Ротильд\nПривет.", "subs")
+    assert len(calls) == 1, "первая реплика — новый разговор"
+    editor._remember("Rotild\nHow are you?", "Ротильд\nКак дела?", "subs")
+    assert len(calls) == 1, "тот же персонаж и не прошло 8 с — без снимка"
+    editor._state["scene_at"] = 0
+    editor._remember("Baron Alderich\nWelcome.", "Барон Альдерих\nДобро пожаловать.", "subs")
+    assert len(calls) == 2, "заговорил другой персонаж — снимок"
+
+
 def test_steam_about(monkey):
     """Новая игра, которую ИИ не знает: описание берётся со страницы Steam."""
     from aac import gamefacts

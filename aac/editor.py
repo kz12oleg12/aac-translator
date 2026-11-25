@@ -106,7 +106,7 @@ def ready():
 def reset():
     """Сменилась игра — память сцены и прошлые реплики больше не нужны."""
     with _lock:
-        _state.update(scene="", since_scene=0, history=[])
+        _state.update(scene="", since_scene=0, history=[], last_speaker=None, last_line_at=0, scene_at=0)
 
 
 def _game():
@@ -400,9 +400,22 @@ def _remember(src, final, kind):
         _state["history"].append((src.replace("\n", " / "), final.replace("\n", " / ")))
         del _state["history"][:-config.HISTORY_LINES]
         _state["since_scene"] += 1
-        need = _state["since_scene"] >= config.EDITOR_SCENE_EVERY
+        now = time.time()
+        try:
+            sp = voices.speaker(final, src)
+            who = sp[0] if sp else None
+        except Exception:
+            who = None
+        new_talk = now - _state.get("last_line_at", 0) > 20          # долго было тихо — новый разговор
+        new_npc = bool(who) and who != _state.get("last_speaker")   # заговорил другой персонаж
+        _state["last_line_at"] = now
+        if who:
+            _state["last_speaker"] = who
+        need = (_state["since_scene"] >= config.EDITOR_SCENE_EVERY or new_talk or new_npc) \
+            and now - _state.get("scene_at", 0) > 8                  # но не чаще раза в 8 с
         if need:
             _state["since_scene"] = 0
+            _state["scene_at"] = now
     if need:
         threading.Thread(target=_update_scene, daemon=True).start()
 
