@@ -226,9 +226,8 @@ R.games = () => {
       <button class="btn" data-act="layout" title="Двигать области и окна перевода прямо поверх игры" style="padding:3px 16px">Расставить на экране</button></div>
     <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
       <div class="hdr">${ico("eye", g.menu)}<span style="display:flex;flex-direction:column;flex-grow:1"><span style="font-weight:600">Экраны без перевода</span><span style="font-size:12px;color:var(--m)">На них автоперевод встаёт на паузу</span></span></div>
-      <div class="lst">${g.menu ? `<div class="r"><span class="thumb"></span><span class="tx"><span>Меню</span></span><button class="btn" data-act="menu_learn">Перезапомнить</button></div>` : `<div class="empty">Пока нет.</div>`}</div>
-      <button class="btn" style="height:32px;display:flex;align-items:center;justify-content:center;gap:6px" data-a="scradd">${svg("plus", 13)}Добавить</button>
-      <span style="font-size:12px;color:var(--f)">Откройте экран в игре и нажмите <span class="key">${esc(K.menu_learn)}</span></span></div>
+      <div class="lst">${g.menu ? `<div class="r"><span class="thumb" style="${g.menu_thumb ? `background:#000 url(${g.menu_thumb}) center/contain no-repeat` : ""}"></span><span class="tx"><span>Меню игры</span><span class="d">пока оно на экране — перевод и озвучка на паузе</span></span><button class="btn" data-a="scrnew">Заменить</button><button class="ib" title="Забыть" data-a="scrdel">${svg("x", 14)}</button></div>` : `<div class="empty">Пока нет.</div>`}</div>
+      ${g.menu ? "" : `<button class="btn" style="height:32px;display:flex;align-items:center;justify-content:center;gap:6px" data-a="scrnew">${svg("plus", 13)}Запомнить экран</button>`}</div>
     <div class="grid3" style="grid-template-columns:1fr 1fr">
       <div class="card tc" style="gap:10px"><div class="hdr">${ico("font")}<span style="flex-grow:1"></span>${lnk("изменить", 'data-go="win"')}</div><div><div style="font-weight:600">Вид перевода</div><div style="font-size:12px;color:var(--m)">Шрифт, размер, фон</div></div></div>
       <div class="card tc" style="gap:10px"><div class="hdr">${ico("people")}<span style="flex-grow:1"></span>${lnk("открыть", 'data-a="gochars"')}</div><div><div style="font-weight:600">Имена и голоса</div><div style="font-size:12px;color:var(--m)">${g.chars} персонажей · ${g.gloss} в словаре</div></div></div></div>
@@ -238,7 +237,14 @@ R.games = () => {
     <div class="card" style="padding:14px;display:flex;align-items:center;gap:10px">${ico("start", g.auto_start)}<span style="display:flex;flex-direction:column;flex-grow:1"><span style="font-weight:600">Включать автоперевод при запуске</span><span style="font-size:12px;color:var(--m)">Когда эта игра открывается</span></span>${sw(g.auto_start, 'data-a="gauto"')}</div>`}</div>`;
   return `<h1>Игры</h1><div style="display:flex;gap:16px;align-items:flex-start">${list}${detail}</div>`;
 };
-HANDLERS.scradd = () => act("screen_add");
+HANDLERS.scrnew = () => modal(`<h3 style="font-size:16px">Запомнить экран без перевода</h3>
+  <ol style="font-size:13px;color:var(--m);line-height:1.7;padding-left:18px;margin:10px 0">
+    <li>Перейдите в игру и откройте экран, где переводить не нужно — меню, карту, инвентарь.</li>
+    <li>Нажмите <span class="key">${esc(S.keys ? S.keys.menu_learn || "Ctrl+Shift+M" : "Ctrl+Shift+M")}</span> прямо в игре.</li>
+    <li>Обведите мышкой кусочек, который на этом экране всегда одинаковый: заголовок или строку вкладок.</li></ol>
+  <span style="font-size:12px;color:var(--f)">Сейчас запоминается один экран на игру — новый заменит прежний.</span>
+  <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btnp" style="padding:6px 16px" onclick="closeModal()">Понятно</button></div>`);
+HANDLERS.scrdel = () => confirmDlg("Забыть экран?", "Автоперевод больше не будет вставать на паузу на этом экране.", "Забыть", () => act("menu_forget"));
 HANDLERS.gpick = b => { SUB.game = b.dataset.id; render(); };
 HANDLERS.gq = b => { SUB.gq = b.value; render(); const i = document.querySelector('[data-i="gq"]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } };
 HANDLERS.gadd = () => pickDlg("Добавить игру", "Выберите игру из запущенных сейчас программ. Название потом можно исправить.", exe => act("pick_game", exe), true);

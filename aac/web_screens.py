@@ -93,7 +93,7 @@ def _s_games():
         out.append({
             "id": pid, "name": _clean(p.get("name") or pid), "free": free, "running": pid in run,
             "active": pid == core.active_profile, "locked": lock == pid,
-            "exes": list(p.get("exes", [])), "regions": regs, "menu": bool(p.get("menu_region")),
+            "exes": list(p.get("exes", [])), "regions": regs, "menu": bool(p.get("menu_region")), "menu_thumb": _menu_thumb(pid) if p.get("menu_region") else "",
             "auto_start": bool(p.get("auto_start")), "about": p.get("about") or "",
             "facts_busy": pid in gamefacts._running, "facts_ok": gamefacts.available(),
             "chars": chars, "gloss": gl,
@@ -226,6 +226,25 @@ def _s_hist():
     from . import history
     items = [{"t": t, "kind": k, "orig": o, "tr": r} for t, k, o, r in history.translation_history[-500:]]
     return {"items": items[::-1]}
+
+
+def _menu_thumb(pid):
+    """Миниатюра запомненного экрана (data:image) — чтобы было видно, что именно запомнено."""
+    import base64
+    import io
+    from . import menu
+    try:
+        path = profiles.paths(pid)["menu"]
+        if not os.path.exists(path) and pid == core.active_profile:
+            path = menu.REF_FILE
+        from PIL import Image
+        im = Image.open(path).convert("RGB")
+        im.thumbnail((128, 72))
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=80)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return ""
 
 
 def _s_start():
@@ -377,11 +396,9 @@ def do(name, arg, app):
     elif name == "unmark_not_game":
         from . import game
         game.unmark_not_game(a.get("v"))
-    elif name == "screen_add":
-        from . import web_api
-        web_api.push("hide")
-        core.log(f"Откройте в игре экран, где переводить не нужно (меню, карту…), и нажмите {_keys().get('menu_learn', '')}. "
-                 "Панель вернётся по F6.", "ok")
+    elif name == "menu_forget":
+        from . import menu
+        menu.forget()
     elif name == "area_draw" and a.get("key") in REGION_EVENTS:
         if a.get("id") and a["id"] != core.active_profile:
             profiles.activate(a["id"], hold=True)
