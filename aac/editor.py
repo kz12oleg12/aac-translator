@@ -239,9 +239,26 @@ def parse(out):
     return res
 
 
+def _note_traits(info):
+    """Пол и характер говорящего — сразу в карточку персонажа (даже если ответ редактора опоздал к озвучке)."""
+    sp = info.get("speaker")
+    if not sp or not (info.get("gender") or info.get("type") or info.get("address")):
+        return
+    try:
+        found = voices.speaker("", f"{sp}\n…")
+        key = found[0] if found else None
+        if key:
+            voices.set_ai_gender(key, info.get("gender"))
+            voices.set_traits(key, info.get("type"), info.get("address"))
+    except Exception:
+        pass
+
+
 def _keep_speech(shown, info):
     if not shown or not info.get("voice"):
         return
+    if _norm(shown) not in _speech:
+        _note_traits(info)
     with _lock:
         _speech[_norm(shown)] = info
         while len(_speech) > _SPEECH_MAX:

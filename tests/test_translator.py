@@ -2144,6 +2144,15 @@ def test_steam_about(monkey):
     assert gamefacts.steam_about("ArcheAge Chronicles") == "An action RPG & open world. Genres: RPG."
 
 
+def test_line_voice():
+    """Реплика без имени: пол и характер от ИИ-редактора — голос нужного пола и высоты."""
+    from aac import voices
+    v = voices.line_voice("f", "old", "neural")
+    assert v and v[1] < 0
+    assert voices.line_voice("m", "monster", "silero")[1] == -2
+    assert voices.line_voice("", "", "neural") is None
+
+
 def test_split_options():
     """Варианты ответа склеились в одну строку — разбиваем по строкам оригинала."""
     from aac.appwin import split_options

@@ -272,6 +272,10 @@ def speak_subtitle(translation, seen=None, orig=None):
             voices.set_traits(key, info.get("type"), info.get("address"))
         if config.TTS_PER_CHARACTER:
             vp = voices.voice_for(key)
+            if vp is None and info:            # говорящий без имени — пол и характер подсказал ИИ-редактор
+                vp = voices.line_voice(info.get("gender"), info.get("type"))
+                if vp and vp[0] is None:
+                    vp = None
     except Exception as e:
         core.log(f"Голоса персонажей: {e}", "error")
     _key_box["key"] = _line_key(translation)

@@ -307,8 +307,21 @@ def set_ai_gender(key, g):
 
 
 TYPE_NAMES = {"young": "молодой", "old": "пожилой", "child": "ребёнок", "monster": "чудовище", "noble": "знатный"}
-TYPE_PITCH = {"neural": {"old": -8, "monster": -14, "child": 14, "young": 4, "noble": -3},
-              "silero": {"old": -1, "monster": -2, "child": 2, "young": 1, "noble": 0}}
+TYPE_PITCH = {"neural": {"old": -18, "monster": -32, "child": 26, "young": 8, "noble": -6},     # Гц
+              "silero": {"old": -1, "monster": -2, "child": 2, "young": 1, "noble": -1}}       # ступени (-2…+2)
+
+
+def line_voice(g, kind, engine=None):
+    """Голос для реплики без известного персонажа, когда ИИ-редактор понял пол и характер говорящего
+    (старик, чудовище, ребёнок…): голос нужного пола со сдвигом высоты. None — читать как обычно."""
+    engine = engine or config.TTS_ENGINE
+    if engine not in ("neural", "silero") or (g not in ("m", "f") and not kind):
+        return None
+    shift = TYPE_PITCH["neural" if engine == "neural" else "silero"].get(kind, 0)
+    if g not in ("m", "f"):
+        return None if not shift else (None, shift)
+    pool = NEURAL_POOL[g] if engine == "neural" else SILERO_POOL.auto(g)
+    return (default_voice(engine, g) or pool[0]), shift
 
 
 def set_traits(key, kind=None, address=None):
@@ -384,7 +397,7 @@ def voice_for(key, engine=None, auto_only=False):
     voice = pool[h % len(pool)]
     pitch = pitches[(h // 7) % len(pitches)]
     if shift:
-        lim = 2 if engine != "neural" else 20
+        lim = 2 if engine != "neural" else 35
         pitch = max(-lim, min(lim, (0 if kind in ("old", "monster", "child") else pitch) + shift))
     return voice, pitch
 
