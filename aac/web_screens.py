@@ -424,13 +424,18 @@ def do(name, arg, app):
     elif name == "screen_replace":
         from . import menu
         menu.replace_next["id"] = a.get("id")
+        core.events.put(("menu_learn_panel", None))
     elif name == "screen_new":
         from . import menu
         menu.replace_next["id"] = None
+        core.events.put(("menu_learn_panel", None))
     elif name == "area_draw" and a.get("key") in REGION_EVENTS:
         if a.get("id") and a["id"] != core.active_profile:
             profiles.activate(a["id"], hold=True)
-        core.events.put((REGION_EVENTS[a["key"]], None))
+        if app is not None:
+            app.from_panel(REGION_EVENTS[a["key"]])
+        else:
+            core.events.put((REGION_EVENTS[a["key"]], None))
     elif name == "area_clear" and a.get("key") in REGION_EVENTS and p is not None:
         if a.get("id") in (None, core.active_profile):
             p._clear_area(a["key"])

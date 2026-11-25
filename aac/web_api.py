@@ -194,9 +194,11 @@ def _do(name, arg):
     """Выполняется в потоке tkinter."""
     from . import game, profiles, ui_overlay
     app = _state["app"]
-    simple = {"auto", "select", "select_answers", "select_subs2", "select_chat", "tts", "toggle", "layout",
-              "reset", "update_install", "update_check", "restart", "menu_learn"}
-    if name in simple:
+    simple = {"auto", "tts", "toggle", "layout", "reset", "update_install", "update_check", "restart"}
+    picks = {"select", "select_answers", "select_subs2", "select_chat", "menu_learn"}
+    if name in picks and app is not None:
+        app.from_panel(name)                 # панель прячется, обводите поверх игры, потом она вернётся
+    elif name in simple or name in picks:
         core.events.put((name, None))
     elif name == "answers":
         core.answers_auto = bool(arg)

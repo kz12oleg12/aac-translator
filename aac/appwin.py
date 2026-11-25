@@ -226,7 +226,24 @@ class App:
             profiles.activate(pid, announce=False)
         return pid
 
-    def pick_area(self, prompt, on_done, on_clear=None, game_area=False, layout=False):
+    def from_panel(self, event):
+        """Кнопка в панели, которая обводит что-то на экране: панель прячется, затемнение поверх игры,
+        после обводки (или Esc) панель возвращается."""
+        from . import web_api
+        web_api.push("hide")
+        self._after_pick = lambda: web_api.push("show")
+
+        def start():
+            core.events.put((event, None))
+
+            def guard():                  # обводка не открылась (например, игры нет) — панель всё равно вернуть
+                if getattr(self, "_after_pick", None) and not getattr(self, "_picking", None):
+                    back, self._after_pick = self._after_pick, None
+                    back()
+            self.root.after(1500, guard)
+        self.root.after(400, start)
+
+    def pick_area(self, prompt, on_done, on_clear=None, game_area=False, layout=False, click_full=False):
         """Затемняет экран и даёт обвести прямоугольник мышкой.
         game_area — область игры (субтитры, ответы, чат, меню): сохраняется в пресет игры, которая была
         на экране в момент нажатия клавиши, даже если за время обводки активная игра сменилась."""
@@ -291,6 +308,10 @@ class App:
         def close():
             if getattr(self, "_picking", None) is picking:
                 self._picking = None
+            back = getattr(self, "_after_pick", None)     # обводили по кнопке в панели — панель вернуть
+            self._after_pick = None
+            if back:
+                self.root.after(900, back)
             try:
                 sel.destroy()
             except tk.TclError:
@@ -319,6 +340,10 @@ class App:
                 return
             x0, y0 = min(state["x0"], e.x), min(state["y0"], e.y)
             w, h = abs(e.x - state["x0"]), abs(e.y - state["y0"])
+            if (w <= 10 or h <= 10) and click_full:            # просто щелчок — весь экран, где щёлкнули
+                ml, mt, mr, mb = screens.monitor_at(e.x + vx, e.y + vy)
+                finish((ml, mt, mr - ml, mb - mt))
+                return
             finish((x0 + vx, y0 + vy, w, h) if w > 10 and h > 10 else None)    # в координаты экрана
 
         cv.bind("<ButtonPress-1>", down)
@@ -516,15 +541,41 @@ class App:
         chat.hide_for_capture = hide_for_capture
 
     # --- меню игры ---
-    def menu_learn(self):
+    def menu_learn(self, from_panel=False):
+        """Запомнить экран без перевода. Из панели: панель прячется, обводите поверх игры, потом панель возвращается."""
+        def back():
+            if from_panel:
+                try:
+                    from . import web_api
+                    web_api.push("show")
+                except Exception:
+                    pass
+
         def done(reg):
             if reg:
-                self.root.after(200, lambda: threading.Thread(target=menu.learn, args=(reg,), daemon=True).start())
+                def work():
+                    try:
+                        menu.learn(reg)
+                    finally:
+                        back()
+                self.root.after(250, lambda: threading.Thread(target=work, daemon=True).start())
+            else:
+                menu.replace_next["id"] = None
+                back()
 
         what = "заменит выбранный экран" if menu.replace_next["id"] else "добавится к запомненным"
-        self.pick_area("Экран, где переводить не нужно (меню, карта, инвентарь), должен быть ОТКРЫТ. Обведите кусочек, "
-                       f"который на нём всегда одинаковый (заголовок или вкладки) — {what}. Esc — отмена.",
-                       done, None, game_area=True)
+        ask = lambda: self.pick_area(
+            "Экран без перевода (меню, карта, инвентарь): обведите кусочек, который на нём всегда одинаковый, "
+            f"или просто щёлкните — запомнится весь экран. Он {what}.", done, None, game_area=True, click_full=True)
+        if from_panel:
+            try:
+                from . import web_api
+                web_api.push("hide")
+            except Exception:
+                pass
+            self.root.after(700, ask)            # панель успела спрятаться — видно игру под ней
+        else:
+            ask()
 
     def menu_state(self, opened):
         """Меню игры открыли/закрыли: прячем/возвращаем окна перевода."""
@@ -1004,6 +1055,8 @@ class App:
                     self.menu_state(payload)
                 elif kind == "menu_learn":
                     self.menu_learn()
+                elif kind == "menu_learn_panel":
+                    self.menu_learn(from_panel=True)
                 elif kind == "chat_once":
                     threading.Thread(target=chat.translate_chat_once, daemon=True).start()
                 elif kind == "chat_show":

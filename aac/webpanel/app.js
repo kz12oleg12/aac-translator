@@ -226,9 +226,9 @@ R.games = () => {
       <div class="lst">${g.regions.map(regRow).join("")}</div>
       <button class="btn" data-act="layout" title="Двигать области и окна перевода прямо поверх игры" style="padding:3px 16px">Расставить на экране</button></div>
     <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
-      <div class="hdr">${ico("eye", g.menu)}<span style="display:flex;flex-direction:column;flex-grow:1"><span style="font-weight:600">Экраны без перевода</span><span style="font-size:12px;color:var(--m)">На них автоперевод встаёт на паузу</span></span></div>
+      <div class="hdr">${ico("eye", g.menu)}<span style="display:flex;flex-direction:column;flex-grow:1"><span style="font-weight:600">Экраны без перевода</span><span style="font-size:12px;color:var(--m)">На них автоперевод встаёт на паузу. Добавить можно и в игре: <span class="key">${esc(K.menu_learn || "")}</span></span></span></div>
       <div class="lst">${g.screens.length ? g.screens.map(x => `<div class="r"><span class="thumb" style="${x.thumb ? `background:#000 url(${x.thumb}) center/cover no-repeat` : ""}"></span><span class="tx" style="flex-grow:1"><input class="inp" style="height:30px;width:100%;max-width:220px;background:transparent;border-color:transparent;padding-left:6px" value="${esc(x.name)}" title="Переименовать" data-c="scrn" data-id="${esc(x.id)}"></span><button class="btn" data-a="scrrep" data-id="${esc(x.id)}" data-n="${esc(x.name)}">Заменить</button><button class="ib" title="Забыть" data-a="scrdel" data-id="${esc(x.id)}" data-n="${esc(x.name)}">${svg("x", 14)}</button></div>`).join("") : `<div class="empty">Пока нет. Добавьте меню, карту, инвентарь — на них перевод и озвучка встанут на паузу.</div>`}</div>
-      ${activeHere ? `<button class="btn" style="height:32px;display:flex;align-items:center;justify-content:center;gap:6px" data-a="scrnew">${svg("plus", 13)}Добавить экран</button>` : `<span style="font-size:12px;color:var(--f)">Добавлять экраны можно, когда выбрана эта игра.</span>`}</div>
+      ${activeHere ? `<button class="btn" style="height:32px;display:flex;align-items:center;justify-content:center;gap:6px" data-a="scrnew">${svg("plus", 13)}Добавить экран</button>` : `<span style="font-size:12px;color:var(--f)">Добавлять экраны можно, когда выбрана эта игра.</span>`}
     <div class="grid3" style="grid-template-columns:1fr 1fr">
       <div class="card tc" style="gap:10px"><div class="hdr">${ico("font")}<span style="flex-grow:1"></span>${lnk("изменить", 'data-go="win"')}</div><div><div style="font-weight:600">Вид перевода</div><div style="font-size:12px;color:var(--m)">Шрифт, размер, фон</div></div></div>
       <div class="card tc" style="gap:10px"><div class="hdr">${ico("people")}<span style="flex-grow:1"></span>${lnk("открыть", 'data-a="gochars"')}</div><div><div style="font-weight:600">Имена и голоса</div><div style="font-size:12px;color:var(--m)">${g.chars} персонажей · ${g.gloss} в словаре</div></div></div></div>
@@ -238,15 +238,8 @@ R.games = () => {
     <div class="card" style="padding:14px;display:flex;align-items:center;gap:10px">${ico("start", g.auto_start)}<span style="display:flex;flex-direction:column;flex-grow:1"><span style="font-weight:600">Включать автоперевод при запуске</span><span style="font-size:12px;color:var(--m)">Когда эта игра открывается</span></span>${sw(g.auto_start, 'data-a="gauto"')}</div>`}</div>`;
   return `<h1>Игры</h1><div style="display:flex;gap:16px;align-items:flex-start">${list}${detail}</div>`;
 };
-const scrHow = (title, note) => modal(`<h3 style="font-size:16px">${title}</h3>
-  <ol style="font-size:13px;color:var(--m);line-height:1.7;padding-left:18px;margin:10px 0">
-    <li>Перейдите в игру и откройте экран, где переводить не нужно — меню, карту, инвентарь.</li>
-    <li>Нажмите <span class="key">${esc(S.keys ? S.keys.menu_learn || "Ctrl+Shift+M" : "Ctrl+Shift+M")}</span> прямо в игре.</li>
-    <li>Обведите мышкой кусочек, который на этом экране всегда одинаковый: заголовок или строку вкладок.</li></ol>
-  <span style="font-size:12px;color:var(--f)">${note}</span>
-  <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btnp" style="padding:6px 16px" onclick="closeModal()">Понятно</button></div>`);
-HANDLERS.scrnew = () => { act("screen_new"); scrHow("Добавить экран без перевода", "Экранов может быть сколько угодно: меню, карта, инвентарь, торговец… Пауза включается, когда открыт любой из них."); };
-HANDLERS.scrrep = b => { act("screen_replace", {id: b.dataset.id}); scrHow(`Заменить «${esc(b.dataset.n)}»`, "Новый образец заменит этот экран, остальные останутся."); };
+HANDLERS.scrnew = () => act("screen_new");
+HANDLERS.scrrep = b => act("screen_replace", {id: b.dataset.id});
 HANDLERS.scrn = b => act("screen_rename", {id: b.dataset.id, v: b.value});
 HANDLERS.scrdel = b => confirmDlg(`Забыть «${b.dataset.n}»?`, "Автоперевод больше не будет вставать на паузу на этом экране.", "Забыть", () => act("screen_del", {id: b.dataset.id}));
 HANDLERS.gpick = b => { SUB.game = b.dataset.id; render(); };
