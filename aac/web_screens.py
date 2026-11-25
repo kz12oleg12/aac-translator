@@ -171,7 +171,13 @@ def _s_voice():
                       "auto": pool.get(auto[0], auto[0]).split(" — ")[0] if auto else ""})
     vpool = [{"id": v, "name": pool.get(v, v).split(" — ")[0], "g": g}
              for g in ("f", "m") for v in (voices.SILERO_POOL if e2 == "silero" else voices.NEURAL_POOL)[g]]
+    gpool = {g: [{"id": v, "name": pool.get(v, v).split(" — ")[0]}
+                 for v in (voices.SILERO_POOL if e2 == "silero" else voices.NEURAL_POOL)[g]] for g in ("m", "f")}
+    gvoice = {g: (_safe(lambda g=g: voices.default_voice(e2, g)) or (gpool[g][0]["id"] if gpool[g] else ""))
+              for g in ("m", "f")}
+    mode = ("one" if not config.TTS_PER_CHARACTER else "each" if config.TTS_VARY_IN_GENDER else "gender")
     return {"on": bool(config.TTS_ENABLED), "key": hotkeys.K("tts"), "engine": eng, "voice": cur,
+            "mode": mode, "gender_pool": gpool, "gender_voice": gvoice,
             "voices": _voice_list(eng), "rate": config.TTS_RATE, "volume": config.TTS_VOLUME,
             "flags": {k: bool(getattr(config, FLAGS[k][0], False)) for k in FLAGS if k.startswith("tts_")},
             "silero_installed": bool(_safe(tts.tts_silero.installed)), "frozen": config.FROZEN,
@@ -383,6 +389,21 @@ def do(name, arg, app):
     elif name == "tts_test":
         from . import tts
         _bg(tts.say_test, None, (str(a.get("v") or "").strip()[:300] or None))
+    elif name == "voice_mode" and a.get("v") in ("one", "gender", "each"):
+        config.TTS_PER_CHARACTER = a["v"] != "one"
+        config.TTS_VARY_IN_GENDER = a["v"] == "each"
+        core.save_settings(tts_per_character=config.TTS_PER_CHARACTER, tts_vary_in_gender=config.TTS_VARY_IN_GENDER)
+        from . import tts
+        tts.apply_settings()
+    elif name == "gender_voice" and a.get("g") in ("m", "f") and a.get("v"):
+        from . import voices
+        voices.set_default_voice("silero" if config.TTS_ENGINE == "silero" else "neural", a["g"], a["v"])
+    elif name == "gender_test" and a.get("g") in ("m", "f"):
+        from . import tts, voices
+        e2 = "silero" if config.TTS_ENGINE == "silero" else "neural"
+        vid = voices.default_voice(e2, a["g"])
+        _bg(tts.say_test, (vid, 0) if vid else None, "Так звучит мужской голос персонажей." if a["g"] == "m"
+            else "Так звучит женский голос персонажей.")
     elif name == "voicepack_install":
         from . import voicepack
         voicepack.install()

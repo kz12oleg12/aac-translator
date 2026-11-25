@@ -279,15 +279,20 @@ function voiceTab() {
   <div class="grid3">${eng("neural","cloud","Нейроголоса Microsoft","Звучат живее всего. Нужен интернет")}${eng("silero","cpu","Silero","Без интернета, на вашем ПК")}${eng("windows","win","Голос Windows","Встроенный, самый простой")}</div>
   ${vp ? `<div class="card" style="padding:12px 14px;display:flex;align-items:center;gap:12px"><span style="flex-grow:1;font-size:13px;color:var(--t3)">Офлайн-голоса ещё не установлены${D.frozen ? " (около 250 МБ, один раз)" : ""}. Пока читает голос Windows.</span><button class="btnp" style="padding:6px 14px" data-a="vpack" ${D.voicepack.busy ? "disabled" : ""}>${D.voicepack.busy ? "Устанавливаю… " + esc(D.voicepack.progress) : "Установить"}</button></div>` : ""}
   <div class="card" style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:16px 20px">
-    <div style="display:flex;flex-direction:column;gap:6px"><span class="lbl">Основной голос</span><select class="sel" data-c="vvoice">${D.voices.map(v => `<option value="${esc(v.id)}" ${v.id == D.voice ? "selected" : ""}>${esc(v.name)}</option>`).join("") || "<option>загружаю…</option>"}</select><span style="font-size:12px;color:var(--f)">Для всех, кому не назначен свой голос</span></div>
+    <div style="display:flex;flex-direction:column;gap:6px"><span class="lbl">Основной голос</span><select class="sel" data-c="vvoice">${D.voices.map(v => `<option value="${esc(v.id)}" ${v.id == D.voice ? "selected" : ""}>${esc(v.name)}</option>`).join("") || "<option>загружаю…</option>"}</select><span style="font-size:12px;color:var(--f)">${D.mode == "one" ? "Им читаются все реплики" : "Для реплик без имени говорящего"}</span></div>
     <div style="display:flex;flex-direction:column;gap:14px">
       <label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">Скорость</span><span style="font-size:12px">${rt}</span></span><input type="range" min="-5" max="6" step="1" value="${rate}" data-c="vrate"></label>
       <label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">Громкость</span><span style="font-size:12px">${D.volume}%</span></span><input type="range" min="10" max="100" step="5" value="${D.volume}" data-c="vvol"></label></div>
     <div style="grid-column:1/-1;border-top:.5px solid var(--line);padding-top:14px;display:flex;align-items:center;gap:14px"><div style="display:flex;flex-direction:column;gap:4px;flex-grow:1"><span class="lbl">Проверить на фразе</span><input class="inp" style="background:none;padding:0;height:24px;font-size:14px" id="vtest" value="${esc(SUB.vtest || "Реналь: Держись рядом! Ты слышал это?..")}" data-i="vtesti"></div><button class="btnp" style="display:flex;align-items:center;gap:8px" data-a="vplay">${svg("play", 13)}Прослушать</button></div></div>
+  <h2 style="font-size:15px;padding-top:6px">Кто каким голосом</h2>
+  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
+    <div class="grid3">${[["one","mon","Один голос для всех","Все реплики — основным голосом"],["gender","people","По полу","Мужчинам мужской голос, женщинам женский"],["each","mix","Каждому свой","У каждого персонажа свой голос, мужской или женский"]].map(([id, ic, t, d]) => `<button class="eng" role="radio" aria-checked="${D.mode == id}" data-a="vmode" data-v="${id}">${ico(ic, D.mode == id)}<div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">${t}</span><span style="font-size:12px;color:var(--m)">${d}</span></div></button>`).join("")}</div>
+    ${D.engine == "windows" && D.mode != "one" ? `<span style="font-size:12px;color:var(--warn)">С голосом Windows разные голоса не работают — выберите нейроголоса или Silero.</span>` : ""}
+    ${D.mode == "gender" && D.engine != "windows" ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px">${[["m","Мужской голос"],["f","Женский голос"]].map(([g, t]) => `<div style="display:flex;flex-direction:column;gap:6px"><span class="lbl">${t}</span><div class="row" style="gap:6px"><select class="sel" data-c="gvoice" data-g="${g}">${D.gender_pool[g].map(v => `<option value="${esc(v.id)}" ${v.id == D.gender_voice[g] ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select><button class="ib" style="color:var(--acc2);flex-shrink:0" title="Прослушать" data-a="gtest" data-g="${g}">${svg("play", 14)}</button></div></div>`).join("")}</div>` : ""}
+    ${D.mode == "each" ? `<div class="row" style="font-size:12px;color:var(--m)"><span style="flex-grow:1">Голос подбирается сам по полу. Поменять пол или голос конкретному персонажу — во вкладке «Персонажи» (${D.chars.length}).</span>${lnk("открыть",'data-a="vtab" data-v="chars"')}</div>` : ""}
+  </div>
   <h2 style="font-size:15px;padding-top:6px">Как читать</h2>
   <div class="grid3" style="grid-template-columns:1fr 1fr">
-    ${fl("tts_per_character","people","Свой голос каждому персонажу","По имени в субтитрах, пол угадывается сам",`<div class="row" style="margin-top:auto;font-size:12px;color:var(--m)"><span style="flex-grow:1">${D.chars.length} персонажей</span>${lnk("открыть",'data-a="vtab" data-v="chars"')}</div>`)}
-    ${fl("tts_vary","mix","Разные голоса внутри пола","Выкл — всем мужчинам один голос, всем женщинам другой")}
     ${fl("tts_expressive","wave","Интонация","«!» — живее, «?» — выше, «…» — медленнее")}
     ${fl("tts_finish","end","Дочитывать реплику","Следующая начнётся сразу после, чуть быстрее")}
     ${fl("tts_read_name","lines","Читать имя говорящего","«Коллекционер: …» перед репликой")}
@@ -316,6 +321,9 @@ HANDLERS.vrate = b => act("tts_rate", +b.value);
 HANDLERS.vvol = b => act("tts_volume", +b.value);
 HANDLERS.vtesti = b => { SUB.vtest = b.value; };
 HANDLERS.vplay = () => act("tts_test", $("vtest") ? $("vtest").value : "");
+HANDLERS.vmode = b => act("voice_mode", b.dataset.v);
+HANDLERS.gvoice = b => act("gender_voice", {g: b.dataset.g, v: b.value});
+HANDLERS.gtest = b => act("gender_test", {g: b.dataset.g});
 HANDLERS.vpack = () => act("voicepack_install");
 HANDLERS.cg = b => act("char_gender", {key: b.dataset.k, v: b.dataset.v});
 HANDLERS.cv = b => act("char_voice", {key: b.dataset.k, v: b.value});
