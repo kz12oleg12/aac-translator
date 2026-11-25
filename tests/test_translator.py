@@ -2043,6 +2043,7 @@ def test_editor_voice(monkey):
     r = editor.parse("TEXT:\nЯ пришла за тобой.\nVOICE:\nЯ пришл+а за тоб+ой, Арг+ус.\nSPEAKER: Lyra\nGENDER: f\nMOOD: shout")
     assert r["text"] == "Я пришла за тобой." and r["speaker"] == "Lyra" and r["gender"] == "f" and r["mood"] == "shout"
     assert editor.parse("просто текст") == {"text": "просто текст"}
+    assert editor.parse("TEXT:\nДжиеллини / Чем помочь?\nVOICE:\nДжиелл+ини / Чем помочь?")["text"] == "Джиеллини\nЧем помочь?"
     shots = []
     monkey(editor, "_ask_with_shot", lambda p: shots.append(p) or "A woman, Lyra, talks to the player.")
     monkey(editor.config, "EDITOR_SCENE_IMAGE", True)
@@ -2076,6 +2077,8 @@ def test_editor_voice(monkey):
     assert tts.speech_text("Джиелл+ини: Чем могу помочь?", "Джиеллини / May I help you?") == "Чем могу помочь?"
     assert tts.speech_text("Джанеллини, чем помочь?", "Gianellini\nHow can I help?") == "чем помочь?"
     assert tts.speech_text("Привет, как дела?", "Hello\nHow are you?") == "Привет, как дела?"
+    assert tts.speech_text("Джиеллини / Чем могу помочь?", "Джиеллини / May Ай help you?") == "Чем могу помочь?"
+    assert tts.speech_text("Джиелл+ини / Чем могу пом+очь?") == "Чем могу пом+очь?"
     assert tts.speech_text("Джиеллини / Чем могу помочь?", "Giellini\nMay I help you?") == "Чем могу помочь?"
     assert editor.parse("TEXT:\nДжиеллини / Чем помочь?\nVOICE:\nДжиеллини / Чем помочь?")["text"] == "Джиеллини\nЧем помочь?"
 

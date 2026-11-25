@@ -47,6 +47,7 @@ Original English:
 Draft translation:
 {draft}
 
+(In the history above " / " only marks a line break. In your answer use real line breaks, never " / ".)
 Answer strictly in this format, nothing else:
 TEXT:
 <final Russian subtitle>
