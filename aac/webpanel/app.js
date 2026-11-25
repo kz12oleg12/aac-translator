@@ -366,7 +366,8 @@ function voiceTab() {
     <div style="display:flex;flex-direction:column;gap:6px"><span class="lbl">Основной голос</span><select class="sel" data-c="vvoice">${D.voices.map(v => `<option value="${esc(v.id)}" ${v.id == D.voice ? "selected" : ""}>${esc(v.name)}</option>`).join("") || "<option>загружаю…</option>"}</select><span style="font-size:12px;color:var(--f)">${D.mode == "one" ? "Им читаются все реплики" : "Для реплик без имени говорящего"}</span></div>
     <div style="display:flex;flex-direction:column;gap:14px">
       <label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">Скорость</span><span style="font-size:12px">${rt}</span></span><input type="range" min="-5" max="6" step="1" value="${rate}" data-c="vrate"></label>
-      <label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">Громкость</span><span style="font-size:12px">${D.volume}%</span></span><input type="range" min="10" max="100" step="5" value="${D.volume}" data-c="vvol"></label></div>
+      <label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">Громкость</span><span style="font-size:12px">${D.volume}%</span></span><input type="range" min="10" max="100" step="5" value="${D.volume}" data-c="vvol"></label>
+      <label style="display:flex;flex-direction:column;gap:4px" title="Строка кончилась точкой, а дальше новая — короткая пауза, как вдох"><span class="row"><span class="lbl" style="flex-grow:1">Пауза между абзацами</span><span style="font-size:12px">${D.pause ? D.pause.toFixed(1) + " с" : "нет"}</span></span><input type="range" min="0" max="1.5" step="0.1" value="${D.pause}" data-c="vpause"></label></div>
     <div style="grid-column:1/-1;border-top:.5px solid var(--line);padding-top:14px;display:flex;align-items:center;gap:14px"><div style="display:flex;flex-direction:column;gap:4px;flex-grow:1"><span class="lbl">Проверить на фразе</span><input class="inp" style="background:none;padding:0;height:24px;font-size:14px" id="vtest" value="${esc(SUB.vtest || "Реналь: Держись рядом! Ты слышал это?..")}" data-i="vtesti"></div><button class="btnp" style="display:flex;align-items:center;gap:8px" data-a="vplay">${svg("play", 13)}Прослушать</button></div></div>
   <h2 style="font-size:15px;padding-top:6px">Кто каким голосом</h2>
   <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
@@ -412,6 +413,7 @@ HANDLERS.veng = b => act("tts_engine", b.dataset.v);
 HANDLERS.vvoice = b => act("tts_voice", b.value);
 HANDLERS.vrate = b => act("tts_rate", +b.value);
 HANDLERS.vvol = b => act("tts_volume", +b.value);
+HANDLERS.vpause = b => act("tts_pause", +b.value);
 HANDLERS.vtesti = b => { SUB.vtest = b.value; };
 HANDLERS.vplay = () => act("tts_test", $("vtest") ? $("vtest").value : "");
 HANDLERS.vmode = b => act("voice_mode", b.dataset.v);

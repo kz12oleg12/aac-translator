@@ -236,7 +236,11 @@ def speech_text(translation, orig=None):
         m = _NAME_PREFIX.match(lines[0])
         if m:
             lines[0] = m.group(1)
-    text = " ".join(lines)
+    # строка кончилась точкой/вопросом, а дальше новая — это новый абзац (перед ним озвучка делает паузу);
+    # иначе это просто перенос длинной строки
+    text = ""
+    for ln in lines:
+        text += ("\n" if text and re.search(r"[.!?…»\"]$", text) else (" " if text else "")) + ln
     if not config.TTS_READ_NAME and orig and len(lines) >= 1:
         text = _strip_speaker(text, orig)
         text = _strip_name_line(text, orig)
@@ -547,7 +551,21 @@ CATCHUP_RATE = 2   # реплика ждала в очереди — читае�
 
 
 def split_chunks(text, first_max=90, max_len=220):
-    """Режем реплику на фразы: первая — короткая (быстрее синтезируется и раньше зазвучит)."""
+    """Режем реплику на фразы: первая — короткая (быстрее синтезируется и раньше зазвучит).
+    Абзацы (перенос строки после точки) не склеиваются: последняя фраза абзаца помечается «\n» — после неё пауза."""
+    paras = [p.strip() for p in re.split(r"\n+", text or "") if p.strip()]
+    if len(paras) > 1:
+        out = []
+        for k, para in enumerate(paras):
+            ch = _split_para(para, first_max if not out else max_len, max_len)
+            if ch and k < len(paras) - 1:
+                ch[-1] += "\n"
+            out += ch
+        return out
+    return _split_para(" ".join(paras), first_max, max_len)
+
+
+def _split_para(text, first_max, max_len):
     parts = [p.strip() for p in re.split(r"(?<=[.!?…])\s+", text) if p.strip()]
     if not parts:
         return []
@@ -787,6 +805,7 @@ class _Neural:
 
     def _synth_futs(self, chunks, tag, faster, voice_pitch):
         async def timed(c, base):
+            c = c.strip()
             key = _cache_key(c, faster, voice_pitch)
             hit = _cache_get(key, base)
             if hit:
@@ -899,8 +918,12 @@ class _Neural:
         if job["cur"] is not None and player:
             player.close(job["cur"])
             job["cur"] = None
+            if i < len(futs) and i > 0 and job["chunks"][i - 1].endswith("\n") and config.TTS_PARAGRAPH_PAUSE > 0:
+                job["hold"] = time.time() + config.TTS_PARAGRAPH_PAUSE     # новый абзац — короткий вдох
         if i >= len(futs):
             return False
+        if job.get("hold", 0) > time.time():
+            return True
         if not futs[i].done():
             return True
         try:

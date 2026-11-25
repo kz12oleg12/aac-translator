@@ -61,6 +61,7 @@ def apply_view_settings():
     config.TTS_ENGINE = str(core.SETTINGS.get("tts_engine", config.TTS_ENGINE))
     config.TTS_NEURAL_VOICE = str(core.SETTINGS.get("tts_neural_voice", config.TTS_NEURAL_VOICE))
     config.TTS_RATE = int(core.SETTINGS.get("tts_rate", config.TTS_RATE))
+    config.TTS_PARAGRAPH_PAUSE = float(core.SETTINGS.get("tts_paragraph_pause", config.TTS_PARAGRAPH_PAUSE))
     config.TTS_VOLUME = int(core.SETTINGS.get("tts_volume", config.TTS_VOLUME))
     config.TTS_READ_NAME = bool(core.SETTINGS.get("tts_read_name", config.TTS_READ_NAME))
 

@@ -2144,6 +2144,15 @@ def test_steam_about(monkey):
     assert gamefacts.steam_about("ArcheAge Chronicles") == "An action RPG & open world. Genres: RPG."
 
 
+def test_paragraph_pause():
+    """Новый абзац (строка кончилась точкой) — отдельная фраза с паузой; перенос длинной строки — нет."""
+    from aac import tts
+    t = tts.speech_text("Аренда стоит денег.\nДоговор длится тридцать\nдней и продлевается.")
+    assert t == "Аренда стоит денег.\nДоговор длится тридцать дней и продлевается.", t
+    ch = tts.split_chunks(t)
+    assert ch[0].endswith("\n") and ch[-1] == "Договор длится тридцать дней и продлевается."
+
+
 def test_line_voice():
     """Реплика без имени: пол и характер от ИИ-редактора — голос нужного пола и высоты."""
     from aac import voices

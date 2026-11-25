@@ -208,6 +208,7 @@ def _s_voice():
     return {"on": bool(config.TTS_ENABLED), "key": hotkeys.K("tts"), "engine": eng, "voice": cur,
             "mode": mode, "gender_pool": gpool, "gender_voice": gvoice,
             "voices": _voice_list(eng), "rate": config.TTS_RATE, "volume": config.TTS_VOLUME,
+            "pause": config.TTS_PARAGRAPH_PAUSE,
             "flags": {k: bool(getattr(config, FLAGS[k][0], False)) for k in FLAGS if k.startswith("tts_")},
             "silero_installed": bool(_safe(tts.tts_silero.installed)), "frozen": config.FROZEN,
             "voicepack": dict(voicepack.state) if hasattr(voicepack, "state") else {},
@@ -555,6 +556,9 @@ def do(name, arg, app):
     elif name == "tts_rate":
         config.TTS_RATE = max(-5, min(6, int(a.get("v") or 0)))
         _save_tts()
+    elif name == "tts_pause":
+        config.TTS_PARAGRAPH_PAUSE = max(0.0, min(2.0, float(a.get("v") or 0)))
+        core.save_settings(tts_paragraph_pause=config.TTS_PARAGRAPH_PAUSE)
     elif name == "tts_volume":
         config.TTS_VOLUME = max(10, min(100, int(a.get("v") or 100)))
         _save_tts()
