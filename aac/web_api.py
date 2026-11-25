@@ -119,6 +119,7 @@ def state():
         },
         "stream": bool(config.SHOW_ON_STREAM),
         "new_game": _new_game(app),
+        "boot": _boot(),
         "staged": (_safe(lambda: __import__("aac.updater", fromlist=["x"]).staged()) or {}).get("version"),
         "voice": _voice(),
         "update_auto": bool(getattr(config, "UPDATE_AUTO", False)),
@@ -133,6 +134,15 @@ def _custom_name(pid):
         return x["name"] if x else pid
     except Exception:
         return pid
+
+
+def _boot():
+    try:
+        from . import updater
+        st = updater.state
+        return {"phase": st.get("phase", "done"), "pct": st.get("progress", 0), "to": st.get("target")}
+    except Exception:
+        return {"phase": "done"}
 
 
 def _editors():

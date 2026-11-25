@@ -85,7 +85,7 @@ async function refresh(force) {
   if (busy) return; busy = true;
   try {
     const s = await get("/api/state");
-    if (s) { S = s; updNav(); $("ver").textContent = "v " + s.version; $("gear").title = document.body.classList.contains("nav-c") ? `Настройки · версия ${s.version}` : "Настройки"; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
+    if (s) { S = s; bootView(s.boot); updNav(); $("ver").textContent = "v " + s.version; $("gear").title = document.body.classList.contains("nav-c") ? `Настройки · версия ${s.version}` : "Настройки"; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
     if (SCR != "home") D = await get("/api/screen?name=" + SCR);
     if ((force || !typing()) && !$("modal").classList.contains("on")) render();
   } finally { busy = false; }
@@ -634,6 +634,19 @@ $("flt").onclick = e => { const b = e.target.closest("button"); if (!b) return; 
 (() => { let x0, w0; const g = $("grip"), j = $("jr"); try { const w = localStorage.getItem("jw"); if (w) j.style.width = w + "px"; } catch (e) {}
   g.onmousedown = e => { x0 = e.clientX; w0 = j.offsetWidth; document.onmousemove = m => { j.style.width = Math.max(260, Math.min(700, w0 + x0 - m.clientX)) + "px"; };
     document.onmouseup = () => { document.onmousemove = null; try { localStorage.setItem("jw", j.offsetWidth); } catch (e) {} }; }; })();
+
+// ---------- заставка при запуске: проверка обновлений ----------
+const bootT0 = Date.now();
+function bootView(b) {
+  const el = $("boot"); if (!el || el.classList.contains("off")) return;
+  b = b || {phase: "done"};
+  const bar = $("bootbar");
+  if (b.phase == "checking") $("boots").textContent = "Проверяю обновления…";
+  else if (b.phase == "downloading") { $("boots").textContent = `Скачиваю версию ${b.to || ""}… ${b.pct || 0}%`; bar.classList.add("det"); bar.style.width = (b.pct || 0) + "%"; }
+  else if (b.phase == "installing") { $("boots").textContent = `Ставлю версию ${b.to || ""} — программа сейчас перезапустится`; bar.classList.remove("det"); bar.style.width = "30%"; }
+  if (b.phase == "done" || (b.phase == "checking" && Date.now() - bootT0 > 8000)) el.classList.add("off");
+}
+setTimeout(() => { const el = $("boot"); if (el && S && S.boot && S.boot.phase == "checking") el.classList.add("off"); }, 9000);
 
 // ---------- новая версия — в боковой колонке ----------
 let updShown = null;

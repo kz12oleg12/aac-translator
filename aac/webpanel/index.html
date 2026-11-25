@@ -184,6 +184,15 @@ body.jr-c .jlast{display:flex}
 .rcc:has(input[type=range]){flex:0 1 420px}
 .rcc input[type=range]{max-width:340px;flex-grow:1}
 .rcc .rv{width:56px;text-align:right;font-size:13px;color:var(--t2);flex-shrink:0}
+#boot{position:fixed;inset:0;background:var(--bg);z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .25s}
+#boot.off{opacity:0;pointer-events:none}
+#boot img{width:72px;height:72px}
+#boot .bt{font-size:20px;font-weight:600}
+#boot .bs{font-size:13px;color:var(--m);min-height:18px}
+#boot .bb{width:220px;height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+#boot .bb i{display:block;height:100%;width:30%;background:var(--acc);border-radius:2px;animation:bootrun 1.1s ease-in-out infinite}
+#boot .bb i.det{animation:none;transition:width .3s}
+@keyframes bootrun{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
 </style>
 </head>
 <body>
@@ -207,6 +216,7 @@ body.jr-c .jlast{display:flex}
   <div id="log" aria-live="polite"></div>
 </aside>
 </div>
+<div id="boot"><img alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Crect x='10' y='10' width='236' height='236' rx='64' fill='%235865F2'/%3E%3Cg transform='translate(0 6)'%3E%3Cpath d='M67 188A14.79 14.79 0 0 1 52.2 173L53.7 64.3A9 9 0 0 1 68.3 57.3L99.3 81.8A10 10 0 0 0 105.5 84H150.5A10 10 0 0 0 156.7 81.8L187.7 57.3A9 9 0 0 1 202.3 64.3L203.6 159.6A28 28 0 0 1 175.6 188H111.4A4 4 0 0 0 108.9 188.8L85.5 207.1A4.76 4.76 0 0 1 78 202L80.5 193.1A4 4 0 0 0 76.7 188Z' fill='%23fff'/%3E%3Crect x='87' y='120' width='22' height='28' rx='8' fill='%235865F2'/%3E%3Crect x='147' y='120' width='22' height='28' rx='8' fill='%235865F2'/%3E%3C/g%3E%3C/svg%3E"><div class="bt">AAC Translator</div><div class="bs" id="boots">Запускаюсь…</div><div class="bb"><i id="bootbar"></i></div></div>
 <div class="modal" id="modal"><div class="dlg" id="dlg" role="dialog" aria-modal="true"></div></div>
 <script src="/app.js?t=__TOKEN__"></script>
 </body>

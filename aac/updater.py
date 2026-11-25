@@ -41,7 +41,8 @@ def _use_api():
     return bool(os.environ.get("GITHUB_TOKEN", "").strip())
 
 
-state = {"latest": None, "checking": False, "installing": False, "error": None}
+state = {"latest": None, "checking": False, "installing": False, "error": None,
+         "phase": "checking", "progress": 0}      # phase — для заставки при запуске: checking/downloading/installing/done
 
 
 def parse_version(v):
@@ -222,6 +223,11 @@ def startup_check():
     """Проверка при запуске. Включено «обновлять автоматически» и есть новая версия — ставим сразу
     (программа только что запущена, вы ещё не в игре). Во время работы сама не обновляется."""
     st = core.SETTINGS.get("staged_update")
+    if staged() and config.UPDATE_AUTO:               # скачана в прошлый раз, но не поставилась — ставим сейчас
+        state["phase"], state["target"] = "installing", staged()["version"]
+        if apply_staged(restart=True):
+            core.events.put(("quit", None))
+            return True
     if not staged():                                  # уже стоит (или устарело) — убрать скачанное
         if st:
             core.save_settings(staged_update=None)
@@ -230,8 +236,13 @@ def startup_check():
             shutil.rmtree(STAGE_DIR, ignore_errors=True)
     info = check(quiet=True)
     if info and is_newer(info["version"]):
-        if config.UPDATE_AUTO and config.FROZEN:      # скачать тихо, поставить при выходе — без перезапуска сейчас
-            stage(info)
+        if config.UPDATE_AUTO and config.FROZEN:      # заставка ещё на экране — обновиться сразу, пока вы не в игре
+            state["phase"], state["progress"], state["target"] = "downloading", 0, info["version"]
+            if stage(info) and apply_staged(restart=True):
+                state["phase"] = "installing"
+                core.events.put(("quit", None))
+                return True
+            state["phase"] = "done"                   # не вышло — работаем дальше, попробуем позже
             return False
         if config.UPDATE_AUTO:
             state["auto_installing"] = True
@@ -240,7 +251,9 @@ def startup_check():
             time.sleep(2)
             core.events.put(("update_install", None))
             return True
+        state["phase"] = "done"
         return False
+    state["phase"] = "done"
     if info:
         core.log(f"Обновления проверены: у вас последняя версия {config.VERSION}")
     elif state.get("error"):
@@ -254,10 +267,11 @@ def start_periodic():
     Сама программа обновляется только при запуске (если включено), во время работы — лишь кнопка «Обновить».
     При запуске (вы ещё не в игре) новая версия ставится сама, если включено «обновляться сам»."""
     if not config.UPDATE_CHECK or not config.UPDATE_REPO:
+        state["phase"] = "done"
         return
 
     def loop():
-        time.sleep(3)
+        time.sleep(0.5)
         every = config.UPDATE_EVERY_SECONDS or (3 * 3600 if config.UPDATE_AUTO and config.FROZEN else 0)
         if startup_check() or every <= 0:
             return
@@ -276,9 +290,14 @@ def download(info, dest_dir):
     zpath = os.path.join(dest_dir, "update.zip")
     with requests.get(info["asset_url"], headers=_headers(), timeout=60, stream=True) as r:
         r.raise_for_status()
+        total = int((getattr(r, "headers", None) or {}).get("Content-Length") or 0)
+        got = 0
         with open(zpath, "wb") as f:
             for chunk in r.iter_content(256 * 1024):
                 f.write(chunk)
+                got += len(chunk)
+                if total:
+                    state["progress"] = min(99, got * 100 // total)
     with zipfile.ZipFile(zpath) as z:
         for name in z.namelist():   # защита: файлы только внутри папки распаковки
             target = os.path.realpath(os.path.join(dest_dir, name))
