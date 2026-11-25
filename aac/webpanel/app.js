@@ -296,11 +296,7 @@ R.tr = () => {
 </div>
   <h2 style="font-size:15px;padding-top:6px">Вид для новых игр</h2>
   <span class="subt" style="margin-top:-10px">Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой — меняется в «Играх».</span>
-  <div class="grid3">
-    ${(() => { const st = D.ds || {}; const c = (k, ic, t, d, on) => `<div class="mode${on ? " on" : ""}" style="cursor:default"><div class="row">${ico(ic, on)}<span style="flex-grow:1"></span>${sw(on, `data-a="stt" data-k="${k}"`)}</div><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">${t}</span><span style="font-size:12px;color:var(--m)">${d}</span></div></div>`;
-      return c("keep","subs","Не убирать перевод","Пока нет новой реплики — старая остаётся на экране",st.keep) + c("orig","lines","Показывать оригинал","Под переводом мелко — текст, как в игре",st.orig) + c("docked","ans","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой",st.docked); })()}
-  </div>
-  ${styleBlock(D.ds, true)}`;
+  ${styleBlock(D.ds, true)}${extrasCard(D.ds)}`;
 };
 HANDLERS.pmain = b => act("provider_main", b.value);
 HANDLERS.fbadd = b => { if (b.value) act("provider_fallbacks", D.fallback.concat([b.value])); };
@@ -485,6 +481,10 @@ function ansBox(D, fam, sz, out, docked) {
     <div style="font-size:11px;color:#9C9A92;margin-bottom:2px">Варианты ответа</div>
     <div style="font-size:${sz}px;color:${D.color};${sh}">1. Я пойду первым.</div><div style="font-size:${sz}px;color:${D.color};${sh}">2. Что там может быть?</div></div>`;
 }
+function extrasCard(D) {
+  const tg = (k, t, d, on) => `<div class="r"><span class="tx"><span>${t}</span>${d ? `<span class="d">${d}</span>` : ""}</span>${sw(on, `data-a="stt" data-k="${k}"`)}</div>`;
+  return `<div class="card" style="padding:4px 16px"><div class="lst">${tg("keep","Не убирать, пока нет новой реплики","",D.keep)}${tg("orig","Показывать оригинал под переводом","",D.orig)}${tg("docked","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой, двигаются вместе",D.docked)}</div></div>`;
+}
 function styleBlock(D, DEF) {
   const sl = (k, t, min, max, step, v, fmt) => `<label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">${t}</span><span style="font-size:12px">${fmt(v)}</span></span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-c="st" data-k="${k}"></label>`;
   const sws = (k, list, cur) => list.map(c => `<button title="${c}" data-a="stc" data-k="${k}" data-v="${c}" style="width:24px;height:24px;border-radius:6px;background:${c};border:2px solid ${c.toLowerCase() == cur.toLowerCase() ? "#fff" : "transparent"};padding:0"></button>`).join("") + `<label title="Другой цвет" style="width:24px;height:24px;border-radius:6px;overflow:hidden;border:.5px solid var(--line2);position:relative">${svg("plus", 14)}<input type="color" value="${cur}" data-c="stcol" data-k="${k}" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>`;
@@ -518,8 +518,7 @@ R.win = () => {
       ${D.docked ? ansBox(D, fam, sz, out, true) : ""}</div>${D.docked ? "" : `<div style="align-self:flex-end;margin-top:4px">${ansBox(D, fam, sz, out, false)}</div>`}</div>`;
   const DEF = !!D.default;
   return `${DEF ? back("tr", "Переводчики") : back("games", "Игры")}<div style="display:flex;flex-direction:column;gap:4px"><h1>${DEF ? "Вид для новых игр" : "Вид перевода"}</h1><span class="subt">${DEF ? "Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой." : D.owner ? "Для игры «" + esc(D.owner) + "». У каждой игры свой вид." : "Вид по умолчанию — игра не выбрана."} Образец меняется сразу.</span></div>
-  ${DEF ? "" : `<div class="card" style="padding:4px 16px"><div class="lst">${tg("keep","Не убирать, пока нет новой реплики","",D.keep)}${tg("orig","Показывать оригинал под переводом","",D.orig)}${tg("docked","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой, двигаются вместе",D.docked)}</div></div>`}
-  ${styleBlock(D, DEF)}${DEF ? "" : `
+  ${styleBlock(D, DEF)}${DEF ? "" : extrasCard(D) + `
   <h2 style="font-size:15px;padding-top:6px">Окно чата</h2>
   <div style="background:linear-gradient(160deg,#3a2c20,#1d1712);border-radius:14px;padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;color:#c9b9a6">Образец</span>
     <div style="align-self:flex-start;width:340px;background:rgba(20,20,26,${D.chat_alpha / 100});border-radius:6px;padding:8px 10px;font-size:13px;display:flex;flex-direction:column;gap:3px;color:${D.chat_fg}">
