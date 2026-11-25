@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "15.71"
+VERSION = "15.72"
 import sys as _sys
 FROZEN = bool(getattr(_sys, "frozen", False))      # собранная программа (AAC Translator.exe), без Python
 # папка программы (настройки, словарь, история, иконки): рядом с .exe или с aac_translator.py
@@ -239,6 +239,7 @@ TTS_RUSSIAN_ONLY = False
 TTS_EXPRESSIVE = True      # интонация: «!» — живее и громче, «?» — выше, «…» — медленнее
 TTS_VARY_IN_GENDER = True  # у каждого мужчины/женщины свой голос; выкл — всем мужчинам один, всем женщинам один
 # голос для всех мужчин и для всех женщин (по движкам) — когда TTS_VARY_IN_GENDER выключено
+TTS_TYPE_VOICES = {"neural": {}, "silero": {}}   # голос для характера: {"m_old": "eugene", …}; нет — голос пола
 TTS_DEFAULT_VOICES = {"neural": {"m": "", "f": ""}, "silero": {"m": "", "f": ""}}   # персонажам — только русские голоса (без многоязычных с акцентом)
 TTS_READ_NAME = False      # читать имя говорящего перед репликой
 

@@ -2175,7 +2175,7 @@ def test_paragraph_pause():
     assert ch[0].endswith("\n") and ch[-1] == "Договор длится тридцать дней и продлевается."
 
 
-def test_line_voice():
+def test_line_voice(monkey):
     """Реплика без имени: пол и характер от ИИ-редактора — голос нужного пола и высоты."""
     from aac import voices
     v = voices.line_voice("f", "old", "neural")
@@ -2184,6 +2184,11 @@ def test_line_voice():
     from aac.tts_silero import _split_pitch
     assert _split_pitch(-30) == (0, 0.80) and _split_pitch(21) == (1, 1.18) and _split_pitch(1) == (1, 1.0)
     assert voices.line_voice("", "", "neural") is None
+    monkey(voices.config, "TTS_TYPE_VOICES", {"neural": {"f_old": "ru-RU-DariyaNeural"}, "silero": {}})
+    monkey(voices.core, "save_settings", lambda **k: None)
+    assert voices.line_voice("f", "old", "neural")[0] == "ru-RU-DariyaNeural"
+    voices.set_type_voice("silero", "m", "monster", "aidar")
+    assert voices.type_voice("silero", "m", "monster") == "aidar"
 
 
 def test_split_options():

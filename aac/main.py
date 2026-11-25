@@ -51,6 +51,9 @@ def apply_view_settings():
     config.TTS_SILERO_VOICE = str(core.SETTINGS.get("tts_silero_voice", config.TTS_SILERO_VOICE))
     config.TTS_PER_CHARACTER = bool(core.SETTINGS.get("tts_per_character", config.TTS_PER_CHARACTER))
     saved = core.SETTINGS.get("tts_default_voices") or {}
+    for eng, d in (core.SETTINGS.get("tts_type_voices") or {}).items():
+        if eng in config.TTS_TYPE_VOICES and isinstance(d, dict):
+            config.TTS_TYPE_VOICES[eng].update(d)
     for eng in config.TTS_DEFAULT_VOICES:
         config.TTS_DEFAULT_VOICES[eng].update({g: v for g, v in (saved.get(eng) or {}).items() if g in ("m", "f")})
     any_default = any(v for eng in config.TTS_DEFAULT_VOICES.values() for v in eng.values())

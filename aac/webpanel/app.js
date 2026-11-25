@@ -30,7 +30,7 @@ const I = {
   wave:'<path d="M2 12h2M6 8v8M10 5v14M14 8v8M18 10v4"/>', end:'<path d="M5 12h14M13 6l6 6-6 6"/>',
   ru:'<path d="M4 6h16M4 12h16M4 18h16"/>', folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   img:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5L5 20"/>',
-  check:'<path d="M20 6 9 17l-5-5"/>', pin:'<path d="M12 17v5M9 3h6l-1 6 3 3H7l3-3z"/>'
+  check:'<path d="M20 6 9 17l-5-5"/>', trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', pin:'<path d="M12 17v5M9 3h6l-1 6 3 3H7l3-3z"/>'
 };
 const svg = (k, s = 17, w = 1.8) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">${I[k] || ""}</svg>`;
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -218,8 +218,9 @@ R.games = () => {
         <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--m)"><span class="dot" style="background:${g.running ? "var(--ok)" : "var(--f)"}"></span>${g.free ? "В любом окне" : g.running ? "Запущена" : "Не запущена"}${g.locked ? " · закреплена" : ""}${activeHere && !g.running && !g.free ? " · настраиваете" : ""}</span>
         ${g.free ? `<span style="font-size:20px;font-weight:600">${esc(g.name)}</span>` : `<input class="inp" style="font-size:20px;font-weight:600;background:none;padding:0;height:30px" value="${esc(g.name)}" data-c="grename" aria-label="Название игры">`}
         ${g.exes.length ? `<span style="display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--f)">${g.exes.map(x => `<span>${esc(x)}${g.exes.length > 1 ? ` <a data-a="gexrm" data-exe="${esc(x)}" style="color:var(--f)">×</a>` : ""}</span>`).join(" · ")} · <a data-a="gexadd" style="font-size:12px">ещё файл</a></span>` : ""}</div>
-      ${g.free ? "" : `<div style="display:flex;flex-direction:column;gap:6px;align-self:flex-start;align-items:flex-end">
-        <button class="btn" data-a="glock">${g.locked ? "Открепить" : "Закрепить"}</button><button class="btnd" data-a="gdel">Удалить</button></div>`}</div>
+      ${g.free ? "" : `<div style="display:flex;gap:6px;align-self:flex-start;align-items:center">
+        <button class="btn" style="height:32px;display:flex;align-items:center;gap:6px;padding:0 12px;${g.locked ? "border-color:var(--acc);color:var(--acc2)" : ""}" data-a="glock" title="${g.locked ? "Сейчас программа всегда работает с этой игрой" : "Работать только с этой игрой, даже если открыта другая"}">${svg("pin", 14)}${g.locked ? "Закреплена" : "Закрепить"}</button>
+        <button class="ib" style="width:32px;height:32px;border:.5px solid var(--line);border-radius:6px;color:var(--f)" data-a="gdel" title="Удалить игру и её настройки">${svg("trash", 15)}</button></div>`}</div>
     ${activeHere ? "" : `<div class="card" style="padding:12px 14px;display:flex;align-items:center;gap:12px"><span style="flex-grow:1;font-size:13px;color:var(--t3)">Сейчас выбрана другая игра. Чтобы обвести области этой, переключитесь на неё.</span><button class="btnp" style="padding:6px 14px" data-a="gsel">Настроить эту</button></div>`}
     <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
       <div class="hdr">${ico("frame")}<span style="display:flex;flex-direction:column;flex-grow:1"><span style="font-weight:600">Области</span><span class="d" style="font-size:12px;color:var(--m)">Где читать текст · ${n} из ${g.regions.length} обведены</span></span></div>
@@ -388,8 +389,11 @@ function voiceTab() {
     ${fl("tts_cache","hist","Запоминать озвученное","Повторы фраз звучат сразу, без синтеза")}</div>
   <h2 style="font-size:15px;padding-top:6px">Голос по характеру</h2>
   <div class="card" style="padding:14px 18px;display:flex;flex-direction:column;gap:10px">
-    <span style="font-size:12px;color:var(--m)">ИИ-редактор замечает, кто говорит, и меняет высоту голоса. Послушайте, как это звучит у текущего движка. Характер персонажа можно поправить на вкладке «Персонажи».</span>
-    ${[["m","Мужчины"],["f","Женщины"]].map(([g, t]) => `<div style="display:grid;grid-template-columns:80px repeat(6,1fr);gap:6px;align-items:center"><span style="font-size:13px;color:var(--t3)">${t}</span>${[["","обычный"],["young","молодой"],["old","пожилой"],["child","ребёнок"],["noble","знатный"],["monster","чудовище"]].map(([k, n]) => `<button class="btn" style="height:30px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;padding:0 6px" data-a="tplay" data-g="${g}" data-k="${k}">${svg("play", 11)}${n}</button>`).join("")}</div>`).join("")}
+    <span style="font-size:12px;color:var(--m)">ИИ-редактор замечает, кто говорит, и меняет высоту голоса. Можно выбрать и сам голос для каждого характера: «авто» — голос строки «обычный» со сдвигом высоты. Характер персонажа можно поправить на вкладке «Персонажи».</span>
+    <div class="lst">
+      <div style="display:grid;grid-template-columns:140px 1fr 1fr;gap:10px;padding:0 0 6px;font-size:12px;color:var(--f)"><span>Характер</span><span>Мужчины</span><span>Женщины</span></div>
+      ${[["","обычный"],["young","молодой"],["old","пожилой"],["child","ребёнок"],["noble","знатный"],["monster","чудовище"]].map(([k, n]) => `<div style="display:grid;grid-template-columns:140px 1fr 1fr;gap:10px;align-items:center;padding:6px 0;border-top:.5px solid var(--line)"><span style="font-size:13px">${n}</span>${["m","f"].map(g => { const cur = (D.type_voices || {})[g + "_" + (k || "adult")] || ""; return `<div style="display:flex;gap:6px;min-width:0"><select class="sel" style="flex-grow:1;min-width:0;height:32px;font-size:13px" data-c="tvoice" data-g="${g}" data-k="${k}"><option value="">${k ? "авто" : "первый по списку"}</option>${(D.char_voices || []).map(v => `<option value="${esc(v.id)}" ${v.id == cur ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select><button class="ib" style="height:32px;width:32px;color:var(--acc2);flex-shrink:0" title="Прослушать" data-a="tplay" data-g="${g}" data-k="${k}">${svg("play", 13)}</button></div>`; }).join("")}</div>`).join("")}
+    </div>
   </div>
   <h2 style="font-size:15px;padding-top:6px">Ударения</h2>
   <div class="card" style="padding:14px 18px;display:flex;flex-direction:column;gap:8px">
@@ -427,6 +431,7 @@ HANDLERS.gtest = b => act("gender_test", {g: b.dataset.g});
 HANDLERS.vpack = () => act("voicepack_install");
 HANDLERS.cg = b => act("char_gender", {key: b.dataset.k, v: b.dataset.v});
 HANDLERS.cv = b => act("char_voice", {key: b.dataset.k, v: b.value});
+HANDLERS.tvoice = b => act("type_voice", {g: b.dataset.g, k: b.dataset.k, v: b.value});
 HANDLERS.tplay = b => act("type_play", {g: b.dataset.g, k: b.dataset.k});
 HANDLERS.ctype = b => act("char_type", {key: b.dataset.k, v: b.value});
 HANDLERS.cren = b => act("char_rename", {key: b.dataset.k, v: b.value});

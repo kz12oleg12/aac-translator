@@ -214,6 +214,7 @@ def _s_voice():
             "silero_installed": bool(_safe(tts.tts_silero.installed)), "frozen": config.FROZEN,
             "voicepack": dict(voicepack.state) if hasattr(voicepack, "state") else {},
             "chars": chars, "char_voices": vpool,
+            "type_voices": _type_voices(),
             "stress": [{"k": k, "v": v} for k, v in reversed(list(core.SETTINGS.get("stress", {}).items()))][:300], "game": _clean(_safe(lambda: __import__("aac.profiles",
                                                                                          fromlist=["x"]).name()))}
 
@@ -266,6 +267,15 @@ def _screens(pid):
     except Exception as e:
         print("screens:", e)
     return out
+
+
+def _type_voices():
+    from . import voices
+    eng = "silero" if config.TTS_ENGINE == "silero" else "neural"
+    d = dict(config.TTS_TYPE_VOICES.get(eng) or {})
+    for g in ("m", "f"):
+        d[f"{g}_adult"] = voices.default_voice(eng, g)
+    return d
 
 
 def _s_start():
@@ -605,6 +615,10 @@ def do(name, arg, app):
         names = {"": "Обычный", "young": "Молодой", "old": "Пожилой", "child": "Ребёнок", "noble": "Знатный",
                  "monster": "Чудовище"}
         _bg(tts.say_test, vp, f"{names.get(k, '')} голос. Путник, постой! Мне нужна твоя помощь.")
+    elif name == "type_voice":
+        from . import voices
+        g = a.get("g") if a.get("g") in ("m", "f") else "m"
+        voices.set_type_voice("silero" if config.TTS_ENGINE == "silero" else "neural", g, a.get("k") or "", a.get("v") or "")
     elif name == "char_type":
         from . import voices
         voices.set_type_manual(a.get("key"), a.get("v") or "")

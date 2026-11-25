@@ -323,7 +323,7 @@ def line_voice(g, kind, engine=None):
     if g not in ("m", "f"):
         return None if not shift else (None, shift)
     pool = NEURAL_POOL[g] if engine == "neural" else SILERO_POOL.auto(g)
-    return (default_voice(engine, g) or pool[0]), shift
+    return (type_voice(engine, g, kind) or default_voice(engine, g) or pool[0]), shift
 
 
 def set_type_manual(key, kind):
@@ -419,6 +419,9 @@ def voice_for(key, engine=None, auto_only=False):
     shift = TYPE_PITCH["neural" if engine == "neural" else "silero"].get(kind, 0)
     if manual and not auto_only:
         return manual, shift
+    tv = type_voice(engine, g, kind) if kind else ""
+    if tv:
+        return tv, shift
     if not config.TTS_VARY_IN_GENDER:
         # «один голос на всех мужчин и один на всех женщин» — из настроек (или первый из списка)
         return (default_voice(engine, g) or pool[0]), shift
@@ -434,6 +437,18 @@ def voice_for(key, engine=None, auto_only=False):
         lim = 35
         pitch = max(-lim, min(lim, (0 if kind in ("old", "monster", "child") else pitch) + shift))
     return voice, pitch
+
+
+def type_voice(engine, g, kind):
+    """Голос, выбранный для характера («пожилой мужчина» → такой-то голос), или ""."""
+    return (config.TTS_TYPE_VOICES.get(engine) or {}).get(f"{g}_{kind or 'adult'}", "")
+
+
+def set_type_voice(engine, g, kind, voice):
+    if not kind or kind == "adult":            # «обычный» — это и есть голос пола (Мужской/Женский голос выше)
+        return set_default_voice(engine, g, voice)
+    config.TTS_TYPE_VOICES.setdefault(engine, {})[f"{g}_{kind or 'adult'}"] = voice or ""
+    core.save_settings(tts_type_voices=config.TTS_TYPE_VOICES)
 
 
 def default_voice(engine, g):
