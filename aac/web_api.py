@@ -120,6 +120,7 @@ def state():
         "stream": bool(config.SHOW_ON_STREAM),
         "new_game": _new_game(app),
         "boot": _boot(),
+        "wizard": _safe(lambda: __import__("aac.ui_wizard", fromlist=["x"]).needed(), False),
         "staged": (_safe(lambda: __import__("aac.updater", fromlist=["x"]).staged()) or {}).get("version"),
         "voice": _voice(),
         "update_auto": bool(getattr(config, "UPDATE_AUTO", False)),

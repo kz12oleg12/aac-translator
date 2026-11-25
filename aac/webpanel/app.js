@@ -56,7 +56,7 @@ function nav() {
   $("gear").style.background = SCR == "settings" ? "rgba(88,101,242,.16)" : "";
 }
 function go(s) { SCR = s; nav(); $("main").innerHTML = ""; $("main").dataset.last = "";
-  $("ttl").textContent = ({home: "Главная", settings: "Настройки", win: "Вид перевода", gloss: "Словарь", win_default: "Вид для новых игр"})[s] || (NAV.find(n => n[0] == s) || ["", ""])[1]; D = null; refresh(true); $("main").scrollTop = 0; }
+  $("ttl").textContent = ({home: "Главная", settings: "Настройки", win: "Вид перевода", gloss: "Словарь", win_default: "Вид для новых игр", start: "Начало работы"})[s] || (NAV.find(n => n[0] == s) || ["", ""])[1]; D = null; refresh(true); $("main").scrollTop = 0; }
 
 // ---------- общие клики ----------
 document.addEventListener("click", e => {
@@ -85,7 +85,7 @@ async function refresh(force) {
   if (busy) return; busy = true;
   try {
     const s = await get("/api/state");
-    if (s) { S = s; bootView(s.boot); updNav(); $("ver").textContent = "v " + s.version; $("gear").title = document.body.classList.contains("nav-c") ? `Настройки · версия ${s.version}` : "Настройки"; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
+    if (s) { S = s; bootView(s.boot); if (s.wizard && !window._wzShown && SCR == "home") { window._wzShown = 1; setTimeout(() => go("start"), 0); } updNav(); $("ver").textContent = "v " + s.version; $("gear").title = document.body.classList.contains("nav-c") ? `Настройки · версия ${s.version}` : "Настройки"; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
     if (SCR != "home") D = await get("/api/screen?name=" + SCR);
     if ((force || !typing()) && !$("modal").classList.contains("on")) render();
   } finally { busy = false; }
@@ -304,6 +304,9 @@ HANDLERS.fbadd = b => { if (b.value) act("provider_fallbacks", D.fallback.concat
 HANDLERS.fbrm = b => act("provider_fallbacks", D.fallback.filter(f => f != b.dataset.v));
 HANDLERS.edon = b => act("editor_on", b.getAttribute("aria-checked") != "true");
 HANDLERS.ed = b => act("editor", b.value);
+HANDLERS.strs = b => act("stress_set", {k: b.dataset.k, v: b.value});
+HANDLERS.strp = b => act("stress_play", {v: b.dataset.v});
+HANDLERS.strd = b => act("stress_del", {k: b.dataset.k});
 HANDLERS.ed2 = b => act("editor2", b.value);
 HANDLERS.flag = b => act("flag", {name: b.dataset.n, v: b.getAttribute("aria-checked") != "true"});
 HANDLERS.cclear = () => confirmDlg("Очистить кэш переводов?", "Готовые переводы фраз забудутся — следующие повторы снова пойдут к переводчику.", "Очистить", () => act("cache_clear"));
@@ -364,7 +367,13 @@ function voiceTab() {
     ${fl("tts_expressive","wave","Интонация","«!» — живее, «?» — выше, «…» — медленнее")}
     ${fl("tts_finish","end","Дочитывать реплику","Следующая начнётся сразу после, чуть быстрее")}
     ${fl("tts_read_name","lines","Читать имя говорящего","«Коллекционер: …» перед репликой")}
-    ${fl("tts_russian_only","ru","Только русские голоса","Без иностранных голосов с акцентом")}</div>`;
+    ${fl("tts_russian_only","ru","Только русские голоса","Без иностранных голосов с акцентом")}
+    ${fl("tts_skip","end","Не отставать при пролистывании","Листаете быстро — сразу читается свежая реплика")}</div>
+  <h2 style="font-size:15px;padding-top:6px">Ударения</h2>
+  <div class="card" style="padding:14px 18px;display:flex;flex-direction:column;gap:8px">
+    <span style="font-size:12px;color:var(--m)">ИИ-редактор запоминает ударения в именах и редких словах — дальше они звучат так всегда. Неверное — поправьте: «+» ставится перед ударной гласной. Работает для голосов Silero.</span>
+    ${D.stress.length ? `<div class="lst">${D.stress.map(x => `<div class="row" style="padding:6px 0;gap:10px"><span style="flex-grow:1;font-size:14px">${esc(x.v.replace(/\+(.)/, (m, c) => c.toUpperCase()))}</span><input class="inp" style="width:170px;height:32px" value="${esc(x.v)}" data-c="strs" data-k="${esc(x.k)}"><button class="ib" style="color:var(--acc2)" title="Прослушать" data-a="strp" data-v="${esc(x.v)}">${svg("play", 14)}</button><button class="ib" title="Забыть" data-a="strd" data-k="${esc(x.k)}">${svg("x", 14)}</button></div>`).join("")}</div>` : `<span style="font-size:13px;color:var(--f)">Пока пусто — появятся, когда редактор встретит имена в игре.</span>`}
+  </div>`;
 }
 function chars() {
   const C = D.chars, q = SUB.charQ.toLowerCase(), G = SUB.charG;
@@ -373,7 +382,7 @@ function chars() {
   const seg = c => `<div class="seg" role="group" aria-label="Пол">${[["f","Ж"],["m","М"],["","авто"]].map(([v, t]) => `<button class="${v ? "m" : ""}" aria-pressed="${c.manual_g == v}" data-a="cg" data-k="${esc(c.key)}" data-v="${v}">${t}</button>`).join("")}</div>`;
   const vs = c => `<select class="sel" style="width:160px;height:32px;font-size:13px" data-c="cv" data-k="${esc(c.key)}"><option value="">авто${c.auto ? " · " + esc(c.auto) : ""}</option>${D.char_voices.map(v => `<option value="${esc(v.id)}" ${v.id == c.voice ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select>`;
   const row = c => `<div class="r" style="padding:9px 0"><span class="av" style="background:${c.g == "f" ? "#d16ba5" : "#5865F2"}">${esc(c.name[0])}</span>
-    <span class="tx"><span style="font-weight:500">${esc(c.name)}</span><span class="d" style="color:var(--f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.en && c.en != c.name ? esc(c.en) + " · " : ""}${c.g == "f" ? "женский" : "мужской"}, ${esc(c.how)}</span></span>
+    <span class="tx"><span style="font-weight:500">${esc(c.name)}</span><span class="d" style="color:var(--f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.en && c.en != c.name ? esc(c.en) + " · " : ""}${c.g == "f" ? "женский" : "мужской"}, ${esc(c.how)}${c.type ? " · " + esc(c.type) : ""}${c.addr ? " · на «" + esc(c.addr) + "»" : ""}</span></span>
     ${seg(c)}${vs(c)}<button class="ib" style="color:var(--acc2)" title="Прослушать" data-a="cplay" data-k="${esc(c.key)}" data-n="${esc(c.name)}">${svg("play", 14)}</button><button class="ib" style="color:var(--f)" title="Забыть" data-a="cforget" data-k="${esc(c.key)}" data-n="${esc(c.name)}">${svg("x", 14)}</button></div>`;
   return `<div class="row" style="gap:8px"><span class="subt" style="flex-grow:1">Имена берутся из субтитров, пол угадывается по речи и по имени. Поправьте, если ошиблось.</span><span class="chip" style="height:32px">${esc(D.game || "")}</span></div>
   <div class="row" style="gap:8px"><label style="display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:8px;background:var(--card);color:var(--f);flex-grow:1">${svg("search", 15)}<input class="inp" style="background:none;padding:0;height:auto" placeholder="Найти персонажа" data-i="cq" value="${esc(SUB.charQ)}"></label>
@@ -421,6 +430,28 @@ HANDLERS.hk = b => { SUB.histKind = b.dataset.v; render(); };
 HANDLERS.hplay = b => act("hist_play", b.dataset.v);
 
 // ---------- клавиши ----------
+R.start = () => {
+  if (!D) return null;
+  const step = (n, st, t, d, acts) => `<div class="card" style="padding:14px 18px;display:flex;gap:14px;align-items:flex-start">
+    <span style="flex-shrink:0;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;${st.ok ? "background:var(--ok,#3ba55d);color:#fff" : "background:var(--line)"}">${st.ok ? "✓" : n}</span>
+    <div style="display:flex;flex-direction:column;gap:6px;flex-grow:1"><div class="row"><span style="font-weight:600;flex-grow:1">${t}</span><span style="font-size:12px;color:${st.ok ? "var(--ok,#3ba55d)" : "var(--f)"}">${esc(st.txt)}</span></div>
+    <span style="font-size:13px;color:var(--m);line-height:1.5">${d}</span>${acts ? `<div class="row" style="gap:8px;flex-wrap:wrap">${acts}</div>` : ""}</div></div>`;
+  const T = D.tr;
+  return `<div style="display:flex;flex-direction:column;gap:4px"><h1>Начало работы</h1><span class="subt">Пять шагов — и игра на русском. Шаги отмечаются сами.</span></div>
+  ${step(1, T, "Выберите переводчик", "Google работает сразу и без ключа. Нейросеть Groq бесплатна, переводит живее и понимает сцену, но ей нужен ключ — получить его можно за пару минут.",
+    `<button class="btn" data-a="wzp" data-v="google">Google — без ключа</button><button class="btn" data-a="wzp" data-v="groq_ocr">Groq — нейросеть</button>${T.main.startsWith("groq") && !T.groq_key ? `<button class="btnp" style="padding:6px 14px;font-size:13px" data-a="key" data-id="groq">Добавить ключ Groq</button>` : ""}`)}
+  ${step(2, D.game, "Запустите игру", "Программа сама узнает игру и заведёт ей свои области, словарь и персонажей. Ничего нажимать не нужно.", "")}
+  ${step(3, D.area, "Обведите субтитры", "Обведите мышкой место на экране, где в игре появляются реплики персонажей. Можно нажать клавишу прямо в игре.",
+    `<button class="btnp" style="padding:6px 14px;font-size:13px" data-act="select">Обвести субтитры · ${esc(D.area.key)}</button>`)}
+  ${step(4, D.auto, "Включите автоперевод", "Дальше программа сама переводит каждую новую реплику.",
+    `<button class="btnp" style="padding:6px 14px;font-size:13px" data-act="auto">Включить · ${esc(D.auto.key)}</button>`)}
+  ${step(5, D.voice, "Озвучка — по желанию", "Реплики будут читаться вслух, у каждого персонажа свой голос.",
+    `<button class="btn" data-go="voice">Настроить озвучку</button>`)}
+  <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" data-a="wzdone">Пропустить</button><button class="btnp" style="padding:6px 14px;font-size:13px" data-a="wzdone">Готово</button></div>`;
+};
+HANDLERS.wzp = b => act("wizard_provider", b.dataset.v);
+HANDLERS.wzdone = () => { act("wizard_done"); go("home"); };
+
 R.keys = () => {
   if (!D) return null;
   const row = (k, first) => `<div class="r" style="padding:7px 0;${first ? "" : "border-top:.5px solid var(--line)"}"><span class="tx"><span>${esc(k.desc)}</span>${k.risk ? `<span style="font-size:12px;color:var(--warn)">⚠ ${esc(k.risk)}</span>` : ""}</span>
@@ -437,10 +468,10 @@ R.settings = () => {
   if (!D) return null;
   const row = (t, d, right, first) => `<div class="r" style="${first ? "" : "border-top:.5px solid var(--line)"}"><span class="tx"><span>${t}</span>${d ? `<span class="d">${d}</span>` : ""}</span>${right}</div>`;
   const ab = D.autobackups.map((n, i) => row(esc(n), "", `<button class="btn" data-a="bres" data-v="${esc(n)}">Вернуть</button>`, i == 0)).join("");
-  return `<h1>Настройки</h1>
+  return `<div class="row"><h1 style="flex-grow:1">Настройки</h1><button class="btn" data-go="start">Мастер первого запуска</button></div>
   <div class="card" style="padding:0 16px 6px">
     <div class="sec">Обновления</div>${row("Версия " + esc(D.version), S && S.update ? "Доступна " + esc(S.update) : "Проверяется при запуске", `<button class="btn" data-act="update_check">Проверить</button>`, true)}
-    ${row("Обновлять автоматически", "Новая версия ставится при следующем запуске программы", sw(D.update_auto, 'data-a="updauto"'))}
+    ${row("Обновлять автоматически", "Новая версия ставится сразу при запуске программы", sw(D.update_auto, 'data-a="updauto"'))}
     <div class="sec">Поверх игры</div>${row("Значок поверх игры", "Маленькое «● AAC: перевод вкл», пока идёт автоперевод", sw(D.indicator, 'data-a="flag" data-n="indicator"'), true)}
     <div class="sec">Резервная копия</div>${row("Сохранить в файл", "Настройки, области, голоса персонажей, словарь и кэш. Ключи не сохраняются — они в Windows", `<button class="btn" data-a="bexp">Сохранить…</button>`, true)}
     ${row("Загрузить из файла", "Текущие настройки сначала сохранятся в папку backups. Программа перезапустится", `<button class="btn" data-a="bimp">Выбрать файл…</button>`)}

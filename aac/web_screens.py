@@ -25,7 +25,7 @@ KEY_GROUPS = [
     ("Перевести по области", ["subs_once", "answers_once", "chat_once", "once_tts"]),
     ("Обвести область", ["select", "select_answers", "select_subs2", "select_chat"]),
     ("Окна и области", ["toggle", "layout", "reset", "panel"]),
-    ("Озвучка и чат", ["tts", "flip_gender", "chat_compose", "menu_learn"]),
+    ("Озвучка и чат", ["tts", "flip_gender", "bad_line", "chat_compose", "menu_learn"]),
     ("Программа", ["quit"]),
 ]
 FLAGS = {  # переключатели: имя → (атрибут config, ключ настроек, что сделать после)
@@ -40,6 +40,7 @@ FLAGS = {  # переключатели: имя → (атрибут config, кл
     "tts_vary": ("TTS_VARY_IN_GENDER", "tts_vary_in_gender", "tts"),
     "tts_expressive": ("TTS_EXPRESSIVE", "tts_expressive", "tts"),
     "tts_finish": ("TTS_FINISH_LINE", "tts_finish_line", "tts"),
+    "tts_skip": ("TTS_SKIP_FAST", "tts_skip_fast", "tts"),
     "tts_read_name": ("TTS_READ_NAME", "tts_read_name", "tts"),
     "tts_russian_only": ("TTS_RUSSIAN_ONLY", "tts_russian_only", "tts"),
 }
@@ -189,7 +190,8 @@ def _s_voice():
         manual = c.get(f"voice_{e2}", "")
         chars.append({"key": key, "name": c.get("ru") or c.get("en") or key, "en": c.get("en") or "", "g": g,
                       "how": how, "manual_g": c.get("gender_manual", ""), "voice": manual,
-                      "auto": pool.get(auto[0], auto[0]).split(" — ")[0] if auto else ""})
+                      "auto": pool.get(auto[0], auto[0]).split(" — ")[0] if auto else "",
+                      "type": voices.TYPE_NAMES.get(c.get("type", ""), ""), "addr": c.get("address", "")})
     vpool = [{"id": v, "name": pool.get(v, v).split(" — ")[0], "g": g}
              for g in ("f", "m") for v in (voices.SILERO_POOL if e2 == "silero" else voices.NEURAL_POOL)[g]]
     gpool = {g: [{"id": v, "name": pool.get(v, v).split(" — ")[0]}
@@ -203,7 +205,8 @@ def _s_voice():
             "flags": {k: bool(getattr(config, FLAGS[k][0], False)) for k in FLAGS if k.startswith("tts_")},
             "silero_installed": bool(_safe(tts.tts_silero.installed)), "frozen": config.FROZEN,
             "voicepack": dict(voicepack.state) if hasattr(voicepack, "state") else {},
-            "chars": chars, "char_voices": vpool, "game": _clean(_safe(lambda: __import__("aac.profiles",
+            "chars": chars, "char_voices": vpool,
+            "stress": [{"k": k, "v": v} for k, v in reversed(list(core.SETTINGS.get("stress", {}).items()))][:300], "game": _clean(_safe(lambda: __import__("aac.profiles",
                                                                                          fromlist=["x"]).name()))}
 
 
@@ -218,6 +221,24 @@ def _s_hist():
     from . import history
     items = [{"t": t, "kind": k, "orig": o, "tr": r} for t, k, o, r in history.translation_history[-500:]]
     return {"items": items[::-1]}
+
+
+def _s_start():
+    """Мастер первого запуска: шаги отмечаются сами."""
+    from . import hotkeys, profiles, translate
+    game_on = bool(core.active_profile) and _safe(profiles.is_running, False) and not _safe(profiles.is_free, True)
+    chain = translate.provider_chain()
+    from .ui_panel import PROVIDER_NAMES as names
+    return {
+        "tr": {"ok": bool(chain), "txt": " → ".join(names.get(p, p) for p in chain[:2]) or "выберите переводчик",
+               "main": config.PROVIDER, "groq_key": bool(translate.provider_has_key("groq"))},
+        "game": {"ok": game_on, "txt": _clean(profiles.name()) if game_on else "ждёт игру…"},
+        "area": {"ok": bool(core.region), "txt": "обведено" if core.region else "ещё не обведено",
+                 "key": hotkeys.K("select")},
+        "auto": {"ok": core.auto_on.is_set(), "txt": "включён" if core.auto_on.is_set() else "выключен",
+                 "key": hotkeys.K("auto")},
+        "voice": {"ok": bool(config.TTS_ENABLED), "txt": "включена" if config.TTS_ENABLED else "выключена"},
+    }
 
 
 def _s_keys():
@@ -383,6 +404,30 @@ def do(name, arg, app):
             core.save_settings(editor=config.EDITOR)
             editor.reset()
             _editor_log()
+    elif name == "wizard_provider":
+        v = a.get("v")
+        config.PROVIDER = v
+        config.FALLBACK_PROVIDERS = ["google"] if v != "google" else ["microsoft"]
+        core.save_settings(provider=config.PROVIDER, fallback=config.FALLBACK_PROVIDERS)
+        core.log(f"Переводчик: {v} (запасной — {config.FALLBACK_PROVIDERS[0]})", "ok")
+    elif name == "wizard_done":
+        core.save_settings(wizard_done=True)
+    elif name == "stress_set":
+        import re as _re
+        k, v = str(a.get("k") or "").lower(), str(a.get("v") or "").strip().lower()
+        d = core.SETTINGS.setdefault("stress", {})
+        if k in d and v.replace("+", "") == k and v.count("+") == 1 and _re.search(r"\+[аеёиоуыэюя]", v):
+            d[k] = v
+            core.save_settings()
+            core.log(f"Ударение: {v}", "ok")
+        else:
+            core.log("Ударение: поставьте один «+» перед ударной гласной, само слово не меняйте", "warn")
+    elif name == "stress_del":
+        core.SETTINGS.setdefault("stress", {}).pop(str(a.get("k") or ""), None)
+        core.save_settings()
+    elif name == "stress_play":
+        from . import tts
+        tts.say_test(text=str(a.get("v") or ""))
     elif name == "editor2":
         from . import editor
         v = a.get("v") or ""

@@ -993,6 +993,12 @@ class App:
                     self.chat_compose()
                 elif kind == "chat_out":
                     self.chat_out_ready(*payload)
+                elif kind == "bad_line":
+                    from . import editor
+                    if core.last_line and editor.mark_bad(core.last_line[1], core.last_line[0]):
+                        core.log("👎 Отмечено как плохой перевод — ИИ-редактор учтёт это в следующих репликах", "ok")
+                    else:
+                        core.log("Отмечать пока нечего — ещё не было ни одной реплики.", "warn")
                 elif kind == "flip_gender":
                     from . import voices
                     res = voices.flip_last()

@@ -1204,6 +1204,7 @@ def test_neural_voice(monkey):
     if not hasattr(tts, "_Neural"):
         print("   (в этой версии нет нейроголосов — пропуск)")
         return
+    monkey(T.config, "TTS_SKIP_FAST", False)
     cfg = T._owner("TTS_READ_NAME")
     monkey(cfg, "TTS_ENABLED", True)
     monkey(cfg, "TTS_ENGINE", "neural")
@@ -2019,11 +2020,14 @@ def test_editor_voice(monkey):
     r = editor.parse("TEXT:\nЯ пришла за тобой.\nVOICE:\nЯ пришл+а за тоб+ой, Арг+ус.\nSPEAKER: Lyra\nGENDER: f\nMOOD: shout")
     assert r["text"] == "Я пришла за тобой." and r["speaker"] == "Lyra" and r["gender"] == "f" and r["mood"] == "shout"
     assert editor.parse("просто текст") == {"text": "просто текст"}
+    r2 = editor.parse("TEXT:\nА\nVOICE:\nА\nSPEAKER: -\nGENDER: m\nMOOD: -\nTYPE: old\nADDRESS: вы\nTERMS: Dawn Blade = Клинок Рассвета; x")
+    assert r2["type"] == "old" and r2["address"] == "вы" and r2["terms"] == [("Dawn Blade", "Клинок Рассвета")]
     monkey(c, "SETTINGS", {})
     monkey(c, "save_settings", lambda: None)
     editor._keep_speech("Я пришла за тобой, Аргус.", r)
     assert editor.speech_for("Я пришла за тобой,  Аргус.")["voice"].startswith("Я пришл+а")
     assert c.SETTINGS["stress"]["аргус"] == "арг+ус"
+    assert editor.mark_bad("Hi", "Привет") and "Привет" in editor.bad_hint()
     assert editor.apply_stress("Где Аргус?") == "Где Арг+ус?"
     assert "Known stresses" in editor.stress_prompt("Argus Аргус")
     assert tts._with_mood("Стой.", "shout") == "Стой!" and tts._with_mood("Тише.", "whisper") == "Тише…"

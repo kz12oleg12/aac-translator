@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "15.41"
+VERSION = "15.42"
 import sys as _sys
 FROZEN = bool(getattr(_sys, "frozen", False))      # собранная программа (AAC Translator.exe), без Python
 # папка программы (настройки, словарь, история, иконки): рядом с .exe или с aac_translator.py
@@ -98,6 +98,7 @@ HOTKEY_QUIT = "ctrl+shift+q"
 HOTKEY_TTS = "ctrl+shift+v"       # озвучка субтитров вкл/выкл
 HOTKEY_ONCE_TTS = "ctrl+f7"          # обвести текст → перевести и прочитать вслух (книги, письма, задания)
 HOTKEY_FLIP_GENDER = "ctrl+shift+g"
+HOTKEY_BAD_LINE = "ctrl+shift+b"   # отметить последний перевод как плохой
 HOTKEY_SELECT_CHAT = "ctrl+shift+f9"   # обвести окно игрового чата
 HOTKEY_CHAT_COMPOSE = "ctrl+shift+c"
 HOTKEY_CHAT_ONCE = "ctrl+shift+f8"
@@ -225,6 +226,7 @@ TTS_SILERO_VOICE = "xenia"   # офлайн-голос Silero: xenia, baya, ksen
 TTS_VOICE = ""             # имя голоса Windows ("" — голос по умолчанию)
 TTS_RATE = 0               # скорость: от -10 (медленно) до 10 (быстро)
 TTS_VOLUME = 100           # громкость 0..100
+TTS_SKIP_FAST = True       # листаете диалог быстро (пришли 2 реплики, пока читается одна) — читать сразу свежую
 TTS_FINISH_LINE = True     # дочитывать реплику до конца (следующая — сразу после, чуть быстрее)
 TTS_PER_CHARACTER = True   # свой голос для каждого персонажа (по имени в субтитрах)
 TTS_RUSSIAN_ONLY = False

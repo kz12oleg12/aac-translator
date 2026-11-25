@@ -306,6 +306,45 @@ def set_ai_gender(key, g):
             _save()
 
 
+TYPE_NAMES = {"young": "молодой", "old": "пожилой", "child": "ребёнок", "monster": "чудовище", "noble": "знатный"}
+TYPE_PITCH = {"neural": {"old": -8, "monster": -14, "child": 14, "young": 4, "noble": -3},
+              "silero": {"old": -1, "monster": -2, "child": 2, "young": 1, "noble": 0}}
+
+
+def set_traits(key, kind=None, address=None):
+    """Что заметил ИИ-редактор: характер голоса (старик, ребёнок, чудовище…) и «ты»/«вы» к игроку."""
+    if not key:
+        return
+    with _lock:
+        _load()
+        c = _data["chars"].get(key)
+        if not c:
+            return
+        ch = False
+        if kind and not c.get("type_manual") and c.get("type") != kind:
+            c["type"], ch = kind, True
+        if address and c.get("address") != address:
+            c["address"], ch = address, True
+        if ch:
+            _save()
+
+
+def memory_hint(src):
+    """Подсказка редактору о говорящем: как он обращается к игроку и какой он."""
+    sp = speaker("", src)
+    if not sp:
+        return ""
+    with _lock:
+        _load()
+        c = _data["chars"].get(sp[0]) or {}
+    bits = []
+    if c.get("address"):
+        bits.append(f"addresses the player with «{c['address']}»")
+    if c.get("type"):
+        bits.append(f"is {c['type']}")
+    return f"Known about {sp[1] or sp[2]}: " + ", ".join(bits) + "." if bits else ""
+
+
 def _line_of(text):
     lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
     if len(lines) > 1 and _name_from(text) == lines[0]:
@@ -331,17 +370,22 @@ def voice_for(key, engine=None, auto_only=False):
         pool, pitches, main = NEURAL_POOL[g], NEURAL_PITCH, config.TTS_NEURAL_VOICE
     else:
         pool, pitches, main = SILERO_POOL.auto(g), SILERO_PITCH, config.TTS_SILERO_VOICE
+    kind = c.get("type", "")
+    shift = TYPE_PITCH["neural" if engine == "neural" else "silero"].get(kind, 0)
     if manual and not auto_only:
-        return manual, 0
+        return manual, shift
     if not config.TTS_VARY_IN_GENDER:
         # «один голос на всех мужчин и один на всех женщин» — из настроек (или первый из списка)
-        return (default_voice(engine, g) or pool[0]), 0
+        return (default_voice(engine, g) or pool[0]), shift
     # основной голос (которым читается рассказчик) персонажам — пореже: ставим его в конец очереди
     pool = [v for v in pool if v != main] + [v for v in pool if v == main]
     if config.TTS_RUSSIAN_ONLY and engine == "neural":
         pool = [v for v in pool if v.startswith("ru-")] or pool
     voice = pool[h % len(pool)]
     pitch = pitches[(h // 7) % len(pitches)]
+    if shift:
+        lim = 2 if engine != "neural" else 20
+        pitch = max(-lim, min(lim, (0 if kind in ("old", "monster", "child") else pitch) + shift))
     return voice, pitch
 
 

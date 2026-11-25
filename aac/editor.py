@@ -37,7 +37,9 @@ PROMPT = """You are a professional video game localization editor (English → R
 - use punctuation for natural pauses and intonation (commas, «—», «…», «!», «?»);
 - if the line is longer than about {maxlen} characters, condense VOICE to the essential meaning.
 {voice_only}
-Also guess who is speaking (if a name is visible or obvious from context), their gender and the mood.
+Also guess who is speaking (if a name is visible or obvious from context), their gender, the mood,
+what kind of voice suits them and how they address the player. List proper names / game terms from this line
+(not common words) with their Russian form in the nominative case.
 {glossary}{gender}{stress}{scene}{history}
 Original English:
 {src}
@@ -52,7 +54,10 @@ VOICE:
 <text for speech>
 SPEAKER: <speaker's name in English as in the original, or ->
 GENDER: <m, f or ->
-MOOD: <calm, shout, whisper, question, sad or ->"""
+MOOD: <calm, shout, whisper, question, sad or ->
+TYPE: <young, adult, old, child, monster, noble or ->
+ADDRESS: <ты, вы or ->
+TERMS: <English = Русский; English = Русский … or ->"""
 
 SCENE_PROMPT = """Here are the latest dialogue lines from {game} (English original → Russian):
 {lines}
@@ -139,6 +144,12 @@ def build_prompt(src, draft, kind):
         scene = _state["scene"]
         hist = list(_state["history"][-config.HISTORY_LINES:])
     st = stress_prompt(src + "\n" + draft)
+    mem = voices.memory_hint(src)
+    bad = bad_hint()
+    if mem:
+        st = (st + "\n" if st else "") + mem
+    if bad:
+        st = (st + "\n" if st else "") + bad
     return PROMPT.format(
         game=game, about=(f"About the game: {about}\n" if about else ""),
         maxlen=config.EDITOR_VOICE_MAX,
@@ -169,6 +180,19 @@ def parse(out):
         mm = re.search(k.upper() + r":\s*([^\n]*)", out)
         v = (mm.group(1).strip().strip("<>\"' ") if mm else "")
         res[k] = "" if v in ("-", "—", "none", "unknown", "u") else v
+    for k in ("type", "address", "terms"):
+        mm = re.search(k.upper() + r":\s*([^\n]*)", out)
+        v = (mm.group(1).strip().strip("<>\"' ") if mm else "")
+        res[k] = "" if v in ("-", "—", "none") else v
+    res["type"] = res["type"].lower() if res["type"].lower() in ("young", "old", "child", "monster", "noble") else ""
+    res["address"] = res["address"].lower() if res["address"].lower() in ("ты", "вы") else ""
+    terms = []
+    for part in res["terms"].split(";"):
+        if "=" in part:
+            a, b = (x.strip(" .\"'«»") for x in part.split("=", 1))
+            if a and b and len(a) <= 40 and len(b) <= 50:
+                terms.append((a, b))
+    res["terms"] = terms[:6]
     res["gender"] = res["gender"][:1].lower() if res["gender"][:1].lower() in ("m", "f") else ""
     res["mood"] = res["mood"].lower() if res["mood"].lower() in ("shout", "whisper", "question", "sad") else ""
     if len(res["speaker"]) > 30:
@@ -184,6 +208,39 @@ def _keep_speech(shown, info):
         while len(_speech) > _SPEECH_MAX:
             _speech.pop(next(iter(_speech)))
     _learn_stress(info["voice"])
+    for en, ru in info.get("terms") or []:
+        try:
+            if glossary.learn(en, ru, "ИИ-редактор"):
+                pass
+        except Exception:
+            pass
+
+
+# ---------- «плохой перевод» по горячей клавише: редактор учитывает такие примеры ----------
+def _bad():
+    return core.SETTINGS.setdefault("bad_lines", [])
+
+
+def mark_bad(src, shown):
+    """Игрок отметил последнюю реплику как плохо переведённую."""
+    if not shown:
+        return False
+    b = _bad()
+    b.append({"en": (src or "")[:300], "ru": shown[:300], "t": int(time.time())})
+    del b[:-30]
+    core.save_settings()
+    tcache_keys = [k for k in list(_speech) if k == _norm(shown)]
+    for k in tcache_keys:
+        _speech.pop(k, None)
+    return True
+
+
+def bad_hint():
+    b = _bad()[-4:]
+    if not b:
+        return ""
+    return ("The player marked these earlier translations as bad — avoid the same mistakes:\n"
+            + "\n".join(f"EN: {x['en']} → RU (bad): {x['ru']}" for x in b))
 
 
 def speech_for(shown):

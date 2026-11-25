@@ -42,6 +42,7 @@ def apply_view_settings():
     config.SUBS_HISTORY = int(core.SETTINGS.get("subs_history", config.SUBS_HISTORY))
     config.TTS_ENABLED = bool(core.SETTINGS.get("tts_enabled", config.TTS_ENABLED))
     config.TTS_VOICE = str(core.SETTINGS.get("tts_voice", config.TTS_VOICE))
+    config.TTS_SKIP_FAST = bool(core.SETTINGS.get("tts_skip_fast", config.TTS_SKIP_FAST))
     config.TTS_FINISH_LINE = bool(core.SETTINGS.get("tts_finish_line", config.TTS_FINISH_LINE))
     config.TTS_SILERO_VOICE = str(core.SETTINGS.get("tts_silero_voice", config.TTS_SILERO_VOICE))
     config.TTS_PER_CHARACTER = bool(core.SETTINGS.get("tts_per_character", config.TTS_PER_CHARACTER))

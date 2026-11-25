@@ -241,6 +241,7 @@ def speak_subtitle(translation, seen=None, orig=None):
         key = voices.note_line(translation, orig)
         if info and key:
             voices.set_ai_gender(key, info.get("gender"))
+            voices.set_traits(key, info.get("type"), info.get("address"))
         if config.TTS_PER_CHARACTER:
             vp = voices.voice_for(key)
     except Exception as e:
@@ -749,9 +750,17 @@ class _Neural:
                 cmd, data, gen = item
                 if cmd == "say" and gen == self.gen and job is not None and config.TTS_FINISH_LINE:
                     # дочитываем текущую; новая синтезируется уже сейчас и зазвучит сразу после неё
-                    if waiting:
-                        self._cancel(waiting)     # в очереди держим только самую свежую реплику
-                    waiting = self._new_job(data[0], data[1], gen, faster=True, voice_pitch=data[2])
+                    if waiting and config.TTS_SKIP_FAST:
+                        # игрок листает диалог быстрее, чем мы читаем: обрываем устаревшую и читаем свежую
+                        for jb in (job, waiting):
+                            self._cancel(jb)
+                        if player:
+                            player.close_all()
+                        job, waiting = self._new_job(data[0], data[1], gen, voice_pitch=data[2]), None
+                    else:
+                        if waiting:
+                            self._cancel(waiting)     # в очереди держим только самую свежую реплику
+                        waiting = self._new_job(data[0], data[1], gen, faster=True, voice_pitch=data[2])
                 elif cmd != "noop":
                     for jb in (job, waiting):
                         if jb:
