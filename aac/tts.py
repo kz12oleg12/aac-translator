@@ -163,6 +163,30 @@ def _sounds_like(ru, en):
     return any(difflib.SequenceMatcher(None, x, y).ratio() >= 0.7 for x in ru_words for y in en_words)
 
 
+def _strip_name_line(text, orig):
+    """В оригинале первая строка — имя («Джиеллини», «Gianellini»), а перевод начинается с того же имени
+    (иногда без переноса строки или с «+» ударения) — отрезаем его."""
+    ol = [ln.strip() for ln in (orig or "").replace(" / ", "\n").splitlines() if ln.strip()]
+    if len(ol) < 2:
+        return text
+    name = ol[0]
+    if len(name.split()) > 3 or len(name) > 30 or re.search(r"[.!?…,:;]", name):
+        return text
+    plain = text.replace("+", "")
+    k = len(name.split())
+    words = plain.split()
+    if len(words) <= k:
+        return text
+    head = " ".join(words[:k]).rstrip(":：—–-,.")
+    same = head.lower() == name.lower() or (re.search(r"[a-z]", name.lower()) and _sounds_like(head, name))
+    if not same:
+        return text
+    # вырезаем столько же слов из исходного текста (с «+»), плюс разделитель после имени
+    m = re.match(r"\s*" + r"\s+".join([r"\S+"] * k) + r"\s*[:：—–\-,.]?\s*", text)
+    rest = text[m.end():] if m else text
+    return rest if sum(ch.isalpha() for ch in rest) >= 3 else text
+
+
 def _strip_speaker(text, orig):
     """Имя говорящего осталось в начале перевода («Итан Аренда…», «Итан — Аренда…», «Ethan: …»)?
     Берём имя из оригинала (первая строка «Ethan»), смотрим, как его уже переводили, и отрезаем."""
@@ -212,6 +236,7 @@ def speech_text(translation, orig=None):
     text = " ".join(lines)
     if not config.TTS_READ_NAME and orig and len(lines) >= 1:
         text = _strip_speaker(text, orig)
+        text = _strip_name_line(text, orig)
     text = re.sub(r"\s*\([^)]*\)", "", text)          # «Клинок (Dawn Blade)» → «Клинок»
     return re.sub(r"[⏳❌✅📜💬]", "", text).strip()
 

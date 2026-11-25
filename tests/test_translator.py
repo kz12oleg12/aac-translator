@@ -2072,6 +2072,10 @@ def test_editor_voice(monkey):
                                                           "voice": "Коллекцион+ер: Ты оп+ять пришёл?"})
     tts.speak_subtitle("Коллекционер: Ты опять пришёл?", orig="Collector: You came again?")
     assert said[-1].startswith("Ты оп+ять"), said[-1]
+    assert tts.speech_text("Джиеллини Чем могу помочь?", "Джиеллини\nMay Ай help you?") == "Чем могу помочь?"
+    assert tts.speech_text("Джиелл+ини: Чем могу помочь?", "Джиеллини / May I help you?") == "Чем могу помочь?"
+    assert tts.speech_text("Джанеллини, чем помочь?", "Gianellini\nHow can I help?") == "чем помочь?"
+    assert tts.speech_text("Привет, как дела?", "Hello\nHow are you?") == "Привет, как дела?"
 
 
 def test_tts_upgrade(monkey):
