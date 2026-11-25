@@ -276,13 +276,19 @@ R.tr = () => {
     ${D.editor_on ? `<span style="padding-left:42px;font-size:12px;color:var(--f)">${D.editor_note ? "Сейчас основной переводчик — нейросеть, редактор включается только для машинных. " : ""}Поправил: ${st.edited} · без правок: ${st.same} · не успел: ${st.late}${st.failed ? " · ошибок: " + st.failed : ""}</span>` : ""}</div>
   <div class="card" style="padding:14px 18px"><div style="display:flex;align-items:baseline;gap:10px"><span style="font-weight:600;font-size:15px;flex-grow:1">Все переводчики</span><span style="font-size:12px;color:var(--f)">ключи хранятся в Windows, не в файлах программы</span></div>
     <div class="sec">Машинный перевод <span style="font-weight:400;color:var(--f)">быстро, без понимания сцены</span></div><div class="lst">${P.filter(p => p.group == "mt").map(row).join("")}</div>
-    <div class="sec">Нейросети <span style="font-weight:400;color:var(--f)">понимают сцену и прошлые реплики</span></div><div class="lst">${P.filter(p => p.group == "ai").map(row).join("")}</div></div>
+    <div class="sec">Нейросети <span style="font-weight:400;color:var(--f)">понимают сцену и прошлые реплики</span></div><div class="lst">${P.filter(p => p.group == "ai").map(row).join("")}</div>
+    ${P.some(p => p.own) ? `<div class="sec">Свои</div><div class="lst">${P.filter(p => p.own).map(p => `<div class="r"><span class="av" style="border-radius:9px;background:#30302E;color:var(--t3)">${esc(p.name.slice(0, 2))}</span>
+      <span class="tx"><span style="font-weight:500;color:${p.has ? "var(--t)" : "var(--f)"}">${esc(p.name)}</span><span class="d">${esc(p.model)} · ${esc(p.url)}</span></span>
+      <span class="d">${p.local ? "на этом ПК" : p.has ? "ключ " + esc(p.masked) : "нет ключа"}</span>${lnk("изменить", `data-a="own" data-id="${p.id}"`)}</div>`).join("")}</div>` : ""}
+    <button class="btn" style="height:34px;margin-top:12px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px" data-a="own">${svg("plus", 13)}Свой переводчик</button></div>
   <h2 style="font-size:15px;padding-top:6px">Как переводить</h2>
   <div class="grid3" style="grid-template-columns:1fr 1fr">
     ${flag("cache","db","Кэш переводов","Повторы — мгновенно и без запросов",`${D.cache_size} фраз`,lnk("очистить",'data-a="cclear"'))}
     ${flag("gloss_auto","book","Пополнять словарь","Имена, предметы и места из переводов",`${D.gloss_count} записей`,lnk("открыть",'data-go="gloss"'))}
     ${flag("save_history","hist","История в файл","По файлу на каждый день","папка history",lnk("открыть",'data-a="hfolder"'))}
     ${flag("skip_system","mute","Пропускать системные","Сообщения игры не переводить и не озвучивать")}
+    ${(() => { const st = D.ds || {}; const c = (k, ic, t, d, on) => `<div class="mode${on ? " on" : ""}" style="cursor:default"><div class="row">${ico(ic, on)}<span style="flex-grow:1"></span>${sw(on, `data-a="stt" data-k="${k}"`)}</div><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">${t}</span><span style="font-size:12px;color:var(--m)">${d}</span></div></div>`;
+      return c("keep","subs","Не убирать перевод","Пока нет новой реплики — старая остаётся на экране",st.keep) + c("orig","lines","Показывать оригинал","Под переводом мелко — текст, как в игре",st.orig) + c("docked","ans","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой",st.docked); })()}
 </div>
   <h2 style="font-size:15px;padding-top:6px">Вид для новых игр</h2>
   <span class="subt" style="margin-top:-10px">Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой — меняется в «Играх».</span>
@@ -297,6 +303,25 @@ HANDLERS.flag = b => act("flag", {name: b.dataset.n, v: b.getAttribute("aria-che
 HANDLERS.cclear = () => confirmDlg("Очистить кэш переводов?", "Готовые переводы фраз забудутся — следующие повторы снова пойдут к переводчику.", "Очистить", () => act("cache_clear"));
 HANDLERS.hfolder = () => act("hist_folder");
 HANDLERS.key = b => keyDlg(b.dataset.id);
+HANDLERS.own = b => ownDlg(b.dataset.id);
+function ownDlg(id) {
+  const p = id ? D.providers.find(x => x.id == id) : null;
+  const PRE = [["OpenRouter","https://openrouter.ai/api/v1","deepseek/deepseek-chat-v3-0324:free"],["DeepSeek","https://api.deepseek.com/v1","deepseek-chat"],["LM Studio","http://localhost:1234/v1",""],["Ollama","http://localhost:11434/v1","qwen2.5:7b"]];
+  modal(`<div class="row"><span style="font-size:18px;font-weight:600;flex-grow:1">${p ? "Изменить «" + esc(p.name) + "»" : "Свой переводчик"}</span><button class="ib" data-close="1">${svg("x", 16)}</button></div>
+    <span style="font-size:13px;color:var(--t3)">Любая нейросеть с адресом, совместимым с OpenAI. Текст читается на ПК, нейросеть получает только текст.</span>
+    ${p ? "" : `<div style="display:flex;gap:6px;flex-wrap:wrap">${PRE.map((x, i) => `<button class="chip" data-pre="${i}">${x[0]}</button>`).join("")}</div>`}
+    ${[["on","Название","DeepSeek",p ? p.name : ""],["ou","Адрес","https://api.deepseek.com/v1",p ? p.url : ""],["om","Модель","deepseek-chat",p ? p.model : ""]].map(([i, t, ph, v]) => `<label style="display:flex;flex-direction:column;gap:6px"><span class="lbl">${t}</span><input class="inp" id="${i}" placeholder="${ph}" value="${esc(v)}"></label>`).join("")}
+    <label style="display:flex;flex-direction:column;gap:6px"><span class="lbl">Ключ ${p && p.has && !p.local ? "(сохранён " + esc(p.masked) + " — оставьте пустым, чтобы не менять)" : "(для программ на этом ПК не нужен)"}</span><input class="inp" id="ok" type="password" autocomplete="off" placeholder="Вставьте ключ"></label>
+    <span id="ores" style="font-size:13px;min-height:18px"></span>
+    <div style="display:flex;gap:8px">${p ? `<button class="btnd" id="odel">Удалить</button>` : ""}<span style="flex-grow:1"></span><button class="btn" style="height:36px;padding:0 16px;font-size:13px" id="otest">Проверить</button><button class="btnp" id="osave">Сохранить</button></div>`);
+  const val = () => ({id: id || null, name: $("on").value, url: $("ou").value, model: $("om").value, key: $("ok").value});
+  $("dlg").querySelectorAll("[data-pre]").forEach(b => b.onclick = () => { const x = PRE[+b.dataset.pre]; $("on").value = x[0]; $("ou").value = x[1]; $("om").value = x[2]; $("om").focus(); });
+  $("otest").onclick = async () => { $("ores").style.color = "var(--m)"; $("ores").textContent = "Проверяю…"; const r = (await act("custom_test", val())).data || {};
+    $("ores").style.color = r.ok ? "var(--ok)" : "var(--err)"; $("ores").textContent = (r.ok ? "✓ Работает: " : "✗ ") + (r.text || ""); };
+  $("osave").onclick = async () => { const r = (await act("custom_save", val())).data || {};
+    if (r.error) { $("ores").style.color = "var(--err)"; $("ores").textContent = r.error; return; } closeModal(); };
+  if ($("odel")) $("odel").onclick = () => { closeModal(); confirmDlg(`Удалить «${p.name}»?`, "Переводчик пропадёт из списка, его ключ удалится из Windows. Если он был основным или запасным — его место займёт Google.", "Удалить", () => act("custom_remove", {id})); };
+}
 
 // ---------- озвучка ----------
 R.voice = () => {
@@ -445,6 +470,13 @@ async function pickDlg(title, text, fn, hideKnown) {
 
 // ---------- вид перевода ----------
 const back = (to, t) => `<a data-go="${to}" style="font-size:13px;display:inline-flex;align-items:center;gap:4px">← ${t}</a>`;
+function ansBox(D, fam, sz, out, docked) {
+  const bg = out ? "transparent" : "rgba(20,20,26," + D.alpha / 100 + ")";
+  const sh = out ? "text-shadow:0 0 2px #000,0 0 2px #000,0 0 3px #000;" : "";
+  return `<div style="${docked ? "margin-top:6px;padding-top:6px;border-top:.5px solid rgba(255,255,255,.12)" : "background:" + bg + ";border-radius:6px;padding:8px 10px"};font-family:'${esc(fam)}';text-align:left">
+    <div style="font-size:11px;color:#9C9A92;margin-bottom:2px">Варианты ответа</div>
+    <div style="font-size:${sz}px;color:${D.color};${sh}">1. Я пойду первым.</div><div style="font-size:${sz}px;color:${D.color};${sh}">2. Что там может быть?</div></div>`;
+}
 function styleBlock(D, DEF) {
   const sl = (k, t, min, max, step, v, fmt) => `<label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">${t}</span><span style="font-size:12px">${fmt(v)}</span></span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-c="st" data-k="${k}"></label>`;
   const sws = (k, list, cur) => list.map(c => `<button title="${c}" data-a="stc" data-k="${k}" data-v="${c}" style="width:24px;height:24px;border-radius:6px;background:${c};border:2px solid ${c.toLowerCase() == cur.toLowerCase() ? "#fff" : "transparent"};padding:0"></button>`).join("") + `<label title="Другой цвет" style="width:24px;height:24px;border-radius:6px;overflow:hidden;border:.5px solid var(--line2);position:relative">${svg("plus", 14)}<input type="color" value="${cur}" data-c="stcol" data-k="${k}" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>`;
@@ -454,7 +486,8 @@ function styleBlock(D, DEF) {
     <div style="max-width:520px;background:${out ? "transparent" : "rgba(20,20,26," + D.alpha / 100 + ")"};border-radius:6px;padding:8px 10px;font-family:'${esc(fam)}'">
       ${D.history ? `<div style="font-size:${sz - 2}px;color:#9C9A92">Кеспер: Принеси кости — и я расскажу.</div>` : ""}
       <div style="font-size:${sz}px;font-weight:700;color:${D.color};${out ? "text-shadow:0 0 2px #000,0 0 2px #000,0 0 3px #000" : ""}">Ренальд: Держись рядом! Ты слышал это?</div>
-      ${D.orig ? `<div style="font-size:11px;color:#9C9A92">Renald: Stay close! Did you hear that?</div>` : ""}</div></div>`;
+      ${D.orig ? `<div style="font-size:11px;color:#9C9A92">Renald: Stay close! Did you hear that?</div>` : ""}
+      ${D.docked ? ansBox(D, fam, sz, out, true) : ""}</div>${D.docked ? "" : `<div style="align-self:flex-end;margin-top:4px">${ansBox(D, fam, sz, out, false)}</div>`}</div>`;
   return `${prev}
     <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
       <div class="row" style="gap:12px"><span style="flex-grow:1">Шрифт</span><select class="sel" style="width:200px" data-c="stf">${D.fonts.map(f => `<option ${f == fam ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></div>
@@ -473,11 +506,12 @@ R.win = () => {
     <div style="max-width:520px;background:${out ? "transparent" : "rgba(20,20,26," + D.alpha / 100 + ")"};border-radius:6px;padding:8px 10px;font-family:'${esc(fam)}'">
       ${D.history ? `<div style="font-size:${sz - 2}px;color:#9C9A92">Кеспер: Принеси кости — и я расскажу.</div>` : ""}
       <div style="font-size:${sz}px;font-weight:700;color:${D.color};${out ? "text-shadow:0 0 2px #000,0 0 2px #000,0 0 3px #000" : ""}">Ренальд: Держись рядом! Ты слышал это?</div>
-      ${D.orig ? `<div style="font-size:11px;color:#9C9A92">Renald: Stay close! Did you hear that?</div>` : ""}</div></div>`;
+      ${D.orig ? `<div style="font-size:11px;color:#9C9A92">Renald: Stay close! Did you hear that?</div>` : ""}
+      ${D.docked ? ansBox(D, fam, sz, out, true) : ""}</div>${D.docked ? "" : `<div style="align-self:flex-end;margin-top:4px">${ansBox(D, fam, sz, out, false)}</div>`}</div>`;
   const DEF = !!D.default;
   return `${DEF ? back("tr", "Переводчики") : back("games", "Игры")}<div style="display:flex;flex-direction:column;gap:4px"><h1>${DEF ? "Вид для новых игр" : "Вид перевода"}</h1><span class="subt">${DEF ? "Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой." : D.owner ? "Для игры «" + esc(D.owner) + "». У каждой игры свой вид." : "Вид по умолчанию — игра не выбрана."} Образец меняется сразу.</span></div>
   ${styleBlock(D, DEF)}${DEF ? "" : `
-  <div class="card" style="padding:4px 16px"><div class="lst">${tg("keep","Не убирать, пока нет новой реплики","",D.keep)}${tg("orig","Показывать оригинал под переводом","",D.orig)}</div></div>
+  <div class="card" style="padding:4px 16px"><div class="lst">${tg("keep","Не убирать, пока нет новой реплики","",D.keep)}${tg("orig","Показывать оригинал под переводом","",D.orig)}${tg("docked","Ответы под субтитрами","Одним окном: варианты ответа сразу под репликой, двигаются вместе",D.docked)}</div></div>
   <h2 style="font-size:15px;padding-top:6px">Окно чата</h2>
   <div style="background:linear-gradient(160deg,#3a2c20,#1d1712);border-radius:14px;padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;color:#c9b9a6">Образец</span>
     <div style="align-self:flex-start;width:340px;background:rgba(20,20,26,${D.chat_alpha / 100});border-radius:6px;padding:8px 10px;font-size:13px;display:flex;flex-direction:column;gap:3px;color:${D.chat_fg}">

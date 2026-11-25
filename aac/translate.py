@@ -14,6 +14,9 @@ from . import capture, config, core, glossary, history, llm, mt, ocr, tcache, vo
 
 
 def provider_has_key(name):
+    from . import custom_ai
+    if custom_ai.is_custom(name):
+        return custom_ai.ready(name)
     name = OCR_AI.get(name, name)
     keys = {"gemini": config.API_KEY, "claude": config.CLAUDE_API_KEY, "mistral": config.MISTRAL_API_KEY, "groq": config.GROQ_API_KEY,
             "deepl": config.DEEPL_API_KEY}
@@ -127,7 +130,8 @@ def ask_text(prompt):
             pass
     for name in provider_chain():
         base = OCR_AI.get(name, name)
-        if base not in ("groq", "gemini", "claude", "mistral") or llm.provider_cooldown.get(name, 0) > time.time():
+        if (base not in ("groq", "gemini", "claude", "mistral") and base not in llm.OPENAI_COMPAT) or \
+                llm.provider_cooldown.get(name, 0) > time.time():
             continue
         try:
             if base == "claude":

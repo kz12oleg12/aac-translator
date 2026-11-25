@@ -46,6 +46,12 @@ FLAGS = {  # переключатели: имя → (атрибут config, кл
 _win_voices = {"list": None}
 
 
+def providers():
+    """Встроенные переводчики и ваши свои."""
+    from . import custom_ai
+    return PROVIDERS + [(x["id"], x["name"], f"Свой · {x['model']}", "own") for x in custom_ai.items()]
+
+
 def _clean(name):
     """«🧪 Без игры» → «Без игры»: значки из старых названий в новой панели не нужны."""
     s = str(name or "")
@@ -102,7 +108,15 @@ def _s_tr():
     chain = translate.provider_chain()
     lim = {n.lower(): (f, t) for n, f, t in limits.bars()}
     provs = []
-    for pid, name, desc, grp in PROVIDERS:
+    from . import custom_ai
+    for pid, name, desc, grp in providers():
+        if grp == "own":
+            x = custom_ai.get(pid)
+            local = custom_ai.is_local(x["url"])
+            provs.append({"id": pid, "name": name, "desc": desc, "group": grp, "need_key": not local,
+                          "has": custom_ai.ready(pid), "masked": custom_ai.masked(pid), "frac": None, "limit": "",
+                          "can_key": False, "own": True, "url": x["url"], "model": x["model"], "local": local})
+            continue
         need = pid not in ("microsoft", "google")
         has = translate.provider_has_key(pid)
         f, t = lim.get(name.lower(), (None, ""))
@@ -241,6 +255,7 @@ def _s_win():
             "mode": config.TEXT_MODE, "alpha": int(round(config.OVERLAY_ALPHA * 100)),
             "history": config.SUBS_HISTORY, "delay": config.HIDE_DELAY,
             "keep": bool(config.KEEP_UNTIL_NEXT), "orig": bool(config.SHOW_ORIGINAL),
+            "docked": bool(getattr(config, "ANSWERS_DOCKED", False)),
             "chat_cover": bool(config.CHAT_COVER), "chat_height": config.CHAT_HEIGHT,
             "chat_history": config.CHAT_HISTORY, "chat_alpha": int(round(config.CHAT_ALPHA * 100)),
             "chat_fg": str(config.CHAT_FG), "chat_colors": ["#eeeeee", "#ffe08a", "#8cf0ff", "#9dff9d", "#ffb3e6"]}
@@ -354,7 +369,7 @@ def do(name, arg, app):
         config.FALLBACK_PROVIDERS = [f for f in config.FALLBACK_PROVIDERS if f != config.PROVIDER]
         _save_providers()
     elif name == "provider_fallbacks":
-        fb = [f for f in (a.get("v") or []) if f in dict((x[0], 1) for x in PROVIDERS) and f != config.PROVIDER]
+        fb = [f for f in (a.get("v") or []) if f in dict((x[0], 1) for x in providers()) and f != config.PROVIDER]
         config.FALLBACK_PROVIDERS = list(dict.fromkeys(fb))
         _save_providers()
     elif name == "editor_on":
@@ -374,6 +389,24 @@ def do(name, arg, app):
         from . import keys
         keys.remove(a.get("id"))
         core.log("Ключ удалён из Windows", "ok")
+    elif name == "custom_save":
+        from . import custom_ai
+        cid, err = custom_ai.add_or_update(a.get("id") or None, a.get("name"), a.get("url"), a.get("model"),
+                                           a.get("key") or None)
+        if err:
+            return {"error": err}
+        core.log(f"Свой переводчик «{a.get('name')}» сохранён", "ok")
+        return {"id": cid}
+    elif name == "custom_test":
+        from . import custom_ai
+        ok, out = custom_ai.test(a.get("name"), a.get("url"), a.get("model"), a.get("key"), a.get("id"))
+        return {"ok": ok, "text": out}
+    elif name == "custom_remove":
+        from . import custom_ai
+        x = custom_ai.get(a.get("id"))
+        if x:
+            custom_ai.remove(x["id"])
+            core.log(f"Свой переводчик «{x['name']}» удалён", "ok")
     elif name == "cache_clear":
         from . import tcache
         n = tcache.size()
@@ -611,6 +644,10 @@ def _style(a):
     elif k == "keep":
         config.KEEP_UNTIL_NEXT = bool(v)
         core.save_settings(keep_until_next=config.KEEP_UNTIL_NEXT)
+    elif k == "docked":
+        if app is not None:
+            app.set_docked(bool(v))
+        return
     elif k == "orig":
         config.SHOW_ORIGINAL = bool(v)
         core.save_settings(show_original=config.SHOW_ORIGINAL)
@@ -649,7 +686,7 @@ def _open(path):
 def _save_providers():
     from . import translate
     core.save_settings(provider=config.PROVIDER, fallback=config.FALLBACK_PROVIDERS)
-    names = {x[0]: x[1] for x in PROVIDERS}
+    names = {x[0]: x[1] for x in providers()}
     chain = translate.provider_chain()
     core.log(f"Переводчик: {' → '.join(names.get(p, p) for p in chain) or 'нет ключей!'} (сохранено)", "ok")
     for pid in [config.PROVIDER] + list(config.FALLBACK_PROVIDERS):

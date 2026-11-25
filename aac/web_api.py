@@ -103,7 +103,7 @@ def state():
         "game": {"name": _clean(profiles.name()) if core.active_profile else None,
                  "running": _safe(profiles.is_running, False), "free": _safe(profiles.is_free, False)},
         "games": games[:6],
-        "translator": {"chain": [PROVIDER_NAMES.get(p, p) for p in chain[:3]], "editor": editor_name,
+        "translator": {"chain": [PROVIDER_NAMES.get(p) or _custom_name(p) for p in chain[:3]], "editor": editor_name,
                        "editor_on": bool(getattr(config, "EDITOR_ON", False)), "editor_id": config.EDITOR,
                        "editors": _editors()},
         "limits": bars,
@@ -124,6 +124,15 @@ def state():
         "update_auto": bool(getattr(config, "UPDATE_AUTO", False)),
         "keys": keys, "key_desc": descs,
     }
+
+
+def _custom_name(pid):
+    try:
+        from . import custom_ai
+        x = custom_ai.get(pid)
+        return x["name"] if x else pid
+    except Exception:
+        return pid
 
 
 def _editors():
@@ -216,6 +225,13 @@ def _do(name, arg):
 
 
 def _call(name, arg):
+    if name == "custom_test":            # сетевой запрос до 30 с — не в потоке окна
+        from . import web_screens
+        try:
+            r = web_screens.do(name, arg, _state["app"])
+            return {"ok": True, "data": r if isinstance(r, dict) else {}}
+        except Exception as e:
+            return {"ok": False, "data": {"ok": False, "text": str(e)}}
     done = threading.Event()
     res = {"ok": False}
 

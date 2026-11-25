@@ -323,6 +323,12 @@ def main():
         print("Переводчик уже запущен — показал его панель.")
         return
     core.SETTINGS = core.load_settings()
+    try:              # свои ИИ-переводчики: ключи из Windows и подключение к остальной программе
+        from . import custom_ai
+        custom_ai.load_keys_from_windows()
+        custom_ai.register()
+    except Exception as e:
+        print(f"Свои переводчики не подключились: {e}")
     if "profiles" not in core.SETTINGS:
         core.save_settings(profiles=profiles.all_profiles())
     config.GAMES_ONLY = bool(core.SETTINGS.get("games_only", config.GAMES_ONLY))   # нужен до выбора пресета

@@ -2013,6 +2013,29 @@ def test_new_shell(monkey):
         app.root.destroy()
 
 
+def test_custom_ai(monkey):
+    """Свои ИИ-переводчики: добавить, подключиться к цепочке и редактору, удалить."""
+    try:
+        from aac import custom_ai, llm, translate, editor
+    except ImportError:
+        print("   (в этой версии нет — пропуск)")
+        return
+    T.set("SETTINGS", {})
+    cid, err = custom_ai.add_or_update(None, "Мой ИИ", "http://localhost:1234/v1", "local-model")
+    assert cid and not err, err
+    assert cid in llm.OPENAI_COMPAT and llm.OPENAI_COMPAT[cid][0].endswith("/v1/chat/completions")
+    assert translate.OCR_AI.get(cid) == cid and cid in editor.EDITORS
+    assert translate.provider_has_key(cid), "на этом ПК ключ не нужен"
+    c2, err = custom_ai.add_or_update(None, "Облако", "https://api.example.com/v1", "m")
+    assert not translate.provider_has_key(c2), "без ключа — не готов"
+    assert custom_ai.add_or_update(None, "", "x", "m")[1], "пустое название — ошибка"
+    cfg = T._owner("PROVIDER")
+    monkey(cfg, "PROVIDER", cid)
+    custom_ai.remove(cid)
+    custom_ai.remove(c2)
+    assert cid not in llm.OPENAI_COMPAT and cfg.PROVIDER == "google", "удалён — основным снова Google"
+
+
 def test_update_staged(monkey):
     """.exe с автообновлением: новая версия скачивается заранее и ставится при выходе — без перезапуска при старте."""
     from aac import updater
