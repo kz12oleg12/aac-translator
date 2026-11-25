@@ -139,9 +139,19 @@ def _ask_with_shot(prompt):
             return llm.ask_gemini(capture.encode(img, 1024), prompt)
         except core.RateLimited:
             llm.provider_cooldown[e] = time.time() + config.PROVIDER_COOLDOWN.get(e, 60)
-        except Exception:
-            pass
+        except Exception as ex:
+            if not _state.get("shot_warned"):
+                _state["shot_warned"] = True
+                core.log(f"🖼 ИИ-редактор не смог посмотреть на экран ({name_of(e)}): {str(ex)[:120]} — "
+                         "заметка о сцене будет только по тексту", "warn")
     return None
+
+
+def name_of(e):
+    try:
+        return EDITORS[e][0].split(" —")[0]
+    except Exception:
+        return str(e)
 
 
 def is_custom_id(e):
@@ -405,9 +415,11 @@ def _update_scene():
         old = _state["scene"]
     fmt = dict(game=game, lines=lines, old=(f"Previous note: {old}\n" if old else ""))
     out = None
+    by_shot = False
     if config.EDITOR_SCENE_IMAGE:
         try:
             out = _ask_with_shot(SCENE_PROMPT.format(shot=SHOT_NOTE, **fmt))
+            by_shot = bool(out)
         except Exception:
             out = None
     if not out:
@@ -419,6 +431,8 @@ def _update_scene():
     if out and len(out) < 400:
         with _lock:
             _state["scene"] = out
+        stats["scenes"] = stats.get("scenes", 0) + 1
+        core.log(("🖼 ИИ-редактор посмотрел на экран: " if by_shot else "📝 Заметка о сцене (по тексту): ") + out[:160])
 
 
 def improve(src, draft, kind, on_late=None):
