@@ -225,14 +225,41 @@ def speak_subtitle(translation, seen=None, orig=None):
     text = speech_text(translation, orig)
     if sum(ch.isalpha() for ch in text) < 4:
         return  # обрывки и одиночные слова интерфейса не читаем
+    info = None
+    try:
+        from . import editor
+        info = editor.speech_for(translation)
+        if info and info.get("voice"):
+            text = _with_mood(info["voice"].replace("\n", " "), info.get("mood"))
+        text = editor.apply_stress(text)
+    except Exception:
+        info = None
     vp = None
     try:
+        if info and info.get("speaker") and not voices.speaker(translation, orig):
+            orig = f"{info['speaker']}\n{orig or translation}"      # редактор понял, кто говорит
         key = voices.note_line(translation, orig)
+        if info and key:
+            voices.set_ai_gender(key, info.get("gender"))
         if config.TTS_PER_CHARACTER:
             vp = voices.voice_for(key)
     except Exception as e:
         core.log(f"Голоса персонажей: {e}", "error")
     _say(text, seen, vp)
+
+
+def _with_mood(text, mood):
+    """Настроение от редактора → знаки, по которым голос меняет интонацию (см. mood_of)."""
+    t = text.rstrip()
+    if not t:
+        return t
+    if mood == "shout" and not t.endswith(("!", "?!", "!?")):
+        t = t.rstrip(".…") + "!"
+    elif mood in ("whisper", "sad") and t.endswith("."):
+        t = t[:-1] + "…"
+    elif mood == "question" and t.endswith("."):
+        t = t[:-1] + "?"
+    return t
 
 
 def _say(text, seen=None, voice_pitch=None):
@@ -242,7 +269,7 @@ def _say(text, seen=None, voice_pitch=None):
     if engine_ready():
         _neural.say(text, seen, voice_pitch)
     else:
-        _windows_queue(text)
+        _windows_queue(text.replace("+", ""))
 
 
 def _windows_say(text):
@@ -614,6 +641,7 @@ class _Neural:
                 return await asyncio.get_running_loop().run_in_executor(
                     tts_silero.executor, tts_silero.synth_to_wav, text, path_base + ".wav", voice, level, pitch_s)
             return run()
+        text = re.sub(r"(?<=\w)\+|\+(?=[а-яёА-ЯЁ])", "", text)   # «+» — ударение для Silero, этот голос ставит сам
         d_rate, d_hz, d_vol = MOOD_EDGE.get(mood, (0, 0, 0))
         voice, rate = pv or config.TTS_NEURAL_VOICE, _rate_str(extra, d_rate)
         kw = {"volume": f"{d_vol:+d}%"} if d_vol else {}

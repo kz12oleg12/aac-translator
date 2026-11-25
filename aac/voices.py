@@ -294,6 +294,18 @@ def note_line(translation, orig=None):
     return key
 
 
+def set_ai_gender(key, g):
+    """Пол персонажа, который заметил ИИ-редактор (если вы не выбрали сами и ещё не спрашивали)."""
+    if g not in ("m", "f") or not key:
+        return
+    with _lock:
+        _load()
+        c = _data["chars"].get(key)
+        if c and not c.get("gender_manual") and c.get("ai") not in ("m", "f"):
+            c["ai"] = g
+            _save()
+
+
 def _line_of(text):
     lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
     if len(lines) > 1 and _name_from(text) == lines[0]:

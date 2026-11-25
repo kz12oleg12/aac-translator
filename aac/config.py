@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "15.39"
+VERSION = "15.40"
 import sys as _sys
 FROZEN = bool(getattr(_sys, "frozen", False))      # собранная программа (AAC Translator.exe), без Python
 # папка программы (настройки, словарь, история, иконки): рядом с .exe или с aac_translator.py
@@ -257,6 +257,7 @@ COMPAT_MAX_TOKENS = 350    # резерв на ответ; Groq засчитыв
 EDITOR_ON = False          # ИИ-редактор включён
 EDITOR = "groq"            # какая нейросеть правит: "groq", "gemini", "mistral", "claude"
 EDITOR_WAIT = 1.2          # сколько ждать редактора, с; не успел — показываем перевод основного, потом подменяем
+EDITOR_VOICE_MAX = 200     # длиннее — редактор сокращает текст для озвучки, чтобы она не отставала
 EDITOR_SCENE_EVERY = 6     # раз в столько реплик обновлять «память сцены»
 EDITOR_LOG = True          # писать в журнал, что редактор поправил
 HISTORY_LINES = 4                         # сколько предыдущих реплик давать нейросети для контекста

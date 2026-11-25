@@ -18,26 +18,49 @@ EDITORS = {
 }
 
 PROMPT = """You are a professional video game localization editor (English → Russian) for {game}.
-{about}A machine translator produced a Russian draft. Edit it into natural, correct Russian game dialogue:
-- fix grammar, noun cases and gender agreement (a speaker's gender is given below when known);
+{about}A machine translator produced a Russian draft. Your job has two parts.
+
+1) TEXT — the subtitle the player reads. Edit the draft into natural, correct Russian game dialogue:
+- fix grammar, noun cases and gender agreement: figure out who speaks and to whom (gender hints below, the
+  speaker's name, the scene) and make verbs/adjectives match («я пришла» for a woman, «я готов» for a man);
 - use the glossary spellings for names and terms, declined correctly;
 - keep the meaning, keep the same number of lines and the numbering of reply options;
 - keep the tone of the game; use the same "ты"/"вы" as the previous lines;
-- if the draft is already good, return it unchanged.
-{glossary}{gender}{scene}{history}
+- if the draft is already good, keep it unchanged.
+
+2) VOICE — the same line prepared for a Russian text-to-speech voice (it reads letters literally):
+- no speaker name prefix, no brackets, no markup, no emoji;
+- write numbers, fractions, percents, "x2", "HP", "lvl", "3/5" etc. as Russian words, correctly declined;
+- write any remaining Latin words in Russian letters the way they are pronounced;
+- put "+" right before the stressed vowel in names, invented/fantasy words, rare words and homographs
+  (з+амок / зам+ок, вс+ё); do not mark ordinary unambiguous words;
+- use punctuation for natural pauses and intonation (commas, «—», «…», «!», «?»);
+- if the line is longer than about {maxlen} characters, condense VOICE to the essential meaning.
+{voice_only}
+Also guess who is speaking (if a name is visible or obvious from context), their gender and the mood.
+{glossary}{gender}{stress}{scene}{history}
 Original English:
 {src}
 
 Draft translation:
 {draft}
 
-Return ONLY the final Russian text, nothing else."""
+Answer strictly in this format, nothing else:
+TEXT:
+<final Russian subtitle>
+VOICE:
+<text for speech>
+SPEAKER: <speaker's name in English as in the original, or ->
+GENDER: <m, f or ->
+MOOD: <calm, shout, whisper, question, sad or ->"""
 
 SCENE_PROMPT = """Here are the latest dialogue lines from {game} (English original → Russian):
 {lines}
 {old}Write 1-2 short sentences in English: who is talking to whom and what is going on now. No intro."""
 
 _state = {"scene": "", "since_scene": 0, "history": []}
+_speech = {}            # показанный текст → {"voice", "speaker", "gender", "mood"} — для озвучки
+_SPEECH_MAX = 200
 _lock = threading.Lock()
 stats = {"edited": 0, "same": 0, "late": 0, "failed": 0}
 
@@ -87,13 +110,110 @@ def build_prompt(src, draft, kind):
     with _lock:
         scene = _state["scene"]
         hist = list(_state["history"][-config.HISTORY_LINES:])
+    st = stress_prompt(src + "\n" + draft)
     return PROMPT.format(
         game=game, about=(f"About the game: {about}\n" if about else ""),
+        maxlen=config.EDITOR_VOICE_MAX,
+        voice_only=("These are reply options of a dialogue menu: in VOICE keep them as separate lines without numbers.\n"
+                    if kind == "answers" else ""),
+        stress=(st + "\n" if st else ""),
         glossary=(gl + "\n" if gl else ""), gender=(gender + "\n" if gender else ""),
         scene=(f"What is happening now: {scene}\n" if scene else ""),
         history=("Previous lines (context only):\n" + "\n".join(f"EN: {a}\nRU: {b}" for a, b in hist) + "\n"
                  if hist and kind == "subs" else ""),
         src=src, draft=draft)
+
+
+def _norm(t):
+    import re
+    return re.sub(r"[^\wё]", "", (t or "").lower())
+
+
+def parse(out):
+    """Ответ редактора → {"text", "voice", "speaker", "gender", "mood"}. Старый формат (просто текст) тоже понимаем."""
+    import re
+    out = (out or "").strip().strip("`").strip()
+    m = re.search(r"TEXT:\s*(.*?)\s*VOICE:\s*(.*?)\s*(?=SPEAKER:|GENDER:|MOOD:|$)", out, re.S)
+    if not m:
+        return {"text": out}
+    res = {"text": m.group(1).strip(), "voice": m.group(2).strip()}
+    for k in ("speaker", "gender", "mood"):
+        mm = re.search(k.upper() + r":\s*([^\n]*)", out)
+        v = (mm.group(1).strip().strip("<>\"' ") if mm else "")
+        res[k] = "" if v in ("-", "—", "none", "unknown", "u") else v
+    res["gender"] = res["gender"][:1].lower() if res["gender"][:1].lower() in ("m", "f") else ""
+    res["mood"] = res["mood"].lower() if res["mood"].lower() in ("shout", "whisper", "question", "sad") else ""
+    if len(res["speaker"]) > 30:
+        res["speaker"] = ""
+    return res
+
+
+def _keep_speech(shown, info):
+    if not shown or not info.get("voice"):
+        return
+    with _lock:
+        _speech[_norm(shown)] = info
+        while len(_speech) > _SPEECH_MAX:
+            _speech.pop(next(iter(_speech)))
+    _learn_stress(info["voice"])
+
+
+def speech_for(shown):
+    """Подготовленный редактором текст для озвучки показанной реплики (или None)."""
+    with _lock:
+        return _speech.get(_norm(shown))
+
+
+# ---------- ударения: редактор отметил «+» в имени или редком слове — запоминаем для всех следующих реплик ----------
+def _stress_map():
+    return core.SETTINGS.setdefault("stress", {})
+
+
+def _learn_stress(voice):
+    import re
+    d = _stress_map()
+    changed = False
+    for w in re.findall(r"[А-Яа-яЁё+]+", voice):
+        if w.count("+") != 1 or len(w) < 4:
+            continue
+        plain = w.replace("+", "")
+        if not (plain[:1].isupper() or len(plain) >= 9):     # имена, термины и длинные редкие слова
+            continue
+        k = plain.lower()
+        if d.get(k) != w.lower():
+            d[k] = w.lower()
+            changed = True
+    if changed:
+        while len(d) > 600:
+            d.pop(next(iter(d)))
+        try:
+            core.save_settings()
+        except Exception:
+            pass
+
+
+def stress_prompt(text):
+    d = _stress_map()
+    low = (text or "").lower()
+    hits = [v for k, v in d.items() if k[:-2] and k[:-2] in low][:15]
+    return ("Known stresses (keep them): " + ", ".join(hits)) if hits else ""
+
+
+def apply_stress(text):
+    """Подставить запомненные ударения (для озвучки без редактора или если он не отметил)."""
+    import re
+    d = _stress_map()
+    if not d:
+        return text
+
+    def rep(m):
+        w = m.group(0)
+        v = d.get(w.lower())
+        if not v or "+" in w:
+            return w
+        i = v.index("+")
+        return w[:i] + "+" + w[i:]
+    return re.sub(r"(?<![+\w])[А-Яа-яЁё]{4,}(?![+\w])", rep, text)
 
 
 def _clean(out, draft):
@@ -145,20 +265,27 @@ def _update_scene():
 
 
 def improve(src, draft, kind, on_late=None):
-    """Поправить черновик основного переводчика. kind: "subs" или "answers".
+    """Поправить черновик основного переводчика и подготовить текст для озвучки. kind: "subs" или "answers".
     Возвращает исправленный текст, если редактор успел за EDITOR_WAIT с, иначе None (показывайте черновик).
     on_late(текст) — вызовется, если ответ пришёл позже (подменить показанный черновик)."""
+    import json
     if not ready() or not src or not draft:
         if draft:
             _remember(src, draft, kind)
         return None
     game, about = _game()
-    key = tcache.make_key("ed-" + kind, src, draft + "|" + name() + "|" + about + glossary.glossary_prompt(src)
+    key = tcache.make_key("ed2-" + kind, src, draft + "|" + name() + "|" + about + glossary.glossary_prompt(src)
                           + (voices.gender_hint(src) if kind == "subs" else ""))
     cached = tcache.get(key)
     if cached:
-        _remember(src, cached, kind)
-        return cached
+        try:
+            info = json.loads(cached)
+        except Exception:
+            info = {"text": cached}
+        _keep_speech(info["text"], info)
+        _keep_speech(draft, info)
+        _remember(src, info["text"], kind)
+        return None if info["text"].strip() == draft.strip() else info["text"]
     box = {}
     done = threading.Event()
     st = {"phase": "waiting"}           # waiting → done (успел) | gave_up (не дождались — ответ «поздний»)
@@ -167,18 +294,27 @@ def improve(src, draft, kind, on_late=None):
 
     def work():
         try:
-            box["out"] = _clean(_ask(prompt), draft)
+            info = parse(_ask(prompt))
+            txt = _clean(info.get("text"), draft)
+            if txt:
+                info["text"] = txt
+                if info.get("voice"):
+                    info["voice"] = info["voice"] if len(info["voice"]) <= 3 * len(draft) + 60 else ""
+                box["info"] = info
         except Exception as e:
             box["err"] = e
-        out = box.get("out")
-        if out:
-            tcache.put(key, out, "ai")
+        info = box.get("info")
+        if info:
+            tcache.put(key, json.dumps(info, ensure_ascii=False), "ai")
+            _keep_speech(info["text"], info)
+            _keep_speech(draft, info)
         with lk:
             gave_up = st["phase"] == "gave_up"
             st["phase"] = "done"
         done.set()
         if gave_up:
             stats["late"] += 1
+            out = info and info["text"]
             if out and out.strip() != draft.strip() and on_late:
                 on_late(out)
             _remember(src, out or draft, kind)
@@ -189,12 +325,17 @@ def improve(src, draft, kind, on_late=None):
         if st["phase"] != "done":
             st["phase"] = "gave_up"
             return None
-    out = box.get("out")
-    if "err" in box or not out:
+    info = box.get("info")
+    if "err" in box or not info:
         stats["failed"] += 1
         _remember(src, draft, kind)
         return None
+    out = info["text"]
     _remember(src, out, kind)
+    if config.EDITOR_LOG and info.get("voice"):
+        core.log(f"🔊 Для озвучки: {info['voice'].replace(chr(10), ' / ')[:110]}"
+                 + (f" · {info['speaker']}" if info.get("speaker") else "")
+                 + (f" · {info['mood']}" if info.get("mood") else ""))
     if out.strip() == draft.strip():
         stats["same"] += 1
         return None

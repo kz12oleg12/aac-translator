@@ -2013,6 +2013,28 @@ def test_new_shell(monkey):
         app.root.destroy()
 
 
+def test_editor_voice(monkey):
+    """ИИ-редактор готовит текст для озвучки: ударения, говорящий, пол, настроение."""
+    from aac import editor, tts, voices, core as c
+    r = editor.parse("TEXT:\nЯ пришла за тобой.\nVOICE:\nЯ пришл+а за тоб+ой, Арг+ус.\nSPEAKER: Lyra\nGENDER: f\nMOOD: shout")
+    assert r["text"] == "Я пришла за тобой." and r["speaker"] == "Lyra" and r["gender"] == "f" and r["mood"] == "shout"
+    assert editor.parse("просто текст") == {"text": "просто текст"}
+    monkey(c, "SETTINGS", {})
+    monkey(c, "save_settings", lambda: None)
+    editor._keep_speech("Я пришла за тобой, Аргус.", r)
+    assert editor.speech_for("Я пришла за тобой,  Аргус.")["voice"].startswith("Я пришл+а")
+    assert c.SETTINGS["stress"]["аргус"] == "арг+ус"
+    assert editor.apply_stress("Где Аргус?") == "Где Арг+ус?"
+    assert "Known stresses" in editor.stress_prompt("Argus Аргус")
+    assert tts._with_mood("Стой.", "shout") == "Стой!" and tts._with_mood("Тише.", "whisper") == "Тише…"
+    said = []
+    monkey(tts, "_say", lambda t, seen=None, vp=None: said.append(t))
+    monkey(tts.config, "TTS_ENABLED", True)
+    monkey(voices, "note_line", lambda tr, orig=None: None)
+    tts.speak_subtitle("Я пришла за тобой, Аргус.", orig="I came for you, Argus.")
+    assert said and said[-1] == "Я пришл+а за тоб+ой, Арг+ус!"
+
+
 def test_custom_ai(monkey):
     """Свои ИИ-переводчики: добавить, подключиться к цепочке и редактору, удалить."""
     try:
@@ -2159,7 +2181,7 @@ def test_ai_editor(monkey):
     out = editor.improve("I met the Collector.", "Я встретил Коллекционер.", "subs")
     assert out == "Я встретил Коллекционера.", out
     p = asked[0]
-    assert "I met the Collector." in p and "Я встретил Коллекционер." in p and "Return ONLY" in p
+    assert "I met the Collector." in p and "Я встретил Коллекционер." in p and "VOICE:" in p
     assert editor.improve("I met the Collector.", "Я встретил Коллекционер.", "subs") == out, "из кэша"
     assert len([a for a in asked if a.startswith("You are")]) == 1, "второй раз — без запроса"
     time.sleep(0.2)

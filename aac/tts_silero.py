@@ -445,7 +445,7 @@ def _synth_cis(text, path, voice, rate_level=0, pitch_level=0):
             core.log("Silero: такого доп. голоса нет в модели. Есть: "
                      + ", ".join(s for s in speakers if str(s).startswith("ru_"))[:300], "warn")
         raise RuntimeError(f"нет голоса {voice}")
-    stressed = acc(text)
+    stressed = re.sub(r"\+{2,}", "+", acc(text))
     rate = _prosody_rate(rate_level)
     pitch = _PITCHES.get(max(-2, min(2, int(pitch_level))), "medium")
     kw = dict(speaker=voice, sample_rate=SAMPLE_RATE)
