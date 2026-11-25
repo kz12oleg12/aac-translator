@@ -84,7 +84,7 @@ async function refresh(force) {
   if (busy) return; busy = true;
   try {
     const s = await get("/api/state");
-    if (s) { S = s; $("ver").textContent = (document.body.classList.contains("nav-c") ? "" : "v ") + s.version; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
+    if (s) { S = s; $("ver").textContent = "v " + s.version; $("gear").title = document.body.classList.contains("nav-c") ? `Настройки · версия ${s.version}` : "Настройки"; const gc = $("gcount"); if (gc) gc.textContent = s.games.length || ""; }
     if (SCR != "home") D = await get("/api/screen?name=" + SCR);
     if ((force || !typing()) && !$("modal").classList.contains("on")) render();
   } finally { busy = false; }
@@ -522,7 +522,8 @@ let unread = 0;
 function layout(save) {
   const nc = document.body.classList.contains("nav-c"), jc = document.body.classList.contains("jr-c");
   $("navc").title = nc ? "Развернуть меню" : "Свернуть меню"; $("navc").setAttribute("aria-label", $("navc").title);
-  $("ver").textContent = S ? (nc ? S.version : "v " + S.version) : "v";
+  $("ver").textContent = S ? "v " + S.version : "v";
+  $("gear").title = nc && S ? `Настройки · версия ${S.version}` : "Настройки";
   if (!jc) { unread = 0; }
   $("jrn").textContent = unread; $("jrn").style.display = jc && unread ? "inline-block" : "none";
   if (save) try { localStorage.setItem("lay", JSON.stringify({nc, jc})); } catch (e) {}
