@@ -118,7 +118,8 @@ def _s_tr():
             "editor_stats": {k: s.get(k, 0) for k in ("edited", "same", "late", "failed")},
             "flags": {k: bool(getattr(config, FLAGS[k][0], False))
                       for k in ("cache", "skip_system", "gloss_auto", "save_history")},
-            "cache_size": tcache.size(), "gloss_count": _gloss_count(), "default_style": _style_summary()}
+            "cache_size": tcache.size(), "gloss_count": _gloss_count(), "default_style": _style_summary(),
+            "ds": _s_win_default()}
 
 
 def _style_summary():

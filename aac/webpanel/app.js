@@ -283,9 +283,10 @@ R.tr = () => {
     ${flag("gloss_auto","book","Пополнять словарь","Имена, предметы и места из переводов",`${D.gloss_count} записей`,lnk("открыть",'data-go="gloss"'))}
     ${flag("save_history","hist","История в файл","По файлу на каждый день","папка history",lnk("открыть",'data-a="hfolder"'))}
     ${flag("skip_system","mute","Пропускать системные","Сообщения игры не переводить и не озвучивать")}
-    <div class="mode" style="cursor:default"><div class="row">${ico("font", false)}</div>
-      <div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">Вид для новых игр</span><span style="font-size:12px;color:var(--m)">Шрифт, цвет и подложка перевода, пока игре не настроен свой</span></div>
-      <div class="row" style="margin-top:auto;font-size:12px;color:var(--m)"><span style="flex-grow:1">${esc(D.default_style)}</span>${lnk("изменить",'data-go="win_default"')}</div></div></div>`;
+</div>
+  <h2 style="font-size:15px;padding-top:6px">Вид для новых игр</h2>
+  <span class="subt" style="margin-top:-10px">Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой — меняется в «Играх».</span>
+  ${styleBlock(D.ds, true)}`;
 };
 HANDLERS.pmain = b => act("provider_main", b.value);
 HANDLERS.fbadd = b => { if (b.value) act("provider_fallbacks", D.fallback.concat([b.value])); };
@@ -444,6 +445,24 @@ async function pickDlg(title, text, fn, hideKnown) {
 
 // ---------- вид перевода ----------
 const back = (to, t) => `<a data-go="${to}" style="font-size:13px;display:inline-flex;align-items:center;gap:4px">← ${t}</a>`;
+function styleBlock(D, DEF) {
+  const sl = (k, t, min, max, step, v, fmt) => `<label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">${t}</span><span style="font-size:12px">${fmt(v)}</span></span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-c="st" data-k="${k}"></label>`;
+  const sws = (k, list, cur) => list.map(c => `<button title="${c}" data-a="stc" data-k="${k}" data-v="${c}" style="width:24px;height:24px;border-radius:6px;background:${c};border:2px solid ${c.toLowerCase() == cur.toLowerCase() ? "#fff" : "transparent"};padding:0"></button>`).join("") + `<label title="Другой цвет" style="width:24px;height:24px;border-radius:6px;overflow:hidden;border:.5px solid var(--line2);position:relative">${svg("plus", 14)}<input type="color" value="${cur}" data-c="stcol" data-k="${k}" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>`;
+  const tg = (k, t, d, on) => `<div class="r"><span class="tx"><span>${t}</span>${d ? `<span class="d">${d}</span>` : ""}</span>${sw(on, `data-a="stt" data-k="${k}"`)}</div>`;
+  const out = D.mode == "outline", fam = D.font, sz = D.size;
+  const prev = `<div style="background:linear-gradient(160deg,#3a2c20,#1d1712);border-radius:14px;padding:12px 16px 16px;display:flex;flex-direction:column;align-items:center;gap:8px;min-height:150px"><span style="font-size:12px;color:#c9b9a6;align-self:flex-start;flex-grow:1">Образец</span>
+    <div style="max-width:520px;background:${out ? "transparent" : "rgba(20,20,26," + D.alpha / 100 + ")"};border-radius:6px;padding:8px 10px;font-family:'${esc(fam)}'">
+      ${D.history ? `<div style="font-size:${sz - 2}px;color:#9C9A92">Кеспер: Принеси кости — и я расскажу.</div>` : ""}
+      <div style="font-size:${sz}px;font-weight:700;color:${D.color};${out ? "text-shadow:0 0 2px #000,0 0 2px #000,0 0 3px #000" : ""}">Ренальд: Держись рядом! Ты слышал это?</div>
+      ${D.orig ? `<div style="font-size:11px;color:#9C9A92">Renald: Stay close! Did you hear that?</div>` : ""}</div></div>`;
+  return `${prev}
+    <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
+      <div class="row" style="gap:12px"><span style="flex-grow:1">Шрифт</span><select class="sel" style="width:200px" data-c="stf">${D.fonts.map(f => `<option ${f == fam ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></div>
+      <div class="row" style="gap:8px"><span style="flex-grow:1">Цвет текста</span>${sws("color", D.colors, D.color)}</div>
+      <div class="seg" style="align-self:flex-start"><button aria-pressed="${!out}" class="m" data-a="stm" data-v="box" style="height:30px;padding:0 14px">Плашка</button><button aria-pressed="${out}" class="m" data-a="stm" data-v="outline" style="height:30px;padding:0 14px">Обводка букв</button></div>
+      ${sl("size","Размер шрифта",10,26,1,sz,v => v)}${sl("alpha","Непрозрачность",40,100,5,D.alpha,v => v + "%")}
+      ${DEF ? "" : sl("history","Прошлых реплик над текущей",0,3,1,D.history,v => v) + sl("delay","Убирать через, после того как реплика исчезла",0,30,0.5,D.delay,v => v + " с")}</div>`;
+}
 R.win = () => {
   if (!D) return null;
   const sl = (k, t, min, max, step, v, fmt) => `<label style="display:flex;flex-direction:column;gap:4px"><span class="row"><span class="lbl" style="flex-grow:1">${t}</span><span style="font-size:12px">${fmt(v)}</span></span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-c="st" data-k="${k}"></label>`;
@@ -457,13 +476,7 @@ R.win = () => {
       ${D.orig ? `<div style="font-size:11px;color:#9C9A92">Renald: Stay close! Did you hear that?</div>` : ""}</div></div>`;
   const DEF = !!D.default;
   return `${DEF ? back("tr", "Переводчики") : back("games", "Игры")}<div style="display:flex;flex-direction:column;gap:4px"><h1>${DEF ? "Вид для новых игр" : "Вид перевода"}</h1><span class="subt">${DEF ? "Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой." : D.owner ? "Для игры «" + esc(D.owner) + "». У каждой игры свой вид." : "Вид по умолчанию — игра не выбрана."} Образец меняется сразу.</span></div>
-  ${prev}
-    <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
-      <div class="row" style="gap:12px"><span style="flex-grow:1">Шрифт</span><select class="sel" style="width:200px" data-c="stf">${D.fonts.map(f => `<option ${f == fam ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></div>
-      <div class="row" style="gap:8px"><span style="flex-grow:1">Цвет текста</span>${sws("color", D.colors, D.color)}</div>
-      <div class="seg" style="align-self:flex-start"><button aria-pressed="${!out}" class="m" data-a="stm" data-v="box" style="height:30px;padding:0 14px">Плашка</button><button aria-pressed="${out}" class="m" data-a="stm" data-v="outline" style="height:30px;padding:0 14px">Обводка букв</button></div>
-      ${sl("size","Размер шрифта",10,26,1,sz,v => v)}${sl("alpha","Непрозрачность",40,100,5,D.alpha,v => v + "%")}
-      ${DEF ? "" : sl("history","Прошлых реплик над текущей",0,3,1,D.history,v => v) + sl("delay","Убирать через, после того как реплика исчезла",0,30,0.5,D.delay,v => v + " с")}</div>${DEF ? "" : `
+  ${styleBlock(D, DEF)}${DEF ? "" : `
   <div class="card" style="padding:4px 16px"><div class="lst">${tg("keep","Не убирать, пока нет новой реплики","",D.keep)}${tg("orig","Показывать оригинал под переводом","",D.orig)}</div></div>
   <h2 style="font-size:15px;padding-top:6px">Окно чата</h2>
   <div style="background:linear-gradient(160deg,#3a2c20,#1d1712);border-radius:14px;padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;color:#c9b9a6">Образец</span>
@@ -474,7 +487,7 @@ R.win = () => {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 20px">${sl("chat_height","Высота, px (0 — по сообщениям)",0,600,20,D.chat_height,v => v)}${sl("chat_history","Хранить сообщений",20,1000,10,D.chat_history,v => v)}${sl("chat_alpha","Непрозрачность",20,100,5,D.chat_alpha,v => v + "%")}</div>
     <div class="row" style="gap:8px"><span style="flex-grow:1">Цвет текста</span>${sws("chat_fg", D.chat_colors, D.chat_fg)}</div></div>`}`;
 };
-const scope = () => SCR == "win_default" ? "default" : "game";
+const scope = () => (SCR == "win_default" || SCR == "tr") ? "default" : "game";
 HANDLERS.st = b => act("style", {k: b.dataset.k, v: +b.value, scope: scope()});
 HANDLERS.stf = b => act("style", {k: "font", v: b.value, scope: scope()});
 HANDLERS.stc = b => act("style", {k: b.dataset.k, v: b.dataset.v, scope: scope()});
