@@ -42,6 +42,7 @@ FLAGS = {  # переключатели: имя → (атрибут config, кл
     "tts_finish": ("TTS_FINISH_LINE", "tts_finish_line", "tts"),
     "tts_skip": ("TTS_SKIP_FAST", "tts_skip_fast", "tts"),
     "tts_nowait": ("TTS_NO_WAIT", "tts_no_wait", "tts"),
+    "ed_shot": ("EDITOR_SCENE_IMAGE", "editor_scene_image", None),
     "tts_read_name": ("TTS_READ_NAME", "tts_read_name", "tts"),
     "tts_russian_only": ("TTS_RUSSIAN_ONLY", "tts_russian_only", "tts"),
 }
@@ -130,7 +131,7 @@ def _s_tr():
     s = editor.stats
     return {"main": config.PROVIDER, "fallback": list(config.FALLBACK_PROVIDERS),
             "chain": chain, "providers": provs, "editor_on": bool(config.EDITOR_ON), "editor": config.EDITOR,
-            "editors": eds, "editor2": config.EDITOR2,
+            "editors": eds, "editor2": config.EDITOR2, "ed_shot": config.EDITOR_SCENE_IMAGE,
             "bad": [{"en": x.get("en", ""), "ru": x.get("ru", "")} for x in core.SETTINGS.get("bad_lines", [])],
             "editor_stats": {k: s.get(k, 0) for k in ("edited", "same", "late", "failed", "voice_up", "skipped")},
             "flags": {k: bool(getattr(config, FLAGS[k][0], False))

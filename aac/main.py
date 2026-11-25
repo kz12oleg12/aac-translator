@@ -25,6 +25,7 @@ def apply_view_settings():
     config.UPDATE_AUTO = bool(core.SETTINGS.get("update_auto", config.UPDATE_AUTO))
     config.HOTKEY_SUPPRESS = bool(core.SETTINGS.get("hotkey_suppress", config.HOTKEY_SUPPRESS))
     config.EDITOR = str(core.SETTINGS.get("editor") or config.EDITOR)
+    config.EDITOR_SCENE_IMAGE = bool(core.SETTINGS.get("editor_scene_image", config.EDITOR_SCENE_IMAGE))
     config.EDITOR2 = str(core.SETTINGS.get("editor2") or "")
     config.EDITOR_ON = bool(core.SETTINGS.get("editor_on", config.EDITOR_ON))
     config.SHOW_ON_STREAM = bool(core.SETTINGS.get("show_on_stream", config.SHOW_ON_STREAM))

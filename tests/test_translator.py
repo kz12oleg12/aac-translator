@@ -2020,6 +2020,11 @@ def test_editor_voice(monkey):
     r = editor.parse("TEXT:\nЯ пришла за тобой.\nVOICE:\nЯ пришл+а за тоб+ой, Арг+ус.\nSPEAKER: Lyra\nGENDER: f\nMOOD: shout")
     assert r["text"] == "Я пришла за тобой." and r["speaker"] == "Lyra" and r["gender"] == "f" and r["mood"] == "shout"
     assert editor.parse("просто текст") == {"text": "просто текст"}
+    shots = []
+    monkey(editor, "_ask_with_shot", lambda p: shots.append(p) or "A woman, Lyra, talks to the player.")
+    monkey(editor.config, "EDITOR_SCENE_IMAGE", True)
+    editor._update_scene()
+    assert shots and "screenshot" in shots[0] and "Lyra" in editor._state["scene"]
     assert editor.trivial("Да.") and editor.trivial("Хм… ладно.") and not editor.trivial("Да, Аргус.")
     assert not editor.trivial("Возьми 3 зелья.") and not editor.trivial("Я пришёл за тобой сегодня вечером.")
     r2 = editor.parse("TEXT:\nА\nVOICE:\nА\nSPEAKER: -\nGENDER: m\nMOOD: -\nTYPE: old\nADDRESS: вы\nTERMS: Dawn Blade = Клинок Рассвета; x")

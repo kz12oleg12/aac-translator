@@ -61,7 +61,11 @@ TERMS: <English = Русский; English = Русский … or ->"""
 
 SCENE_PROMPT = """Here are the latest dialogue lines from {game} (English original → Russian):
 {lines}
-{old}Write 1-2 short sentences in English: who is talking to whom and what is going on now. No intro."""
+{old}{shot}Write 1-2 short sentences in English: who is talking to whom and what is going on now. No intro."""
+
+SHOT_NOTE = """The attached screenshot is the current game screen. Use it: say who is visible (man/woman/child/old/creature,
+by name if the dialogue reveals it) and who is likely speaking.
+"""
 
 _state = {"scene": "", "since_scene": 0, "history": []}
 _speech = {}            # показанный текст → {"voice", "speaker", "gender", "mood"} — для озвучки
@@ -115,6 +119,30 @@ def _ask_one(e, prompt):
     if e in llm.OPENAI_COMPAT:
         return llm.ask_openai_compat(e, None, prompt)
     return llm.ask_gemini(None, prompt)
+
+
+def _ask_with_shot(prompt):
+    """Заметка о сцене по скриншоту игры: видно, кто в кадре — точнее говорящий и его пол."""
+    from . import capture, llm
+    img = capture.grab(None)
+    for e in candidates():
+        if not _usable(e) or is_custom_id(e):
+            continue                       # свои ИИ могут не понимать картинки — для них заметка только по тексту
+        try:
+            if e == "claude":
+                return llm.ask_claude(capture.encode(img, 1024), prompt)
+            if e in llm.OPENAI_COMPAT:
+                return llm.ask_openai_compat(e, img, prompt)
+            return llm.ask_gemini(capture.encode(img, 1024), prompt)
+        except core.RateLimited:
+            llm.provider_cooldown[e] = time.time() + config.PROVIDER_COOLDOWN.get(e, 60)
+        except Exception:
+            pass
+    return None
+
+
+def is_custom_id(e):
+    return str(e).startswith("c_")
 
 
 def _ask(prompt):
@@ -347,11 +375,18 @@ def _update_scene():
     with _lock:
         lines = "\n".join(f"{a} → {b}" for a, b in _state["history"][-8:])
         old = _state["scene"]
-    try:
-        out = _ask(SCENE_PROMPT.format(game=game, lines=lines,
-                                       old=(f"Previous note: {old}\n" if old else "")))
-    except Exception:
-        return
+    fmt = dict(game=game, lines=lines, old=(f"Previous note: {old}\n" if old else ""))
+    out = None
+    if config.EDITOR_SCENE_IMAGE:
+        try:
+            out = _ask_with_shot(SCENE_PROMPT.format(shot=SHOT_NOTE, **fmt))
+        except Exception:
+            out = None
+    if not out:
+        try:
+            out = _ask(SCENE_PROMPT.format(shot="", **fmt))
+        except Exception:
+            return
     out = (out or "").strip()
     if out and len(out) < 400:
         with _lock:
