@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <title>AAC Translator</title>
 <style>
-:root{--bg:#262624;--side:#1F1E1D;--card:#2b2b29;--line:#3D3D3A;--line2:#4D4C48;--t:#FAF9F5;--t2:#DEDCD1;--t3:#B0AEA5;--m:#9C9A92;--f:#87867F;--acc:#5865F2;--acc2:#949cf7;--ok:#23a55a;--warn:#f0b232;--err:#f28b82;--mono:'JetBrains Mono',Consolas,monospace}
-*{box-sizing:border-box}
+:root{color-scheme:dark;--bg:#262624;--side:#1F1E1D;--card:#2b2b29;--line:#3D3D3A;--line2:#4D4C48;--t:#FAF9F5;--t2:#DEDCD1;--t3:#B0AEA5;--m:#9C9A92;--f:#87867F;--acc:#5865F2;--acc2:#949cf7;--ok:#23a55a;--warn:#f0b232;--err:#f28b82;--mono:'JetBrains Mono',Consolas,monospace}
+*{box-sizing:border-box;scrollbar-width:none}
+*::-webkit-scrollbar{width:0;height:0}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--t);font:14px/1.4 'Segoe UI Variable','Segoe UI',system-ui,sans-serif;overflow:hidden}
 button{font:inherit;cursor:pointer}
 a{color:var(--acc2);text-decoration:none;cursor:pointer}a:hover{color:#b5baf9}
@@ -108,6 +109,17 @@ textarea.inp{height:96px;padding:10px 12px;resize:none;background:var(--side);bo
 .thumb{width:64px;height:36px;border-radius:6px;flex-shrink:0;background:repeating-linear-gradient(135deg,#34343a 0 6px,#2e2e33 6px 12px)}
 .sq{width:12px;height:12px;border-radius:3px;flex-shrink:0}
 .empty{color:var(--f);font-size:13px;padding:14px 0}
+
+/* полоса прокрутки — тонкая, в цвет панели, видна при наведении */
+*{scrollbar-width:thin;scrollbar-color:transparent transparent}
+*:hover{scrollbar-color:rgba(255,255,255,.14) transparent}
+::-webkit-scrollbar{width:8px;height:8px;background:transparent}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-button{display:none;width:0;height:0}
+::-webkit-scrollbar-corner{background:transparent}
+::-webkit-scrollbar-thumb{background:transparent;border-radius:4px;border:2px solid transparent;background-clip:padding-box}
+:hover::-webkit-scrollbar-thumb{background-color:rgba(255,255,255,.14)}
+::-webkit-scrollbar-thumb:hover{background-color:rgba(255,255,255,.26)}
 </style>
 </head>
 <body>
