@@ -907,7 +907,7 @@ class _Neural:
                    f"запуск звука {now - t_synth:.1f} с")
             if job["faster"]:
                 msg += " (ждала конца прошлой реплики, читаю чуть быстрее)"
-            elif job["seen"] < job["t0"] - 0.05:
+            elif job["t0"] - 30 < job["seen"] < job["t0"] - 0.05:     # старше 30 с — замер сбился, не пишем
                 msg += f"; от появления текста {now - job['seen']:.1f} с"
             if not self.ok_logged:
                 self.ok_logged = True

@@ -284,7 +284,8 @@ class Watcher:
                             time.sleep(config.POLL_INTERVAL)
                             continue
                         if not same_text(cur, self._prev_ocr):
-                            if not self._prev_ocr or same_text(self._prev_ocr, self._sent_ocr):
+                            if (not self._prev_ocr or same_text(self._prev_ocr, self._sent_ocr)
+                                    or (self._seen_at or 0) < getattr(self, "_sent_at", 0)):
                                 self._seen_at = now      # момент, когда новая реплика появилась на экране
                             self._warn_unstable(self._prev_ocr, cur)
                             self._prev_ocr = cur
@@ -304,6 +305,7 @@ class Watcher:
                             time.sleep(config.POLL_INTERVAL)
                             continue
                         self._sent_ocr = cur
+                        self._sent_at = now
                 wait = translate.chain_ready_in()
                 if wait > 0:
                     # все переводчики на паузе — не долбим их, просто ждём (сообщение — один раз)
