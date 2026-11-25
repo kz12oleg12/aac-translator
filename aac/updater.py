@@ -156,17 +156,83 @@ def check_async(quiet=True):
     threading.Thread(target=check, args=(quiet,), daemon=True).start()
 
 
+STAGE_DIR = os.path.join(config.APP_DIR, "update_ready")
+
+
+def staged():
+    """Скачанная заранее новая версия (.exe): {"version", "folder"} или None."""
+    st = state.get("staged") or core.SETTINGS.get("staged_update")
+    if (isinstance(st, dict) and st.get("version") and is_newer(st["version"]) and st.get("folder")
+            and os.path.isfile(os.path.join(st["folder"], EXE_NAME))):
+        state["staged"] = st
+        return st
+    return None
+
+
+def stage(info):
+    """Тихо скачать новую версию заранее (.exe). Установится, когда программу закроют или перезапустят —
+    без лишнего перезапуска при следующем запуске."""
+    if not config.FROZEN or state.get("staging") or not is_newer(info["version"]):
+        return False
+    st = staged()
+    if st and st["version"] == info["version"]:
+        return True
+    state["staging"] = True
+    try:
+        import shutil
+        shutil.rmtree(STAGE_DIR, ignore_errors=True)
+        dest = os.path.join(STAGE_DIR, info["version"])
+        os.makedirs(dest, exist_ok=True)
+        folder = download(info, dest)
+        st = {"version": info["version"], "folder": folder}
+        state["staged"] = st
+        core.save_settings(staged_update=st)
+        core.log(f"Версия {info['version']} скачана — установится сама, когда вы закроете программу "
+                 "(или кнопкой «Перезапустить» сейчас).", "ok")
+        core.events.put(("update_staged", info))
+        return True
+    except Exception as e:
+        core.log(f"Обновления: не удалось скачать заранее ({e}) — попробую позже", "warn")
+        return False
+    finally:
+        state["staging"] = False
+
+
+def apply_staged(restart):
+    """Поставить скачанную версию: программа закрывается, файлы копируются, (restart) — запускается снова."""
+    st = staged()
+    if not st or state["installing"]:
+        return False
+    state["installing"] = True
+    try:
+        bat = os.path.join(tempfile.gettempdir(), f"aac_update_{os.getpid()}.bat")
+        with open(bat, "w", encoding="utf-8") as f:
+            f.write(exe_update_script(st["folder"], config.APP_DIR, os.getpid(), start=restart))
+        from .uninstall import run_hidden
+        run_hidden(bat)
+        core.log(f"Ставлю версию {st['version']}…", "ok")
+        return True
+    except Exception as e:
+        state["installing"] = False
+        core.log(f"Обновление не поставилось: {e}", "error")
+        return False
+
+
 def startup_check():
     """Проверка при запуске. Включено «обновлять автоматически» и есть новая версия — ставим сразу
     (программа только что запущена, вы ещё не в игре). Во время работы сама не обновляется."""
-    if core.SETTINGS.get("staged_update"):
-        core.save_settings(staged_update=None)        # след старого способа (9.7–9.9) — больше не нужен
-    old = os.path.join(config.APP_DIR, "update_ready")
-    if os.path.isdir(old):
-        import shutil
-        shutil.rmtree(old, ignore_errors=True)
+    st = core.SETTINGS.get("staged_update")
+    if not staged():                                  # уже стоит (или устарело) — убрать скачанное
+        if st:
+            core.save_settings(staged_update=None)
+        if os.path.isdir(STAGE_DIR):
+            import shutil
+            shutil.rmtree(STAGE_DIR, ignore_errors=True)
     info = check(quiet=True)
     if info and is_newer(info["version"]):
+        if config.UPDATE_AUTO and config.FROZEN:      # скачать тихо, поставить при выходе — без перезапуска сейчас
+            stage(info)
+            return False
         if config.UPDATE_AUTO:
             state["auto_installing"] = True
             core.log(f"Нашлась новая версия {info['version']} — обновляюсь при запуске, программа перезапустится…",
@@ -192,11 +258,14 @@ def start_periodic():
 
     def loop():
         time.sleep(3)
-        if startup_check() or config.UPDATE_EVERY_SECONDS <= 0:
+        every = config.UPDATE_EVERY_SECONDS or (3 * 3600 if config.UPDATE_AUTO and config.FROZEN else 0)
+        if startup_check() or every <= 0:
             return
         while True:
-            time.sleep(max(30, config.UPDATE_EVERY_SECONDS))
-            check(quiet=True)
+            time.sleep(max(30, every))
+            info = check(quiet=True)
+            if info and config.UPDATE_AUTO and config.FROZEN and is_newer(info["version"]):
+                stage(info)
             if "ограничил" in str(state.get("error") or ""):
                 time.sleep(15 * 60)                    # GitHub попросил подождать — не настаиваем
     threading.Thread(target=loop, daemon=True).start()
@@ -224,7 +293,7 @@ def download(info, dest_dir):
     raise RuntimeError(f"в архиве обновления нет {EXE_NAME if config.FROZEN else 'install.py'}")
 
 
-def exe_update_script(src, app_dir, pid):
+def exe_update_script(src, app_dir, pid, start=True):
     """Для .exe: bat-файл — дождаться закрытия программы, скопировать новые файлы поверх, запустить снова.
     Ваши файлы (настройки, словари, история) в архиве обновления не лежат и не трогаются."""
     log = os.path.join(app_dir, "update.log")
@@ -233,11 +302,16 @@ def exe_update_script(src, app_dir, pid):
             f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && (ping -n 2 127.0.0.1 >nul & goto wait)\r\n'
             f'echo Обновление из "{src}" >> "{log}"\r\n'
             f'robocopy "{src}" "{app_dir}" /E /R:5 /W:1 /NFL /NDL /NJH /NP >> "{log}"\r\n'
-            f'start "" "{os.path.join(app_dir, EXE_NAME)}"\r\n')
+            + (f'start "" "{os.path.join(app_dir, EXE_NAME)}"\r\n' if start else ""))
 
 
 def install(info):
     """Скачать и запустить установщик; программа после этого должна закрыться (событие quit)."""
+    st = staged()
+    if st and st["version"] == info["version"]:          # уже скачана — сразу ставим
+        if apply_staged(restart=True):
+            core.events.put(("quit", None))
+        return
     if state["installing"]:
         return
     state["installing"] = True

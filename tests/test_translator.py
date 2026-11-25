@@ -2013,6 +2013,40 @@ def test_new_shell(monkey):
         app.root.destroy()
 
 
+def test_update_staged(monkey):
+    """.exe с автообновлением: новая версия скачивается заранее и ставится при выходе — без перезапуска при старте."""
+    from aac import updater
+    if not hasattr(updater, "stage"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    import tempfile as _tf
+    cfg = T._owner("UPDATE_AUTO")
+    T.set("SETTINGS", {})
+    monkey(cfg, "UPDATE_AUTO", True)
+    monkey(cfg, "FROZEN", True)
+    tmp = _tf.mkdtemp()
+    monkey(updater, "STAGE_DIR", os.path.join(tmp, "update_ready"))
+
+    def fake_download(info, dest):
+        open(os.path.join(dest, updater.EXE_NAME), "w").close()
+        return dest
+    monkey(updater, "download", fake_download)
+    newer = {"version": "99.0", "notes": "", "asset_url": "x"}
+    monkey(updater, "check", lambda quiet=True: newer)
+    updater.state.pop("staged", None)
+    drain()
+    assert updater.startup_check() is False, "при запуске не перезапускается"
+    ev = drain()
+    assert ("update_install", None) not in ev, "сразу не ставится"
+    assert any(k == "update_staged" for k, p in ev), "скачано заранее"
+    st = updater.staged()
+    assert st and st["version"] == "99.0"
+    bat = updater.exe_update_script(st["folder"], tmp, 123, start=False)
+    assert "robocopy" in bat and "start \"\"" not in bat, "при выходе — только копирование, без запуска"
+    assert "start \"\"" in updater.exe_update_script(st["folder"], tmp, 123), "перезапуск — с запуском"
+    updater.state.pop("staged", None)
+
+
 def test_update_on_startup(monkey):
     """Сама программа обновляется только при запуске и только если включено «обновлять автоматически»."""
     from aac import updater

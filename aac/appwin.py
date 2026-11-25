@@ -411,6 +411,11 @@ class App:
 
     def restart(self):
         """Перезапуск: новая копия ждёт, пока эта закроется, и запускается."""
+        if updater.staged():               # есть скачанная версия — перезапуск сразу в неё
+            if updater.apply_staged(restart=True):
+                core.log("Перезапускаю программу в новую версию…", "ok")
+                core.events.put(("quit", None))
+                return
         import subprocess
         import sys
         script = os.path.join(config.APP_DIR, "aac_translator.py")
@@ -963,7 +968,7 @@ class App:
                     if updater.state.get("announced") != payload["version"] and not updater.state.get("auto_installing"):
                         updater.state["announced"] = payload["version"]          # уведомление — один раз на версию
                         tray.notify(f"AAC Translator {payload['version']}",
-                                    "Вышла новая версия — " + ("установится при следующем запуске программы."
+                                    "Вышла новая версия — " + ("скачиваю, установится, когда закроете программу."
                                                                if config.UPDATE_AUTO else
                                                                "кнопка «Обновить» на Главной."))
                 elif kind == "update_install":
@@ -1029,8 +1034,14 @@ class App:
                     self.panel.fill_voices(payload)
                 elif kind == "web_call":
                     payload()
+                elif kind == "update_staged":
+                    tray.notify(f"AAC Translator {payload['version']}",
+                                "Новая версия скачана — установится, когда закроете программу.")
+                    self.panel.refresh()
                 elif kind == "quit":
                     self._closing = True
+                    if updater.staged() and not updater.state.get("installing"):
+                        updater.apply_staged(restart=False)     # скачанная версия ставится при выходе
                     try:
                         from . import web_api
                         web_api.shutdown()

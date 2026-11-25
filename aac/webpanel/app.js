@@ -590,9 +590,10 @@ $("flt").onclick = e => { const b = e.target.closest("button"); if (!b) return; 
 // ---------- новая версия — в боковой колонке ----------
 let updShown = null;
 function updNav() {
-  const v = S && S.update || "";
-  if (v === updShown) return; updShown = v;
-  $("updnav").innerHTML = v ? `<div class="uc"><span>Доступна версия ${esc(v)}</span><button data-act="update_install">Обновить</button></div>
+  const st = S && S.staged || "", v = st || (S && S.update) || "";
+  if (v + st === updShown) return; updShown = v + st;
+  $("updnav").innerHTML = st ? `<div class="uc"><span>Версия ${esc(st)} скачана — поставится, когда закроете программу</span><button data-act="restart">Перезапустить сейчас</button></div>
+    <button class="ui" data-act="restart" title="Версия ${esc(st)} скачана — перезапустить сейчас" aria-label="Перезапустить в версию ${esc(st)}">${svg("end", 16, 2).replace("M5 12h14M13 6l6 6-6 6", "M12 19V5M6 11l6-6 6 6")}</button>` : v ? `<div class="uc"><span>Доступна версия ${esc(v)}</span><button data-act="update_install">Обновить</button></div>
     <button class="ui" data-act="update_install" title="Доступна версия ${esc(v)} — обновить" aria-label="Обновить до ${esc(v)}">${svg("end", 16, 2).replace("M5 12h14M13 6l6 6-6 6", "M12 19V5M6 11l6-6 6 6")}</button>` : "";
 }
 

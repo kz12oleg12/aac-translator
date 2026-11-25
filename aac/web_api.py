@@ -119,6 +119,7 @@ def state():
         },
         "stream": bool(config.SHOW_ON_STREAM),
         "new_game": _new_game(app),
+        "staged": (_safe(lambda: __import__("aac.updater", fromlist=["x"]).staged()) or {}).get("version"),
         "voice": _voice(),
         "update_auto": bool(getattr(config, "UPDATE_AUTO", False)),
         "keys": keys, "key_desc": descs,
