@@ -230,7 +230,7 @@ def speak_subtitle(translation, seen=None, orig=None):
         from . import editor
         info = editor.speech_for(translation)
         if info and info.get("voice"):
-            text = _with_mood(info["voice"].replace("\n", " "), info.get("mood"))
+            text = _with_mood(speech_text(info["voice"], orig), info.get("mood"))   # имя — только если включено
         text = editor.apply_stress(text)
     except Exception:
         info = None
@@ -263,7 +263,7 @@ def _line_key(translation):
 
 def _prepare(info):
     from . import editor
-    return editor.apply_stress(_with_mood(info["voice"].replace("\n", " "), info.get("mood")))
+    return editor.apply_stress(_with_mood(speech_text(info["voice"]), info.get("mood")))
 
 
 def upgrade(translation, info):

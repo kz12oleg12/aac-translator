@@ -2044,6 +2044,11 @@ def test_editor_voice(monkey):
     monkey(voices, "note_line", lambda tr, orig=None: None)
     tts.speak_subtitle("Я пришла за тобой, Аргус.", orig="I came for you, Argus.")
     assert said and said[-1] == "Я пришл+а за тоб+ой, Арг+ус!"
+    monkey(tts.config, "TTS_READ_NAME", False)
+    editor._keep_speech("Коллекционер: Ты опять пришёл?", {"text": "Коллекционер: Ты опять пришёл?",
+                                                          "voice": "Коллекцион+ер: Ты оп+ять пришёл?"})
+    tts.speak_subtitle("Коллекционер: Ты опять пришёл?", orig="Collector: You came again?")
+    assert said[-1].startswith("Ты оп+ять"), said[-1]
 
 
 def test_tts_upgrade(monkey):
