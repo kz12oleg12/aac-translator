@@ -104,7 +104,8 @@ def state():
                  "running": _safe(profiles.is_running, False), "free": _safe(profiles.is_free, False)},
         "games": games[:6],
         "translator": {"chain": [PROVIDER_NAMES.get(p, p) for p in chain[:3]], "editor": editor_name,
-                       "editor_on": bool(getattr(config, "EDITOR_ON", False))},
+                       "editor_on": bool(getattr(config, "EDITOR_ON", False)), "editor_id": config.EDITOR,
+                       "editors": _editors()},
         "limits": bars,
         "cache": {"pct": (100 * tcache.stats["hits"] // total) if total else None,
                   "size": _safe(tcache.size, 0), "on": config.CACHE_ENABLED},
@@ -122,6 +123,15 @@ def state():
         "update_auto": bool(getattr(config, "UPDATE_AUTO", False)),
         "keys": keys, "key_desc": descs,
     }
+
+
+def _editors():
+    try:
+        from . import editor, translate
+        return [{"id": e, "name": editor.EDITORS[e][0].split(" —")[0], "desc": editor.EDITORS[e][0].split("— ")[-1],
+                 "has": translate.provider_has_key(e)} for e in editor.EDITORS]
+    except Exception:
+        return []
 
 
 def _voice():

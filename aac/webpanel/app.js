@@ -127,10 +127,11 @@ R.home = () => {
     <div style="display:flex;flex-direction:column;gap:2px;flex-grow:1"><span class="ttl">Автоперевод</span><span class="sub">${esc(a.sub)}</span></div>
     <span class="key">${esc(K.auto)}</span><button class="btnp${a.on ? "" : " off"}" data-act="auto">${a.on ? "Выключить" : "Включить"}</button></div>
   <div class="two">
-    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Переводчик</span><a data-go="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px">${esc(s.translator.chain.join(" → ") || "нет ключей!")}</span>${lim(s.limits[0])}</div>
-    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">ИИ-редактор</span><a data-go="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px">${esc(s.translator.editor || "выключен")}</span>${lim(s.limits[1])}</div>
+    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Переводчик</span><a data-go="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px">${esc(s.translator.chain.join(" → ") || "Нет ключей")}</span>${lim(s.limits[0])}</div>
+    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">ИИ-редактор</span>${sw(s.translator.editor_on, 'data-a="hedon" title="Включить или выключить ИИ-редактор"')}</div>
+      ${s.translator.editor_on ? `<button class="vbtn" data-a="eddlg" aria-label="Выбрать нейросеть редактора"><span>${esc((s.translator.editors.find(e => e.id == s.translator.editor_id) || {}).name || "Groq")}</span>${svg("end", 14, 2)}</button>` : `<span style="font-size:16px;color:var(--f)">Выключен</span>`}${s.translator.editor_on ? lim(s.limits[1]) : ""}</div>
     <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Основной голос</span><a data-go="voice" style="font-size:12px">озвучка</a></div>
-      <button class="vbtn" data-a="vdlg" aria-label="Выбрать основной голос"><span>${esc(((s.voice.list.find(v => v.id == s.voice.id) || {}).name || "по умолчанию").split(" — ")[0])}</span>${svg("end", 14, 2)}</button></div></div>
+      <button class="vbtn" data-a="vdlg" aria-label="Выбрать основной голос"><span>${esc(((s.voice.list.find(v => v.id == s.voice.id) || {}).name || "По умолчанию").split(" — ")[0])}</span>${svg("end", 14, 2)}</button></div></div>
   <div class="grid3">
     ${card("select","subs","Субтитры",M.subs.ready ? "Основная область" : "Не обведена — нажмите",M.subs.ready,K.select,false)}
     ${card("select_subs2","lines","Реплики",M.subs2.ready ? "Вторая область" : "Не обведена — нажмите",M.subs2.ready,K.select_subs2,false)}
@@ -142,14 +143,26 @@ R.home = () => {
     <div style="display:flex;flex-direction:column;gap:2px;flex-grow:1"><span style="font-weight:600">Показывать на трансляции</span><span style="font-size:12px;color:var(--m)">Зрители в Discord, OBS и на записи экрана видят переводы. Панель и журнал скрыты</span></div>
     ${sw(s.stream, 'data-a="stream"')}</div>
   <div style="height:.5px;background:var(--line)"></div>
-  <div style="display:flex;flex-direction:column;gap:10px"><h2>Ещё клавиши</h2>
-    <div class="keys">${show.filter(h => K[h]).map(h => `<div class="k"><span class="key">${esc(K[h])}</span><span>${esc(s.key_desc[h])}</span></div>`).join("")}</div>
+  <div style="display:flex;flex-direction:column;gap:10px"><h2>Горячие клавиши</h2>
+    <div class="hk">${show.filter(h => K[h]).map(h => { const d = s.key_desc[h] || ""; return `<div class="hkt"><span class="hkk">${esc(K[h])}</span><span class="hkd">${esc(d[0].toUpperCase() + d.slice(1))}</span></div>`; }).join("")}</div>
     <button class="btn" data-go="keys" style="padding:3px 16px">Изменить</button></div>`;
 };
 HANDLERS.ngareas = b => { SUB.game = b.dataset.id; act("new_dismiss"); go("games"); };
 HANDLERS.ngno = () => act("new_not_game");
 HANDLERS.hvoice = b => act("tts_voice", b.value);
 HANDLERS.vdlg = () => voiceDlg();
+HANDLERS.hedon = b => act("editor_on", b.getAttribute("aria-checked") != "true");
+HANDLERS.eddlg = () => edDlg();
+function edDlg() {
+  const E = S.translator.editors, cur = S.translator.editor_id;
+  modal(`<div class="row"><span style="font-size:18px;font-weight:600;flex-grow:1">Кто редактирует</span><button class="ib" data-close="1">${svg("x", 16)}</button></div>
+    <span style="font-size:13px;color:var(--t3)">Нейросеть доводит машинный перевод: падежи и род, имена по словарю, тон и «ты»/«вы». Работает поверх DeepL, Microsoft и Google.</span>
+    <div style="display:flex;flex-direction:column;gap:2px;margin:0 -8px">${E.map(e => `<div class="r" style="padding:6px 8px;border-radius:8px;${e.id == cur ? "background:rgba(88,101,242,.16)" : ""}">
+      <button class="gi" style="flex-grow:1;padding:2px 0;background:none" ${e.has ? `data-pe="${e.id}"` : "disabled"}><span style="display:flex;flex-direction:column;align-items:flex-start"><span style="font-weight:${e.id == cur ? 600 : 400};color:${e.has ? "var(--t)" : "var(--f)"}">${esc(e.name)}</span><span style="font-size:12px;color:var(--f)">${esc(e.desc)}</span></span></button>
+      ${e.id == cur ? `<span style="color:var(--acc2);display:flex">${svg("check", 16, 2)}</span>` : e.has ? "" : `<a data-close="1" data-go="tr" style="font-size:12px;white-space:nowrap">добавить ключ</a>`}</div>`).join("")}</div>
+    <div style="display:flex;justify-content:flex-end"><button class="btn" style="height:36px;padding:0 16px;font-size:13px" data-close="1">Готово</button></div>`);
+  $("dlg").querySelectorAll("[data-pe]").forEach(b => b.onclick = async () => { await act("editor", b.dataset.pe); S.translator.editor_id = b.dataset.pe; edDlg(); });
+}
 function voiceDlg() {
   const L = S.voice.list, cur = S.voice.id;
   const groups = [["Женские", v => /женск/i.test(v.name)], ["Мужские", v => /мужск/i.test(v.name)], ["", v => !/женск|мужск/i.test(v.name)]];
