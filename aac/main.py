@@ -329,14 +329,14 @@ def main():
         print("Переводчик уже запущен — показал его панель.")
         return
     core.SETTINGS = core.load_settings()
-    try:              # свои ИИ-переводчики: ключи из Windows и подключение к остальной программе
-        from . import custom_ai
-        try:
+    try:              # окно панели по ошибке приняли за игру — убираем такой пресет
         from . import profiles as _pr
         _pr.drop_self()
     except Exception:
         pass
-    custom_ai.load_keys_from_windows()
+    try:              # свои ИИ-переводчики: ключи из Windows и подключение к остальной программе
+        from . import custom_ai
+        custom_ai.load_keys_from_windows()
         custom_ai.register()
     except Exception as e:
         print(f"Свои переводчики не подключились: {e}")
