@@ -52,6 +52,19 @@ def save(**kw):
     return apply()
 
 
+def save_default(**kw):
+    """Вид для новых игр (и когда игра не выбрана): общие настройки. Свой вид игр не трогается."""
+    kw = {k: v for k, v in kw.items() if k in KEYS}
+    core.save_settings(**kw)
+    if isinstance(core.SETTINGS, dict):
+        core.SETTINGS.update(kw)
+    return apply()
+
+
+def default():
+    return _global()
+
+
 def owner():
     """Для подписи в панели: чей вид сейчас настраиваете."""
     from . import profiles

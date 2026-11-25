@@ -51,12 +51,12 @@ async function get(url) { try { const r = await fetch(url, {headers: H}); return
 const NAV = [["home","Главная"],["games","Игры"],["tr","Переводчики"],["voice","Озвучка"],["hist","История"],["keys","Клавиши"]];
 let SCR = "home", SUB = {voice: "voice", game: null, histKind: "Все", histQ: "", charQ: "", charG: "all"};
 function nav() {
-  const cur = {win: "games", gloss: "tr"}[SCR] || SCR;
+  const cur = {win: "games", gloss: "tr", win_default: "tr"}[SCR] || SCR;
   $("nav").innerHTML = NAV.map(([id, t]) => `<button class="it" data-go="${id}" title="${t}" ${cur == id ? 'aria-current="page"' : ""}>${svg(id)}<span>${t}</span>${id == "games" ? '<span class="n" id="gcount"></span>' : ""}</button>`).join("");
   $("gear").style.background = SCR == "settings" ? "rgba(88,101,242,.16)" : "";
 }
 function go(s) { SCR = s; nav(); $("main").innerHTML = ""; $("main").dataset.last = "";
-  $("ttl").textContent = ({home: "Главная", settings: "Настройки", win: "Вид перевода", gloss: "Словарь"})[s] || (NAV.find(n => n[0] == s) || ["", ""])[1]; D = null; refresh(true); $("main").scrollTop = 0; }
+  $("ttl").textContent = ({home: "Главная", settings: "Настройки", win: "Вид перевода", gloss: "Словарь", win_default: "Вид для новых игр"})[s] || (NAV.find(n => n[0] == s) || ["", ""])[1]; D = null; refresh(true); $("main").scrollTop = 0; }
 
 // ---------- общие клики ----------
 document.addEventListener("click", e => {
@@ -282,7 +282,10 @@ R.tr = () => {
     ${flag("cache","db","Кэш переводов","Повторы — мгновенно и без запросов",`${D.cache_size} фраз`,lnk("очистить",'data-a="cclear"'))}
     ${flag("gloss_auto","book","Пополнять словарь","Имена, предметы и места из переводов",`${D.gloss_count} записей`,lnk("открыть",'data-go="gloss"'))}
     ${flag("save_history","hist","История в файл","По файлу на каждый день","папка history",lnk("открыть",'data-a="hfolder"'))}
-    ${flag("skip_system","mute","Пропускать системные","Сообщения игры не переводить и не озвучивать")}</div>`;
+    ${flag("skip_system","mute","Пропускать системные","Сообщения игры не переводить и не озвучивать")}
+    <div class="mode" style="cursor:default"><div class="row">${ico("font", false)}</div>
+      <div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">Вид для новых игр</span><span style="font-size:12px;color:var(--m)">Шрифт, цвет и подложка перевода, пока игре не настроен свой</span></div>
+      <div class="row" style="margin-top:auto;font-size:12px;color:var(--m)"><span style="flex-grow:1">${esc(D.default_style)}</span>${lnk("изменить",'data-go="win_default"')}</div></div></div>`;
 };
 HANDLERS.pmain = b => act("provider_main", b.value);
 HANDLERS.fbadd = b => { if (b.value) act("provider_fallbacks", D.fallback.concat([b.value])); };
@@ -452,26 +455,29 @@ R.win = () => {
       ${D.history ? `<div style="font-size:${sz - 2}px;color:#9C9A92">Кеспер: Принеси кости — и я расскажу.</div>` : ""}
       <div style="font-size:${sz}px;font-weight:700;color:${D.color};${out ? "text-shadow:0 0 2px #000,0 0 2px #000,0 0 3px #000" : ""}">Ренальд: Держись рядом! Ты слышал это?</div>
       ${D.orig ? `<div style="font-size:11px;color:#9C9A92">Renald: Stay close! Did you hear that?</div>` : ""}</div></div>`;
-  return `${back("games", "Игры")}<div style="display:flex;flex-direction:column;gap:4px"><h1>Вид перевода</h1><span class="subt">${D.owner ? "Для игры «" + esc(D.owner) + "». У каждой игры свой вид." : "Вид по умолчанию — игра не выбрана."} Образец меняется сразу.</span></div>
+  const DEF = !!D.default;
+  return `${DEF ? back("tr", "Переводчики") : back("games", "Игры")}<div style="display:flex;flex-direction:column;gap:4px"><h1>${DEF ? "Вид для новых игр" : "Вид перевода"}</h1><span class="subt">${DEF ? "Его получает каждая новая игра и режим «Без игры». У игры, которой вы уже настроили вид, он свой." : D.owner ? "Для игры «" + esc(D.owner) + "». У каждой игры свой вид." : "Вид по умолчанию — игра не выбрана."} Образец меняется сразу.</span></div>
   <div style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px;align-items:start">
     <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
       <div class="row" style="gap:12px"><span style="flex-grow:1">Шрифт</span><select class="sel" style="width:200px" data-c="stf">${D.fonts.map(f => `<option ${f == fam ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></div>
       <div class="row" style="gap:8px"><span style="flex-grow:1">Цвет текста</span>${sws("color", D.colors, D.color)}</div>
       <div class="seg" style="align-self:flex-start"><button aria-pressed="${!out}" class="m" data-a="stm" data-v="box" style="height:30px;padding:0 14px">Плашка</button><button aria-pressed="${out}" class="m" data-a="stm" data-v="outline" style="height:30px;padding:0 14px">Обводка букв</button></div>
       ${sl("size","Размер шрифта",10,26,1,sz,v => v)}${sl("alpha","Непрозрачность",40,100,5,D.alpha,v => v + "%")}
-      ${sl("history","Прошлых реплик над текущей",0,3,1,D.history,v => v)}${sl("delay","Убирать через, после того как реплика исчезла",0,30,0.5,D.delay,v => v + " с")}</div>${prev}</div>
+      ${DEF ? "" : sl("history","Прошлых реплик над текущей",0,3,1,D.history,v => v) + sl("delay","Убирать через, после того как реплика исчезла",0,30,0.5,D.delay,v => v + " с")}</div>${prev}</div>${DEF ? "" : `
   <div class="card" style="padding:4px 16px"><div class="lst">${tg("keep","Не убирать, пока нет новой реплики","",D.keep)}${tg("orig","Показывать оригинал под переводом","",D.orig)}</div></div>
   <h2 style="font-size:15px;padding-top:6px">Окно чата</h2>
   <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:14px">
     <div class="lst">${tg("chat_cover","Перевод прямо поверх чата игры","Та же область, что и чат",D.chat_cover)}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 20px">${sl("chat_height","Высота, px (0 — по сообщениям)",0,600,20,D.chat_height,v => v)}${sl("chat_history","Хранить сообщений",20,1000,10,D.chat_history,v => v)}${sl("chat_alpha","Непрозрачность",20,100,5,D.chat_alpha,v => v + "%")}</div>
-    <div class="row" style="gap:8px"><span style="flex-grow:1">Цвет текста</span>${sws("chat_fg", D.chat_colors, D.chat_fg)}</div></div>`;
+    <div class="row" style="gap:8px"><span style="flex-grow:1">Цвет текста</span>${sws("chat_fg", D.chat_colors, D.chat_fg)}</div></div>`}`;
 };
-HANDLERS.st = b => act("style", {k: b.dataset.k, v: +b.value});
-HANDLERS.stf = b => act("style", {k: "font", v: b.value});
-HANDLERS.stc = b => act("style", {k: b.dataset.k, v: b.dataset.v});
-HANDLERS.stcol = b => act("style", {k: b.dataset.k, v: b.value});
-HANDLERS.stm = b => act("style", {k: "mode", v: b.dataset.v});
+const scope = () => SCR == "win_default" ? "default" : "game";
+HANDLERS.st = b => act("style", {k: b.dataset.k, v: +b.value, scope: scope()});
+HANDLERS.stf = b => act("style", {k: "font", v: b.value, scope: scope()});
+HANDLERS.stc = b => act("style", {k: b.dataset.k, v: b.dataset.v, scope: scope()});
+HANDLERS.stcol = b => act("style", {k: b.dataset.k, v: b.value, scope: scope()});
+HANDLERS.stm = b => act("style", {k: "mode", v: b.dataset.v, scope: scope()});
+R.win_default = () => R.win();
 HANDLERS.stt = b => act("style", {k: b.dataset.k, v: b.getAttribute("aria-checked") != "true"});
 
 // ---------- словарь ----------

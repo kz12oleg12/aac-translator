@@ -118,7 +118,13 @@ def _s_tr():
             "editor_stats": {k: s.get(k, 0) for k in ("edited", "same", "late", "failed")},
             "flags": {k: bool(getattr(config, FLAGS[k][0], False))
                       for k in ("cache", "skip_system", "gloss_auto", "save_history")},
-            "cache_size": tcache.size(), "gloss_count": _gloss_count()}
+            "cache_size": tcache.size(), "gloss_count": _gloss_count(), "default_style": _style_summary()}
+
+
+def _style_summary():
+    from . import style
+    g = style.default()
+    return f"{g['font_family']} {int(g['font_size'])} · {'обводка' if g['text_mode'] == 'outline' else 'плашка'}"
 
 
 def _gloss_count():
@@ -237,6 +243,15 @@ def _s_win():
             "chat_cover": bool(config.CHAT_COVER), "chat_height": config.CHAT_HEIGHT,
             "chat_history": config.CHAT_HISTORY, "chat_alpha": int(round(config.CHAT_ALPHA * 100)),
             "chat_fg": str(config.CHAT_FG), "chat_colors": ["#eeeeee", "#ffe08a", "#8cf0ff", "#9dff9d", "#ffb3e6"]}
+
+
+def _s_win_default():
+    from . import style
+    g = style.default()
+    d = _s_win()
+    d.update({"default": True, "owner": None, "font": g["font_family"], "size": int(g["font_size"]),
+              "color": str(g["text_color"]), "mode": g["text_mode"], "alpha": int(round(float(g["overlay_alpha"]) * 100))})
+    return d
 
 
 def _s_gloss():
@@ -564,7 +579,15 @@ def _style(a):
     except Exception:
         pass
     k, v = a.get("k"), a.get("v")
-    if k == "font":
+    if a.get("scope") == "default" and k in ("font", "color", "mode", "size", "alpha"):
+        key = {"font": "font_family", "color": "text_color", "mode": "text_mode", "size": "font_size",
+               "alpha": "overlay_alpha"}[k]
+        val = (str(v) if k in ("font", "color") else v if k == "mode" else
+               max(10, min(26, int(v))) if k == "size" else max(40, min(100, int(v))) / 100)
+        if k == "mode" and v not in ("box", "outline"):
+            return
+        style.save_default(**{key: val})
+    elif k == "font":
         style.save(font_family=str(v))
     elif k == "color":
         style.save(text_color=str(v))
