@@ -308,7 +308,9 @@ def set_ai_gender(key, g):
 
 TYPE_NAMES = {"young": "молодой", "old": "пожилой", "child": "ребёнок", "monster": "чудовище", "noble": "знатный"}
 TYPE_PITCH = {"neural": {"old": -18, "monster": -32, "child": 26, "young": 8, "noble": -6},     # Гц
-              "silero": {"old": -1, "monster": -2, "child": 2, "young": 1, "noble": -1}}       # ступени (-2…+2)
+              # у Silero разметка высоты почти не слышна — характер задаём «тембром» (десятки: -30…+20),
+              # звук потом растягивается/сжимается (tts_silero._timbre): ниже и медленнее или выше и быстрее
+              "silero": {"old": -20, "monster": -30, "child": 20, "young": 10, "noble": -10}}
 
 
 def line_voice(g, kind, engine=None):
@@ -425,8 +427,10 @@ def voice_for(key, engine=None, auto_only=False):
         pool = [v for v in pool if v.startswith("ru-")] or pool
     voice = pool[h % len(pool)]
     pitch = pitches[(h // 7) % len(pitches)]
+    if shift and engine != "neural":
+        return voice, shift + pitch            # тембр характера + своя небольшая высота персонажа
     if shift:
-        lim = 2 if engine != "neural" else 35
+        lim = 35
         pitch = max(-lim, min(lim, (0 if kind in ("old", "monster", "child") else pitch) + shift))
     return voice, pitch
 

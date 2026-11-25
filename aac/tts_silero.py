@@ -391,6 +391,25 @@ def _apply(model, kw, **text_kw):
 _PITCHES = {-2: "x-low", -1: "low", 0: "medium", 1: "high", 2: "x-high"}
 
 
+TIMBRE = {-3: 0.80, -2: 0.88, -1: 0.94, 1: 1.07, 2: 1.18}   # характер голоса: чудовище … ребёнок
+
+
+def _split_pitch(p):
+    """Число высоты → (ступень разметки -2…2, множитель тембра). Десятки — тембр характера (voices.TYPE_PITCH)."""
+    p = int(p or 0)
+    k = int(round(p / 10)) if abs(p) >= 8 else 0
+    return max(-2, min(2, p - 10 * k)), TIMBRE.get(max(-3, min(2, k)), 1.0)
+
+
+def _timbre(audio, f, torch):
+    """Сдвинуть тембр: f<1 — ниже и чуть медленнее (старик, чудовище), f>1 — выше и быстрее (ребёнок)."""
+    if abs(f - 1.0) < 0.01:
+        return audio
+    n = max(1, int(audio.shape[-1] / f))
+    return torch.nn.functional.interpolate(audio.reshape(1, 1, -1).float(), size=n, mode="linear",
+                                           align_corners=False).reshape(-1)
+
+
 def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
     """Синтез фразы в wav-файл. Вызывается в потоке executor."""
     if is_cis(voice):
@@ -406,7 +425,8 @@ def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
     if sum(ch.isalpha() for ch in text) < 2:
         raise ValueError("нечего читать")
     rate = _prosody_rate(rate_level)
-    pitch = _PITCHES.get(max(-2, min(2, int(pitch_level))), "medium")
+    step, timbre = _split_pitch(pitch_level)
+    pitch = _PITCHES.get(step, "medium")
     kw = dict(speaker=voice, sample_rate=SAMPLE_RATE, put_accent=True, put_yo=True)
     with torch.no_grad():
         audio = None
@@ -418,7 +438,7 @@ def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
                 audio = None     # модель не поняла разметку скорости/высоты — читаем обычным голосом
         if audio is None:
             audio = _apply(model, kw, text=text)
-    _write_wav(path, audio, torch)
+    _write_wav(path, _timbre(audio, timbre, torch), torch)
     return path
 
 
@@ -447,7 +467,8 @@ def _synth_cis(text, path, voice, rate_level=0, pitch_level=0):
         raise RuntimeError(f"нет голоса {voice}")
     stressed = re.sub(r"\+{2,}", "+", acc(text))
     rate = _prosody_rate(rate_level)
-    pitch = _PITCHES.get(max(-2, min(2, int(pitch_level))), "medium")
+    step, timbre = _split_pitch(pitch_level)
+    pitch = _PITCHES.get(step, "medium")
     kw = dict(speaker=voice, sample_rate=SAMPLE_RATE)
     with torch.no_grad():
         audio = None
@@ -459,5 +480,5 @@ def _synth_cis(text, path, voice, rate_level=0, pitch_level=0):
                 audio = None
         if audio is None:
             audio = model.apply_tts(text=stressed, **kw)
-    _write_wav(path, audio, torch)
+    _write_wav(path, _timbre(audio, timbre, torch), torch)
     return path

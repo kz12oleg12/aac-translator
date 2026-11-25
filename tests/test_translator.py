@@ -2158,7 +2158,9 @@ def test_line_voice():
     from aac import voices
     v = voices.line_voice("f", "old", "neural")
     assert v and v[1] < 0
-    assert voices.line_voice("m", "monster", "silero")[1] == -2
+    assert voices.line_voice("m", "monster", "silero")[1] == -30          # тембр: звук растягивается ниже
+    from aac.tts_silero import _split_pitch
+    assert _split_pitch(-30) == (0, 0.80) and _split_pitch(21) == (1, 1.18) and _split_pitch(1) == (1, 1.0)
     assert voices.line_voice("", "", "neural") is None
 
 
