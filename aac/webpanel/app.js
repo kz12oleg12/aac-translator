@@ -562,5 +562,6 @@ async function start() {
   es.addEventListener("quit", () => { window.pywebview && pywebview.api.quit(); });
   refresh(true); setInterval(refresh, 1200);
 }
+$("main").addEventListener("scroll", () => document.body.classList.toggle("scrolled", $("main").scrollTop > 4));
 layout();
 start();
