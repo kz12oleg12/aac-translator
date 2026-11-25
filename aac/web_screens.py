@@ -320,6 +320,11 @@ def do(name, arg, app):
     elif name == "unmark_not_game":
         from . import game
         game.unmark_not_game(a.get("v"))
+    elif name == "screen_add":
+        from . import web_api
+        web_api.push("hide")
+        core.log(f"Откройте в игре экран, где переводить не нужно (меню, карту…), и нажмите {_keys().get('menu_learn', '')}. "
+                 "Панель вернётся по F6.", "ok")
     elif name == "area_draw" and a.get("key") in REGION_EVENTS:
         if a.get("id") and a["id"] != core.active_profile:
             profiles.activate(a["id"], hold=True)

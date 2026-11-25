@@ -127,10 +127,10 @@ R.home = () => {
     <div style="display:flex;flex-direction:column;gap:2px;flex-grow:1"><span class="ttl">Автоперевод</span><span class="sub">${esc(a.sub)}</span></div>
     <span class="key">${esc(K.auto)}</span><button class="btnp${a.on ? "" : " off"}" data-act="auto">${a.on ? "Выключить" : "Включить"}</button></div>
   <div class="two">
-    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Переводчик</span><a data-go="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px">${esc(s.translator.chain.join(" → ") || "Нет ключей")}</span>${lim(s.limits[0])}</div>
-    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">ИИ-редактор</span>${sw(s.translator.editor_on, 'data-a="hedon" title="Включить или выключить ИИ-редактор"')}</div>
-      ${s.translator.editor_on ? `<button class="vbtn" data-a="eddlg" aria-label="Выбрать нейросеть редактора"><span>${esc((s.translator.editors.find(e => e.id == s.translator.editor_id) || {}).name || "Groq")}</span>${svg("end", 14, 2)}</button>` : `<span style="font-size:16px;color:var(--f)">Выключен</span>`}${s.translator.editor_on ? lim(s.limits[1]) : ""}</div>
-    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Основной голос</span><a data-go="voice" style="font-size:12px">озвучка</a></div>
+    <div class="card tc"><div class="row th"><span class="lbl" style="flex-grow:1">Переводчик</span></div><button class="vbtn" data-go="tr" aria-label="Сменить переводчика"><span>${esc(s.translator.chain.join(" → ") || "Нет ключей")}</span>${svg("end", 14, 2)}</button>${lim(s.limits[0])}</div>
+    <div class="card tc"><div class="row th"><span class="lbl" style="flex-grow:1">ИИ-редактор</span>${sw(s.translator.editor_on, 'data-a="hedon" data-sm="1" title="Включить или выключить ИИ-редактор"')}</div>
+      ${s.translator.editor_on ? `<button class="vbtn" data-a="eddlg" aria-label="Выбрать нейросеть редактора"><span>${esc((s.translator.editors.find(e => e.id == s.translator.editor_id) || {}).name || "Groq")}</span>${svg("end", 14, 2)}</button>` : `<span style="font-size:16px;color:var(--f);line-height:24px">Выключен</span>`}${s.translator.editor_on ? lim(s.limits[1]) : ""}</div>
+    <div class="card tc"><div class="row th"><span class="lbl" style="flex-grow:1">Основной голос</span></div>
       <button class="vbtn" data-a="vdlg" aria-label="Выбрать основной голос"><span>${esc(((s.voice.list.find(v => v.id == s.voice.id) || {}).name || "По умолчанию").split(" — ")[0])}</span>${svg("end", 14, 2)}</button></div></div>
   <div class="grid3">
     ${card("select","subs","Субтитры",M.subs.ready ? "Основная область" : "Не обведена — нажмите",M.subs.ready,K.select,false)}
@@ -221,7 +221,7 @@ R.games = () => {
     <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
       <div class="hdr">${ico("eye", g.menu)}<span style="display:flex;flex-direction:column;flex-grow:1"><span style="font-weight:600">Экраны без перевода</span><span style="font-size:12px;color:var(--m)">На них автоперевод встаёт на паузу</span></span></div>
       <div class="lst">${g.menu ? `<div class="r"><span class="thumb"></span><span class="tx"><span>Меню</span></span><button class="btn" data-act="menu_learn">Перезапомнить</button></div>` : `<div class="empty">Пока нет.</div>`}</div>
-      <span style="font-size:12px;color:var(--f)">Чтобы добавить, откройте экран в игре и нажмите <span class="key">${esc(K.menu_learn)}</span></span></div>
+      <div class="row" style="gap:12px"><span style="font-size:12px;color:var(--f);flex-grow:1">Откройте экран в игре и нажмите <span class="key">${esc(K.menu_learn)}</span></span><button class="btn" style="height:30px;display:flex;align-items:center;gap:6px" data-a="scradd">${svg("plus", 13)}Добавить</button></div></div>
     <div class="grid3" style="grid-template-columns:1fr 1fr">
       <div class="card tc" style="gap:10px"><div class="hdr">${ico("font")}<span style="flex-grow:1"></span>${lnk("изменить", 'data-go="win"')}</div><div><div style="font-weight:600">Вид перевода</div><div style="font-size:12px;color:var(--m)">Шрифт, размер, фон</div></div></div>
       <div class="card tc" style="gap:10px"><div class="hdr">${ico("people")}<span style="flex-grow:1"></span>${lnk("открыть", 'data-a="gochars"')}</div><div><div style="font-weight:600">Имена и голоса</div><div style="font-size:12px;color:var(--m)">${g.chars} персонажей · ${g.gloss} в словаре</div></div></div></div>
@@ -231,6 +231,7 @@ R.games = () => {
     <div class="card" style="padding:14px;display:flex;align-items:center;gap:10px">${ico("start", g.auto_start)}<span style="display:flex;flex-direction:column;flex-grow:1"><span style="font-weight:600">Включать автоперевод при запуске</span><span style="font-size:12px;color:var(--m)">Когда эта игра открывается</span></span>${sw(g.auto_start, 'data-a="gauto"')}</div>`}</div>`;
   return `<h1>Игры</h1><div style="display:flex;gap:16px;align-items:flex-start">${list}${detail}</div>`;
 };
+HANDLERS.scradd = () => act("screen_add");
 HANDLERS.gpick = b => { SUB.game = b.dataset.id; render(); };
 HANDLERS.gq = b => { SUB.gq = b.value; render(); const i = document.querySelector('[data-i="gq"]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } };
 HANDLERS.gadd = () => pickDlg("Добавить игру", "Выберите игру из запущенных сейчас программ. Название потом можно исправить.", exe => act("pick_game", exe), true);
