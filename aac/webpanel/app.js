@@ -128,7 +128,9 @@ R.home = () => {
     <span class="key">${esc(K.auto)}</span><button class="btnp${a.on ? "" : " off"}" data-act="auto">${a.on ? "Выключить" : "Включить"}</button></div>
   <div class="two">
     <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Переводчик</span><a data-go="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px">${esc(s.translator.chain.join(" → ") || "нет ключей!")}</span>${lim(s.limits[0])}</div>
-    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">ИИ-редактор</span><a data-go="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px">${esc(s.translator.editor || "выключен")}</span>${lim(s.limits[1])}</div></div>
+    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">ИИ-редактор</span><a data-go="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px">${esc(s.translator.editor || "выключен")}</span>${lim(s.limits[1])}</div>
+    <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Основной голос</span><a data-go="voice" style="font-size:12px">озвучка</a></div>
+      <select class="vsel" data-c="hvoice" aria-label="Основной голос">${s.voice.list.map(v => `<option value="${esc(v.id)}" ${v.id == s.voice.id ? "selected" : ""}>${esc(v.name.split(" — ")[0])}</option>`).join("") || "<option>загружаю…</option>"}</select></div></div>
   <div class="grid3">
     ${card("select","subs","Субтитры",M.subs.ready ? "Основная область" : "Не обведена — нажмите",M.subs.ready,K.select,false)}
     ${card("select_subs2","lines","Реплики",M.subs2.ready ? "Вторая область" : "Не обведена — нажмите",M.subs2.ready,K.select_subs2,false)}
@@ -146,6 +148,7 @@ R.home = () => {
 };
 HANDLERS.ngareas = b => { SUB.game = b.dataset.id; act("new_dismiss"); go("games"); };
 HANDLERS.ngno = () => act("new_not_game");
+HANDLERS.hvoice = b => act("tts_voice", b.value);
 HANDLERS.mode = b => { const m = b.dataset.mode, on = b.getAttribute("aria-checked") != "true"; (m == "answers" || m == "chat") ? act(m, on) : act(m); };
 HANDLERS.game = b => act("game", b.dataset.id);
 HANDLERS.free = () => act("free");

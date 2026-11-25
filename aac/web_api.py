@@ -118,9 +118,17 @@ def state():
         },
         "stream": bool(config.SHOW_ON_STREAM),
         "new_game": _new_game(app),
+        "voice": _voice(),
         "update_auto": bool(getattr(config, "UPDATE_AUTO", False)),
         "keys": keys, "key_desc": descs,
     }
+
+
+def _voice():
+    from . import web_screens
+    eng = config.TTS_ENGINE
+    cur = {"neural": config.TTS_NEURAL_VOICE, "silero": config.TTS_SILERO_VOICE}.get(eng, config.TTS_VOICE)
+    return {"id": cur, "list": _safe(lambda: web_screens._voice_list(eng), []) or []}
 
 
 def _new_game(app):
