@@ -389,6 +389,12 @@ def do(name, arg, app):
     elif name == "tts_test":
         from . import tts
         _bg(tts.say_test, None, (str(a.get("v") or "").strip()[:300] or None))
+    elif name == "voice_preview" and a.get("v") is not None:
+        from . import tts
+        if config.TTS_ENGINE in ("neural", "silero"):
+            _bg(tts.say_test, (a["v"], 0), "Привет! Так звучит этот голос.")
+        else:
+            _bg(tts.say_test, None, "Привет! Так звучит этот голос.")
     elif name == "voice_mode" and a.get("v") in ("one", "gender", "each"):
         config.TTS_PER_CHARACTER = a["v"] != "one"
         config.TTS_VARY_IN_GENDER = a["v"] == "each"

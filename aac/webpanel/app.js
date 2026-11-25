@@ -130,7 +130,7 @@ R.home = () => {
     <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Переводчик</span><a data-go="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px">${esc(s.translator.chain.join(" → ") || "нет ключей!")}</span>${lim(s.limits[0])}</div>
     <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">ИИ-редактор</span><a data-go="tr" style="font-size:12px">сменить</a></div><span style="font-size:16px">${esc(s.translator.editor || "выключен")}</span>${lim(s.limits[1])}</div>
     <div class="card tc"><div class="row"><span class="lbl" style="flex-grow:1">Основной голос</span><a data-go="voice" style="font-size:12px">озвучка</a></div>
-      <select class="vsel" data-c="hvoice" aria-label="Основной голос">${s.voice.list.map(v => `<option value="${esc(v.id)}" ${v.id == s.voice.id ? "selected" : ""}>${esc(v.name.split(" — ")[0])}</option>`).join("") || "<option>загружаю…</option>"}</select></div></div>
+      <button class="vbtn" data-a="vdlg" aria-label="Выбрать основной голос"><span>${esc(((s.voice.list.find(v => v.id == s.voice.id) || {}).name || "по умолчанию").split(" — ")[0])}</span>${svg("end", 14, 2)}</button></div></div>
   <div class="grid3">
     ${card("select","subs","Субтитры",M.subs.ready ? "Основная область" : "Не обведена — нажмите",M.subs.ready,K.select,false)}
     ${card("select_subs2","lines","Реплики",M.subs2.ready ? "Вторая область" : "Не обведена — нажмите",M.subs2.ready,K.select_subs2,false)}
@@ -149,6 +149,21 @@ R.home = () => {
 HANDLERS.ngareas = b => { SUB.game = b.dataset.id; act("new_dismiss"); go("games"); };
 HANDLERS.ngno = () => act("new_not_game");
 HANDLERS.hvoice = b => act("tts_voice", b.value);
+HANDLERS.vdlg = () => voiceDlg();
+function voiceDlg() {
+  const L = S.voice.list, cur = S.voice.id;
+  const groups = [["Женские", v => /женск/i.test(v.name)], ["Мужские", v => /мужск/i.test(v.name)], ["", v => !/женск|мужск/i.test(v.name)]];
+  const item = v => { const [n, d] = v.name.split(" — "); return `<div class="r" style="padding:6px 8px;border-radius:8px;${v.id == cur ? "background:rgba(88,101,242,.16)" : ""}">
+    <button class="gi" style="flex-grow:1;padding:2px 0;background:none" data-pickv="${esc(v.id)}"><span style="display:flex;flex-direction:column;align-items:flex-start"><span style="font-weight:${v.id == cur ? 600 : 400}">${esc(n)}</span>${d ? `<span style="font-size:12px;color:var(--f)">${esc(d)}</span>` : ""}</span></button>
+    ${v.id == cur ? `<span style="color:var(--acc2);display:flex">${svg("check", 16, 2)}</span>` : ""}
+    <button class="ib" style="color:var(--acc2)" title="Прослушать" data-prev="${esc(v.id)}">${svg("play", 14)}</button></div>`; };
+  modal(`<div class="row"><span style="font-size:18px;font-weight:600;flex-grow:1">Основной голос</span><button class="ib" data-close="1">${svg("x", 16)}</button></div>
+    <span style="font-size:13px;color:var(--t3)">Им читаются реплики без имени говорящего${S && S.modes ? "" : ""}. Нажмите ▶, чтобы послушать.</span>
+    <div style="display:flex;flex-direction:column;gap:2px;max-height:420px;overflow-y:auto;margin:0 -8px">${L.length ? groups.map(([t, f]) => { const g = L.filter(f); return g.length ? (t ? `<div class="sec" style="padding:8px 8px 4px">${t}</div>` : "") + g.map(item).join("") : ""; }).join("") : '<div class="empty">Загружаю список голосов…</div>'}</div>
+    <div style="display:flex;justify-content:flex-end"><button class="btn" style="height:36px;padding:0 16px;font-size:13px" data-close="1">Готово</button></div>`);
+  $("dlg").querySelectorAll("[data-pickv]").forEach(b => b.onclick = async () => { await act("tts_voice", b.dataset.pickv); S.voice.id = b.dataset.pickv; voiceDlg(); });
+  $("dlg").querySelectorAll("[data-prev]").forEach(b => b.onclick = () => act("voice_preview", b.dataset.prev));
+}
 HANDLERS.mode = b => { const m = b.dataset.mode, on = b.getAttribute("aria-checked") != "true"; (m == "answers" || m == "chat") ? act(m, on) : act(m); };
 HANDLERS.game = b => act("game", b.dataset.id);
 HANDLERS.free = () => act("free");
