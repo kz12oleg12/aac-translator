@@ -3016,6 +3016,11 @@ def test_game_presets(monkey):
 # ---------- запуск ----------
 def main():
     print(f"Проверяю: {ROOT}  ({T.kind}, версия {T.VERSION})\n")
+    try:        # проверки ходят по прежней панели (tkinter); окно новой на HTML им мешает и не нужно
+        from aac import config as _cfg
+        _cfg.WEB_PANEL = False
+    except Exception:
+        pass
     ok = fail = 0
     for name, fn in [(n, f) for n, f in globals().items() if n.startswith("test_") and callable(f)]:
         undo = []
