@@ -41,6 +41,7 @@ FLAGS = {  # переключатели: имя → (атрибут config, кл
     "tts_expressive": ("TTS_EXPRESSIVE", "tts_expressive", "tts"),
     "tts_finish": ("TTS_FINISH_LINE", "tts_finish_line", "tts"),
     "tts_skip": ("TTS_SKIP_FAST", "tts_skip_fast", "tts"),
+    "tts_nowait": ("TTS_NO_WAIT", "tts_no_wait", "tts"),
     "tts_read_name": ("TTS_READ_NAME", "tts_read_name", "tts"),
     "tts_russian_only": ("TTS_RUSSIAN_ONLY", "tts_russian_only", "tts"),
 }

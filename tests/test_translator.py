@@ -1456,7 +1456,7 @@ def test_character_voices(monkey):
     monkey(cfg, "TTS_PER_CHARACTER", True)
     monkey(cfg, "TTS_ENGINE", "neural")
     monkey(tts, "engine_ready", lambda: True)
-    monkey(tts._neural, "say", lambda text, seen=None, vp=None: said.append((text, vp)))
+    monkey(tts._neural, "say", lambda text, seen=None, vp=None, key=None: said.append((text, vp)))
     T.speak_subtitle("Кеспер\nПойдём к морю.", None, "Kesper\nLet's go to the sea.")
     assert said == [("Пойдём к морю.", ("ru-RU-DmitryNeural", 0))], said
     monkey(cfg, "TTS_PER_CHARACTER", False)
@@ -2037,6 +2037,26 @@ def test_editor_voice(monkey):
     monkey(voices, "note_line", lambda tr, orig=None: None)
     tts.speak_subtitle("Я пришла за тобой, Аргус.", orig="I came for you, Argus.")
     assert said and said[-1] == "Я пришл+а за тоб+ой, Арг+ус!"
+
+
+def test_tts_upgrade(monkey):
+    """Озвучка без задержки: реплика уже звучит черновиком — оставшиеся фразы берутся у редактора."""
+    from aac import tts
+    n = tts._Neural()
+    monkey(n, "_synth_futs", lambda chunks, tag, faster, vp: [object() for _ in chunks])
+    job = {"chunks": ["Первая фраза.", "Вторая плохая фраза."], "futs": [None, type("F", (), {"cancel": lambda s: None})()],
+           "idx": 1, "next": None, "faster": False, "vp": None, "dead": False, "key": "k"}
+    n._apply_upgrade(job, "П+ервая фраза. Вторая хорошая фраза.", None)
+    assert job["chunks"] == ["Первая фраза.", "Вторая хорошая фраза."] and len(job["futs"]) == 2
+    job = {"chunks": ["Очень длинное начало,", "а дальше плохо."], "futs": [None, type("F", (), {"cancel": lambda s: None})()],
+           "idx": 1, "next": None, "faster": False, "vp": None, "dead": False, "key": "k"}
+    n._apply_upgrade(job, "Очень длинное начало, а дальше хорошо. И ещё.", None)
+    assert " ".join(job["chunks"][1:]) == "а дальше хорошо. И ещё.", job["chunks"]
+    job = {"chunks": ["Черновик."], "futs": [type("F", (), {"cancel": lambda s: None})()], "idx": 0, "next": None,
+           "faster": False, "vp": None, "dead": False, "key": "k"}
+    n.upgrade("k", "Ред+актор.")
+    n._take_upgrades((job, None), None)
+    assert job["chunks"] == ["Ред+актор."]
 
 
 def test_custom_ai(monkey):

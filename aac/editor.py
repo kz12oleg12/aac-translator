@@ -403,10 +403,17 @@ def improve(src, draft, kind, on_late=None):
             out = info and info["text"]
             if out and out.strip() != draft.strip() and on_late:
                 on_late(out)
+            if info and info.get("voice") and kind == "subs":
+                try:      # реплика уже звучит черновиком — оставшиеся фразы дочитать вариантом редактора
+                    from . import tts
+                    tts.upgrade(draft, info)
+                except Exception:
+                    pass
             _remember(src, out or draft, kind)
 
     threading.Thread(target=work, daemon=True).start()
-    done.wait(config.EDITOR_WAIT)
+    voice_fast = config.TTS_NO_WAIT and config.TTS_ENABLED and kind == "subs"
+    done.wait(min(config.EDITOR_WAIT, config.EDITOR_WAIT_VOICE) if voice_fast else config.EDITOR_WAIT)
     with lk:
         if st["phase"] != "done":
             st["phase"] = "gave_up"

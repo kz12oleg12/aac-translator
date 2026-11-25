@@ -246,7 +246,31 @@ def speak_subtitle(translation, seen=None, orig=None):
             vp = voices.voice_for(key)
     except Exception as e:
         core.log(f"Голоса персонажей: {e}", "error")
-    _say(text, seen, vp)
+    _key_box["key"] = _line_key(translation)
+    try:
+        _say(text, seen, vp)
+    finally:
+        _key_box["key"] = None
+
+
+def _line_key(translation):
+    try:
+        from . import editor
+        return editor._norm(translation)
+    except Exception:
+        return None
+
+
+def _prepare(info):
+    from . import editor
+    return editor.apply_stress(_with_mood(info["voice"].replace("\n", " "), info.get("mood")))
+
+
+def upgrade(translation, info):
+    """ИИ-редактор ответил, когда реплика уже читается черновиком: ещё не прозвучавшие фразы — его вариантом."""
+    if not config.TTS_ENABLED or not info or not info.get("voice") or not engine_ready():
+        return
+    _neural.upgrade(_line_key(translation), _prepare(info))
 
 
 def _with_mood(text, mood):
@@ -263,12 +287,15 @@ def _with_mood(text, mood):
     return t
 
 
-def _say(text, seen=None, voice_pitch=None):
+_key_box = {"key": None}     # какая реплика сейчас уходит в озвучку (для подмены вариантом редактора)
+
+
+def _say(text, seen=None, voice_pitch=None, key=None):
     """Прочитать текст выбранным движком. voice_pitch — (голос, сдвиг высоты) персонажа или None."""
     if not text:
         return
     if engine_ready():
-        _neural.say(text, seen, voice_pitch)
+        _neural.say(text, seen, voice_pitch, key or _key_box["key"])
     else:
         _windows_queue(text.replace("+", ""))
 
@@ -576,16 +603,25 @@ class _Neural:
         self.warmed = False
         self.warm_fut = None
         self.dir = os.path.join(tempfile.gettempdir(), "aac_translator_tts")
+        self.ups = []
+        self.up_lock = threading.Lock()
+        self.n_up = 0
 
     def _ensure(self):
         if self.thread is None or not self.thread.is_alive():
             self.thread = threading.Thread(target=self._run, daemon=True)
             self.thread.start()
 
-    def say(self, text, seen=None, voice_pitch=None):
+    def say(self, text, seen=None, voice_pitch=None, key=None):
         self.gen += 1
         self._ensure()
-        self.q.put(("say", (text, seen or time.time(), voice_pitch), self.gen))
+        self.q.put(("say", (text, seen or time.time(), voice_pitch, key), self.gen))
+
+    def upgrade(self, key, text):
+        """Подменить ещё не прозвучавшие фразы реплики key (обрабатывается в потоке озвучки)."""
+        if key and text:
+            with self.up_lock:
+                self.ups.append((key, text))
 
     def stop(self):
         if self.thread is None:
@@ -652,18 +688,55 @@ class _Neural:
             return path_base + ".mp3"
         return run()
 
-    def _new_job(self, text, seen, gen, faster=False, voice_pitch=None):
-        chunks = split_chunks(text)
-
+    def _synth_futs(self, chunks, tag, faster, voice_pitch):
         async def timed(coro):
             path = await coro
             return path, time.time()
-        futs = [asyncio.run_coroutine_threadsafe(
-                    timed(self._synth_coro(c, os.path.join(self.dir, f"g{gen % 4}_{i}"), faster, voice_pitch)),
-                    self.loop)
+        return [asyncio.run_coroutine_threadsafe(
+                    timed(self._synth_coro(c, os.path.join(self.dir, f"{tag}_{i}"), faster, voice_pitch)), self.loop)
                 for i, c in enumerate(chunks)]
+
+    def _new_job(self, text, seen, gen, faster=False, voice_pitch=None, key=None):
+        chunks = split_chunks(text)
+        futs = self._synth_futs(chunks, f"g{gen % 4}", faster, voice_pitch)
         return {"gen": gen, "chunks": chunks, "futs": futs, "idx": 0, "cur": None, "next": None,
-                "seen": seen, "t0": time.time(), "dead": False, "faster": faster}
+                "seen": seen, "t0": time.time(), "dead": False, "faster": faster, "vp": voice_pitch, "key": key}
+
+    def _apply_upgrade(self, job, text, player):
+        """Фразы, которые ещё не начали звучать, заменить вариантом редактора (уже прозвучавшее — не трогаем)."""
+        i = job["idx"]                                    # фразы [0, i) уже звучат/прозвучали
+        played = " ".join(job["chunks"][:i]).strip()
+        sent = [p.strip() for p in re.split(r"(?<=[.!?…])\s+", text) if p.strip()]
+        if played:
+            done = [p for p in re.split(r"(?<=[.!?…])\s+", played) if p.strip()]
+            n = len(done)
+            if played.endswith((".", "!", "?", "…")):
+                rest = sent[n:]
+            else:                                         # фраза оборвана на запятой — дочитываем её хвост
+                cur = sent[n - 1] if 0 < n <= len(sent) else ""
+                m = re.search(r"[,;:—]\s+(.*)$", cur)
+                rest = ([m.group(1)] if m else []) + sent[n:]
+        else:
+            rest = sent
+        for f in job["futs"][i:]:
+            f.cancel()
+        if job["next"] is not None and player:
+            player.close(job["next"])
+        job["next"] = None
+        new = split_chunks(" ".join(rest)) if rest else []
+        self.n_up += 1
+        if i == 0:
+            new = split_chunks(text)
+        job["chunks"] = job["chunks"][:i] + new
+        job["futs"] = job["futs"][:i] + self._synth_futs(new, f"u{self.n_up % 8}", job["faster"], job["vp"])
+
+    def _take_upgrades(self, jobs, player):
+        with self.up_lock:
+            ups, self.ups = self.ups, []
+        for key, text in ups:
+            for jb in jobs:
+                if jb and not jb["dead"] and jb.get("key") == key:
+                    self._apply_upgrade(jb, text, player)
 
     def _cancel(self, job):
         job["dead"] = True
@@ -735,6 +808,8 @@ class _Neural:
         waiting = None    # следующая реплика: уже синтезируется, ждёт конца текущей
         while True:
             self._warm_step(player)
+            if self.ups:
+                self._take_upgrades((job, waiting), player)
             try:
                 item = self.q.get(timeout=0.04) if (job or waiting or self.warm_fut) else self.q.get()
             except queue.Empty:
@@ -756,11 +831,11 @@ class _Neural:
                             self._cancel(jb)
                         if player:
                             player.close_all()
-                        job, waiting = self._new_job(data[0], data[1], gen, voice_pitch=data[2]), None
+                        job, waiting = self._new_job(data[0], data[1], gen, voice_pitch=data[2], key=data[3]), None
                     else:
                         if waiting:
                             self._cancel(waiting)     # в очереди держим только самую свежую реплику
-                        waiting = self._new_job(data[0], data[1], gen, faster=True, voice_pitch=data[2])
+                        waiting = self._new_job(data[0], data[1], gen, faster=True, voice_pitch=data[2], key=data[3])
                 elif cmd != "noop":
                     for jb in (job, waiting):
                         if jb:
@@ -772,7 +847,7 @@ class _Neural:
                         self.loop.call_soon_threadsafe(self.loop.stop)
                         return
                     if cmd == "say" and gen == self.gen:
-                        job = self._new_job(data[0], data[1], gen, voice_pitch=data[2])
+                        job = self._new_job(data[0], data[1], gen, voice_pitch=data[2], key=data[3])
             if job and not self._step(job, player):
                 job, waiting = waiting, None
                 if job:
