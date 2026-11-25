@@ -65,20 +65,30 @@ _lock = threading.Lock()
 stats = {"edited": 0, "same": 0, "late": 0, "failed": 0}
 
 
+def _usable(e):
+    from . import llm, translate
+    return bool(e) and e in EDITORS and llm.provider_cooldown.get(e, 0) <= time.time() and translate.provider_has_key(e)
+
+
+def candidates():
+    """Основной редактор, потом запасной."""
+    if not config.EDITOR_ON:
+        return []
+    out = [config.EDITOR] if config.EDITOR in EDITORS else []
+    if config.EDITOR2 in EDITORS and config.EDITOR2 not in out:
+        out.append(config.EDITOR2)
+    return out
+
+
 def name():
-    """Нейросеть редактора, если редактор включён, иначе ""."""
-    return config.EDITOR if config.EDITOR_ON and config.EDITOR in EDITORS else ""
+    """Нейросеть, которая сейчас редактирует (основной, а если он на паузе — запасной), иначе ""."""
+    c = candidates()
+    return next((e for e in c if _usable(e)), c[0] if c else "")
 
 
 def ready():
-    """Редактор выбран и у его нейросети есть ключ."""
-    from . import llm, translate
-    e = name()
-    if not e:
-        return False
-    if llm.provider_cooldown.get(e, 0) > time.time():
-        return False
-    return translate.provider_has_key(e)
+    """Редактор включён и хотя бы у одной из его нейросетей есть ключ и нет паузы."""
+    return any(_usable(e) for e in candidates())
 
 
 def reset():
@@ -93,14 +103,32 @@ def _game():
     return p.get("name") or "a video game", p.get("about", "")
 
 
-def _ask(prompt):
+def _ask_one(e, prompt):
     from . import llm
-    e = name()
     if e == "claude":
         return llm.ask_claude(None, prompt)
     if e in llm.OPENAI_COMPAT:
         return llm.ask_openai_compat(e, None, prompt)
     return llm.ask_gemini(None, prompt)
+
+
+def _ask(prompt):
+    """Спросить основной редактор; лимит или сбой — запасной."""
+    from . import llm
+    err = None
+    for e in candidates():
+        if not _usable(e):
+            continue
+        try:
+            return _ask_one(e, prompt)
+        except core.RateLimited as ex:
+            llm.provider_cooldown[e] = time.time() + config.PROVIDER_COOLDOWN.get(e, 60)
+            err = ex
+        except Exception as ex:
+            err = ex
+    if err:
+        raise err
+    raise core.ApiError("нет доступного редактора")
 
 
 def build_prompt(src, draft, kind):
@@ -269,7 +297,8 @@ def improve(src, draft, kind, on_late=None):
     Возвращает исправленный текст, если редактор успел за EDITOR_WAIT с, иначе None (показывайте черновик).
     on_late(текст) — вызовется, если ответ пришёл позже (подменить показанный черновик)."""
     import json
-    if not ready() or not src or not draft:
+    src = src or "(original not available — the translator read it from a screenshot)"
+    if not ready() or not draft:
         if draft:
             _remember(src, draft, kind)
         return None

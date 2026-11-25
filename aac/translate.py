@@ -243,6 +243,15 @@ def safe_translate(img, prompt=None):
             text = clean_translation(text, strict=name not in MT_PROVIDERS) if text else text
             if not text or "НЕТ_ТЕКСТА" in text:
                 return None, None
+            if name not in MT_PROVIDERS and not prompt.startswith("Screenshot of a tooltip"):
+                # переводила нейросеть — ИИ-редактор всё равно проверяет род, ударения и готовит озвучку
+                from . import editor
+                is_ans = prompt.startswith("Screenshot of the player's dialogue reply options")
+                src = history._last_src.get(threading.get_ident(), "")
+                better = editor.improve(src, text, "answers" if is_ans else "subs",
+                                        on_late=lambda txt, d=text: core.events.put(("text_improve", (d, txt))))
+                if better:
+                    text = better
             return text, None
         except core.RateLimited as e:
             pause = config.PROVIDER_COOLDOWN.get(name, 60)

@@ -128,7 +128,7 @@ def _s_tr():
     s = editor.stats
     return {"main": config.PROVIDER, "fallback": list(config.FALLBACK_PROVIDERS),
             "chain": chain, "providers": provs, "editor_on": bool(config.EDITOR_ON), "editor": config.EDITOR,
-            "editors": eds, "editor_note": config.EDITOR_ON and config.PROVIDER not in ("google", "microsoft", "deepl"),
+            "editors": eds, "editor2": config.EDITOR2,
             "editor_stats": {k: s.get(k, 0) for k in ("edited", "same", "late", "failed")},
             "flags": {k: bool(getattr(config, FLAGS[k][0], False))
                       for k in ("cache", "skip_system", "gloss_auto", "save_history")},
@@ -383,6 +383,14 @@ def do(name, arg, app):
             core.save_settings(editor=config.EDITOR)
             editor.reset()
             _editor_log()
+    elif name == "editor2":
+        from . import editor
+        v = a.get("v") or ""
+        if v == "" or v in editor.EDITORS:
+            config.EDITOR2 = v
+            core.save_settings(editor2=v)
+            if v:
+                core.log(f"Запасной ИИ-редактор: {editor.EDITORS[v][0].split(' —')[0]}", "ok")
     elif name == "key_save":
         _key_save(a.get("id"), str(a.get("v") or "").strip())
     elif name == "key_remove":
