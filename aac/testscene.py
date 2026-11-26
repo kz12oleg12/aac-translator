@@ -66,7 +66,7 @@ class Scene:
         self.stage = tk.Canvas(w, bg=BG, highlightthickness=0)
         self.stage.pack(fill="both", expand=True)
         self.count = tk.Label(w, text="", bg=BG, fg=MUTED, font=("Segoe UI", 9))
-        self.count.place(relx=0.015, rely=0.08)
+        self.count.place(relx=0.07, rely=0.062)
         # окно субтитров «игры»: имя сверху, реплика ниже
         self.box = tk.Frame(w, bg=BOX, padx=24, pady=16)
         self.box.place(relx=0.5, rely=0.97, anchor="s", relwidth=0.86, relheight=0.30)
