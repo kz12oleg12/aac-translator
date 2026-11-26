@@ -54,6 +54,9 @@ def default_profiles(data=None):
     return {DEFAULT_PROFILE: p}
 
 
+test_scene = False       # открыта «Тестовая сцена»: пресет не переключается на запущенные игры
+
+
 def apply_profile_regions(prof):
     global region, answers_region, region2, chat_region, menu_region
     region = tuple(prof["region"]) if prof.get("region") else None

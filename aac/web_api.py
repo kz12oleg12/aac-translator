@@ -88,7 +88,7 @@ def state():
     run = _safe(lambda: set(profiles.running()), set())
     games = []
     for pid, p in _safe(profiles.all_profiles, {}).items():
-        if profiles.is_free(pid):
+        if profiles.is_free(pid) or p.get("test"):
             continue
         games.append({"id": pid, "name": _clean(p.get("name") or pid), "running": pid in run,
                       "active": pid == core.active_profile, "icon": _icon(pid)})

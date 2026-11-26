@@ -51,7 +51,7 @@ def idle_target():
 
 def game_profiles():
     """Пресеты настоящих игр (без «Без игры») — для раздела «Игры»."""
-    return {k: v for k, v in all_profiles().items() if not v.get("free")}
+    return {k: v for k, v in all_profiles().items() if not v.get("free") and not v.get("test")}
 
 
 _hold = {"pid": None}     # пресет, выбранный вручную в панели (настроить области без игры) — не снимать сам

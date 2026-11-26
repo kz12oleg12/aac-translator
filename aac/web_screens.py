@@ -85,6 +85,8 @@ def _s_games():
     lock = core.SETTINGS.get("profile_lock")
     out = []
     for pid, p in profiles.all_profiles().items():
+        if p.get("test"):
+            continue                      # «Тестовая сцена» — служебный пресет, в списке игр не нужен
         free = profiles.is_free(pid)
         chars, gl = profiles.stats(pid)
         regs = []
@@ -496,6 +498,8 @@ def do(name, arg, app):
         core.log(f"Переводчик: {v} (запасной — {config.FALLBACK_PROVIDERS[0]})", "ok")
     elif name == "wizard_done":
         core.save_settings(wizard_done=True)
+    elif name == "test_scene":
+        core.events.put(("test_scene", None))
     elif name == "bench_run":
         from . import bench
         bench.run(str(a.get("src") or ""), list(a.get("providers") or []), a.get("kind") or "subs")

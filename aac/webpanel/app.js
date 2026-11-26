@@ -284,7 +284,12 @@ R.bench = () => {
         <div class="row" style="align-items:flex-start;gap:8px"><span style="flex-grow:1;font-size:13px;color:var(--t3);white-space:pre-wrap"><span style="color:var(--f)">для озвучки:</span> ${esc(r.ed.voice)}</span>${play(r.ed.voice, r.ed.gender, r.ed.type)}</div>
         <div class="row" style="gap:6px;flex-wrap:wrap">${tag("кто", r.ed.speaker)}${tag("пол", {m: "мужской", f: "женский"}[r.ed.gender])}${tag("характер", {young: "молодой", old: "пожилой", child: "ребёнок", noble: "знатный", monster: "чудовище"}[r.ed.type])}${tag("настроение", {shout: "крик", whisper: "шёпот", question: "вопрос", sad: "грусть"}[r.ed.mood])}</div></div>`) : ""}
     </div>`;
-  return `<div style="display:flex;flex-direction:column;gap:4px"><h1>Проверка</h1><span class="subt">Своя фраза — сразу всеми выбранными переводчиками и редактором, без игры. Кэш не используется: каждый раз настоящий запрос.</span></div>
+  const scene = `<div class="card" style="padding:14px;display:flex;gap:12px;align-items:center">${ico("games", true)}
+    <span style="display:flex;flex-direction:column;gap:2px;flex-grow:1"><span style="font-weight:600">Тестовая сцена</span><span style="font-size:12px;color:var(--m);line-height:1.5">Окно «как в игре»: 12 реплик — девушка, старуха, барон, мальчик, каменный голем, торговец и варианты ответа. Реплики сменяются сами, программа читает их с экрана — видно захват при смене реплики, кто какого пола и возраста, голоса. Персонажи сцены отдельно от ваших игр.</span></span>
+    <button class="btnp" style="padding:8px 18px;white-space:nowrap" data-a="tscene">Открыть сцену</button></div>`;
+  return `<div style="display:flex;flex-direction:column;gap:4px"><h1>Проверка</h1><span class="subt">Проверить всё без игры: целую сцену с персонажами — или свою фразу сразу всеми переводчиками.</span></div>
+  ${scene}
+  <h2 style="font-size:15px;padding-top:6px">Своя фраза</h2>
   <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
     <span class="lbl">Текст на английском — как в игре: имя говорящего отдельной строкой</span>
     <div class="row" style="gap:6px;flex-wrap:wrap"><span class="d" style="margin-right:2px">примеры:</span>${BENCH_EX.map((x, i) => `<button class="btn" style="height:28px;font-size:12px" data-a="bex" data-i="${i}">${x[0]}</button>`).join("")}</div>
@@ -299,6 +304,7 @@ R.bench = () => {
 HANDLERS.bex = b => { SUB.bench.src = BENCH_EX[+b.dataset.i][1]; if (BENCH_EX[+b.dataset.i][0] == "Варианты ответа") SUB.bench.kind = "answers"; else SUB.bench.kind = "subs"; render(); };
 HANDLERS.bkind = b => { SUB.bench.src = $("bsrc").value; SUB.bench.kind = b.dataset.k; render(); };
 HANDLERS.bsel = b => { const B = SUB.bench; B.src = $("bsrc").value; B.sel = b.checked ? [...new Set([...B.sel, b.dataset.id])] : B.sel.filter(x => x != b.dataset.id); };
+HANDLERS.tscene = () => act("test_scene");
 HANDLERS.brun = () => { const B = SUB.bench; B.src = $("bsrc").value; act("bench_run", {src: B.src, providers: B.sel, kind: B.kind}); };
 HANDLERS.bsay = b => act("bench_say", {text: b.dataset.t, g: b.dataset.g, k: b.dataset.k});
 

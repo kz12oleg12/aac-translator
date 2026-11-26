@@ -2128,6 +2128,40 @@ def test_tts_cache(monkey):
     assert tts._cache_key("Привет, путник.", True, None) != k, "ускоренная — другой звук"
 
 
+def test_test_scene(monkey):
+    """Тестовая сцена: свой пресет с областями по окну сцены, автоперевод, после закрытия — всё как было."""
+    if not GUI:
+        print("   (без экрана — пропуск)")
+        return
+    import tkinter as tk
+    from aac import testscene, profiles, core as c
+    monkey(c, "save_settings", lambda **k: c.SETTINGS.update(k))
+    monkey(c, "SETTINGS", {"profiles": {}})
+    monkey(c, "active_profile", None)
+    root = tk.Tk()
+    root.withdraw()
+    app = type("A", (), {"root": root})()
+    was = c.auto_on.is_set()
+    c.auto_on.clear()
+    try:
+        testscene.open_scene(app)
+        for _ in range(30):
+            root.update()
+            time.sleep(0.05)
+        sc = app._scene
+        assert c.active_profile == testscene.PID and c.test_scene and c.auto_on.is_set()
+        reg = profiles.all_profiles()[testscene.PID]["region"]
+        assert reg[2] > 200 and reg[3] > 50, reg
+        assert sc.text.cget("text") or sc.ans_lbl.cget("text") or sc.i == 0
+        assert testscene.PID not in profiles.game_profiles(), "в списке игр не показывается"
+        sc.close()
+        assert c.active_profile is None and not c.test_scene and not c.auto_on.is_set()
+    finally:
+        root.destroy()
+        if was:
+            c.auto_on.set()
+
+
 def test_bench(monkey):
     """Стенд проверки: фраза идёт через переводчик как из игры (без OCR и кэша), редактор — отдельно."""
     from aac import bench, mt, translate, editor, tcache

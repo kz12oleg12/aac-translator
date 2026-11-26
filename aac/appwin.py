@@ -1087,6 +1087,9 @@ class App:
                     self.chat_compose()
                 elif kind == "chat_out":
                     self.chat_out_ready(*payload)
+                elif kind == "test_scene":
+                    from . import testscene
+                    testscene.open_scene(self)
                 elif kind == "recent":
                     self.toggle_recent()
                 elif kind == "bad_line":

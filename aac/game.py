@@ -290,7 +290,7 @@ def scan_running(every=3.0):
     import time
     from . import profiles
     now = time.time()
-    if now - _scan["t"] < every or locked():
+    if now - _scan["t"] < every or locked() or core.test_scene:
         return None
     _scan["t"] = now
     progs = running_programs()
@@ -454,6 +454,8 @@ def remember_game_window():
     Возвращает "new", если показан вопрос про новую игру."""
     global game_exe
     from . import profiles
+    if core.test_scene:
+        return None                       # идёт «Тестовая сцена» — её пресет не трогаем
     exe, pid = foreground_exe()
     if not exe or pid == os.getpid():
         return None
