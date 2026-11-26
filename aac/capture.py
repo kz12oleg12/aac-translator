@@ -68,6 +68,16 @@ def mask_diff(a, b):
     return ImageStat.Stat(ImageChops.difference(a, b)).mean[0] / 255.0
 
 
+def mask_change(a, b):
+    """Насколько сменился текст — относительно его количества. Большая область с небольшой репликой:
+    по общей разнице две похожие по длине реплики почти неотличимы, а по этой мере — явно разные."""
+    if a is None or b is None or a.size != b.size:
+        return 1.0
+    d = mask_diff(a, b)
+    amt = max(text_amount(a), text_amount(b))
+    return d / amt if amt > 0.0005 else d
+
+
 def text_amount(m):
     """Доля «текстовых» (светлых) пикселей в области."""
     return ImageStat.Stat(m).mean[0] / 255.0

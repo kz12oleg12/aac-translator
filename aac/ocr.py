@@ -57,7 +57,13 @@ def ocr_lines(img):
     if bench.active():                  # стенд проверки: текст из поля ввода, а не с экрана
         return list(bench.lines())
     with _ocr_lock:
-        return _ocr_lines(img)
+        return [_fix_line(ln) for ln in _ocr_lines(img)]
+
+
+def _fix_line(ln):
+    """Частые ошибки распознавания: «40%» читается как «4096» перед HP/MP/XP."""
+    import re
+    return re.sub(r"\b(\d{1,3})96(?=\s*(?:HP|MP|XP|SP|ОЗ)\b)", r"\1%", ln)
 
 
 def _looks_like_garbage(line):

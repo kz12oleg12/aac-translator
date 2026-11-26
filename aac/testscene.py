@@ -258,7 +258,7 @@ class Scene:
                 self.timer = self.win.after(self.delay * 1000, self._auto)
             else:
                 import time
-                self._shown_at, self._heard = time.time(), False
+                self._shown_at, self._heard, self._quiet_since = time.time(), False, None
                 self.timer = self.win.after(500, self._wait_voice)
 
     def _wait_voice(self):
@@ -270,8 +270,14 @@ class Scene:
             return
         talking = tts.speaking()
         self._heard = self._heard or talking
-        waited = time.time() - self._shown_at
-        if (self._heard and not talking and waited > 2) or waited > 30 or (not config.TTS_ENABLED and waited > 6):
+        now = time.time()
+        if talking:
+            self._quiet_since = None
+        elif self._heard and getattr(self, "_quiet_since", None) is None:
+            self._quiet_since = now
+        quiet = self._heard and not talking and now - (self._quiet_since or now) >= 1.2   # между фразами бывают паузы
+        waited = now - self._shown_at
+        if (quiet and waited > 2) or waited > 30 or (not config.TTS_ENABLED and waited > 6):
             self.timer = self.win.after(800, self._auto)    # короткая пауза после реплики
         else:
             self.timer = self.win.after(250, self._wait_voice)

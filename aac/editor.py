@@ -229,7 +229,8 @@ def parse(out):
     if not m:
         return {"text": out}
     unslash = lambda t: re.sub(r"\s+/\s+", "\n", t)     # «Имя / Реплика» — это перенос строки, не знак
-    res = {"text": unslash(m.group(1).strip()), "voice": unslash(m.group(2).strip())}
+    res = {"text": re.sub(r"\+(?=[аеёиоуыэюяАЕЁИОУЫЭЮЯ])", "", unslash(m.group(1).strip())),   # «+» — только голосу
+           "voice": unslash(m.group(2).strip())}
     for k in ("speaker", "gender", "mood"):
         mm = re.search(k.upper() + r":\s*([^\n]*)", out)
         v = (mm.group(1).strip().strip("<>\"' ") if mm else "")

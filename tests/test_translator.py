@@ -2048,6 +2048,10 @@ def test_editor_voice(monkey):
     r = editor.parse("TEXT:\nЯ пришла за тобой.\nVOICE:\nЯ пришл+а за тоб+ой, Арг+ус.\nSPEAKER: Lyra\nGENDER: f\nMOOD: shout")
     assert r["text"] == "Я пришла за тобой." and r["speaker"] == "Lyra" and r["gender"] == "f" and r["mood"] == "shout"
     assert editor.parse("просто текст") == {"text": "просто текст"}
+    assert editor.parse("TEXT:\nКт+о потр+евожил?\nVOICE:\nКт+о?")["text"] == "Кто потревожил?", "в субтитре без «+»"
+    from aac import ocr as _o, capture as _cap
+    assert _o._fix_line("Each one restores 4096 HP.") == "Each one restores 40% HP."
+    assert _o._fix_line("In 1996 he left.") == "In 1996 he left."
     assert editor.parse("TEXT:\nДжиеллини / Чем помочь?\nVOICE:\nДжиелл+ини / Чем помочь?")["text"] == "Джиеллини\nЧем помочь?"
     shots = []
     monkey(editor, "_ask_with_shot", lambda p: shots.append(p) or "A woman, Lyra, talks to the player.")

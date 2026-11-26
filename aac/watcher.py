@@ -246,7 +246,10 @@ class Watcher:
                 continue
             m = capture.text_mask(img, self.brightness)
             stable = capture.mask_diff(m, prev) < config.STABLE_THRESHOLD   # текст перестал меняться (дописался)
-            changed = capture.mask_diff(m, sent) > config.CHANGE_THRESHOLD  # и отличается от уже переведённого
+            # и отличается от уже переведённого (по общей разнице — или заметно относительно самого текста)
+            changed = (capture.mask_diff(m, sent) > config.CHANGE_THRESHOLD
+                       or (capture.mask_change(m, sent) > config.CHANGE_RELATIVE
+                           and capture.mask_diff(m, sent) > config.CHANGE_THRESHOLD / 4))
             prev = m
             now = time.time()
             if stable:
