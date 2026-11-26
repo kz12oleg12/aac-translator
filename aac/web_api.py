@@ -27,7 +27,8 @@ _state = {"server": None, "token": None, "port": None, "proc": None, "app": None
 
 PROVIDER_NAMES = {"gemini": "Gemini", "claude": "Claude", "ollama": "Ollama", "mistral": "Mistral", "groq": "Groq",
                   "google": "Google", "deepl": "DeepL", "microsoft": "Microsoft", "groq_ocr": "Groq",
-                  "gemini_ocr": "Gemini", "claude_ocr": "Claude", "mistral_ocr": "Mistral"}
+                  "gemini_ocr": "Gemini", "claude_ocr": "Claude", "mistral_ocr": "Mistral",
+                  "offline": "Офлайн"}
 
 # пункты меню панели → разделы прежнего окна (пока экран не перенесён на HTML)
 OLD_SECTIONS = {"games": "games", "tr": "tr", "voice": "voice", "hist": "hist", "keys": "keys",

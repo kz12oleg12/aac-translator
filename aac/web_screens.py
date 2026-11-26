@@ -15,6 +15,7 @@ PROVIDERS = [  # (id, название, описание, группа)
     ("deepl", "DeepL", "Лучший из машинных · 500 000 символов в месяц", "mt"),
     ("microsoft", "Microsoft", "Как в браузере Edge · без ключа", "mt"),
     ("google", "Google", "Google Переводчик · без ключа", "mt"),
+    ("offline", "Офлайн", "На этом ПК, без интернета · модель ~100 МБ один раз", "mt"),
     ("groq_ocr", "Groq", "Очень быстро · бесплатно", "ai"),
     ("gemini_ocr", "Gemini", "Бесплатно, лимит в минуту и в день", "ai"),
     ("mistral_ocr", "Mistral", "Бесплатно, 1 запрос в секунду", "ai"),
@@ -123,8 +124,15 @@ def _s_tr():
                           "has": custom_ai.ready(pid), "masked": custom_ai.masked(pid), "frac": None, "limit": "",
                           "can_key": False, "own": True, "url": x["url"], "model": x["model"], "local": local})
             continue
-        need = pid not in ("microsoft", "google")
+        need = pid not in ("microsoft", "google", "offline")
         has = translate.provider_has_key(pid)
+        if pid == "offline":
+            from . import offline_mt
+            provs.append({"id": pid, "name": name, "desc": desc, "group": grp, "need_key": False, "has": has,
+                          "masked": "", "frac": None, "limit": "", "can_key": False,
+                          "offline": {"installed": offline_mt.installed(), "engine": offline_mt.available(),
+                                      **offline_mt.state}})
+            continue
         f, t = lim.get(name.lower(), (None, ""))
         provs.append({"id": pid, "name": name, "desc": desc, "group": grp, "need_key": need, "has": has,
                       "masked": keys.masked(pid) if need and has else "", "frac": f, "limit": t,
@@ -505,6 +513,13 @@ def do(name, arg, app):
         core.SETTINGS["bad_lines"] = []
         core.save_settings()
         core.log("Отметки «плохой перевод» очищены", "ok")
+    elif name == "offline_install":
+        from . import offline_mt
+        offline_mt.install(a.get("path") if isinstance(a, dict) else None)
+    elif name == "offline_remove":
+        from . import offline_mt
+        offline_mt.remove()
+        core.log("Офлайн-переводчик удалён")
     elif name == "editor2":
         from . import editor
         v = a.get("v") or ""

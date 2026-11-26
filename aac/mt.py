@@ -157,6 +157,11 @@ def _mt_deepl(text):
     return "\n".join(t["text"] for t in r.json()["translations"])
 
 
+def _mt_offline(text):
+    from . import offline_mt
+    return offline_mt.translate(text)
+
+
 def ask_ocr_mt(name, img, prompt):
     """Распознать текст на ПК и перевести машинным переводчиком."""
     t0 = time.time()
@@ -173,7 +178,7 @@ def ask_ocr_mt(name, img, prompt):
     from_cache = text is not None
     if not from_cache:
         core.stats["requests"] += 1
-        text = {"google": _mt_google, "microsoft": _mt_microsoft, "deepl": _mt_deepl}[name](src)
+        text = {"google": _mt_google, "microsoft": _mt_microsoft, "deepl": _mt_deepl, "offline": _mt_offline}[name](src)
         tcache.put(key, text, "mt")
     out, seen = [], set()
     for ln in text.split("\n"):

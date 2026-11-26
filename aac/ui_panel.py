@@ -20,11 +20,12 @@ PROVIDER_LABELS = {  # как переводчики называются в в�
     "google": "Google Переводчик",
     "microsoft": "Microsoft Переводчик",
     "deepl": "DeepL (нужен ключ)",
+    "offline": "Офлайн — на этом ПК, без интернета",
 }
 PROVIDER_NAMES = {"gemini": "Gemini", "claude": "Claude", "ollama": "Ollama (локально)",
                   "mistral": "Mistral", "groq": "Groq", "google": "Google", "deepl": "DeepL",
                   "microsoft": "Microsoft", "groq_ocr": "Groq", "gemini_ocr": "Gemini",
-                  "claude_ocr": "Claude", "mistral_ocr": "Mistral"}
+                  "claude_ocr": "Claude", "mistral_ocr": "Mistral", "offline": "Офлайн"}
 # прежние варианты «по картинке» → такая же нейросеть, но текст читает программа
 BY_IMAGE = {"groq": "groq_ocr", "gemini": "gemini_ocr", "claude": "claude_ocr", "mistral": "mistral_ocr",
             "ollama": "google"}

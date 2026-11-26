@@ -269,7 +269,7 @@ R.tr = () => {
   const row = p => `<div class="r"><span class="av" style="border-radius:9px;background:#30302E;color:var(--t3)">${p.name.slice(0, p.name.length > 5 ? 2 : 1)}</span>
     <span class="tx"><span style="font-weight:500;color:${p.need_key && !p.has ? "var(--f)" : "var(--t)"}">${esc(p.name)}</span><span class="d">${esc(p.desc)}</span>
     ${p.frac != null ? `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;max-width:340px"><div class="bar" style="flex-grow:1;margin:0"><i style="width:${Math.round(p.frac * 100)}%"></i></div><span class="d" style="white-space:nowrap">${esc(p.limit)}</span></div>` : ""}</span>
-    ${!p.need_key ? `<span class="d">без ключа и лимитов</span>` : p.has ? `<span class="d">ключ ${esc(p.masked)}</span>${lnk("изменить", `data-a="key" data-id="${p.id}"`)}` : p.can_key ? lnk("добавить ключ", `data-a="key" data-id="${p.id}"`) : ""}</div>`;
+    ${p.offline ? (p.offline.busy ? `<span class="d">ставлю… ${esc(p.offline.progress || "")}</span>` : !p.offline.engine ? `<span class="d">нужна новая версия программы</span>` : p.offline.installed ? `<span class="d">установлен</span>${lnk("удалить", `data-a="omtrm"`)}` : `<button class="btnp" style="padding:4px 12px;font-size:12px" data-a="omtin">Установить</button>${lnk("из файла", `data-a="omtfile"`)}`) : !p.need_key ? `<span class="d">без ключа и лимитов</span>` : p.has ? `<span class="d">ключ ${esc(p.masked)}</span>${lnk("изменить", `data-a="key" data-id="${p.id}"`)}` : p.can_key ? lnk("добавить ключ", `data-a="key" data-id="${p.id}"`) : ""}</div>`;
   const flag = (k, ic, t, d, foot, footA) => { const on = D.flags[k]; return `<div class="mode${on ? " on" : ""}" style="cursor:default">
     <div class="row">${ico(ic, on)}<span style="flex-grow:1"></span>${sw(on, `data-a="flag" data-n="${k}"`)}</div>
     <div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">${t}</span><span style="font-size:12px;color:var(--m)">${d}</span></div>
@@ -321,6 +321,9 @@ HANDLERS.strp = b => act("stress_play", {v: b.dataset.v});
 HANDLERS.strd = b => act("stress_del", {k: b.dataset.k});
 HANDLERS.badd = b => act("bad_del", {i: +b.dataset.i});
 HANDLERS.badc = () => act("bad_clear");
+HANDLERS.omtin = () => act("offline_install", {});
+HANDLERS.omtfile = async () => { if (!window.pywebview) return; const p = await pywebview.api.open_file("model"); if (p) act("offline_install", {path: p}); };
+HANDLERS.omtrm = () => confirmDlg("Удалить офлайн-переводчик?", "Модель удалится с диска. Её можно будет поставить заново.", "Удалить", () => act("offline_remove"));
 HANDLERS.ed2 = b => act("editor2", b.value);
 HANDLERS.flag = b => act("flag", {name: b.dataset.n, v: b.getAttribute("aria-checked") != "true"});
 HANDLERS.cclear = () => confirmDlg("Очистить кэш переводов?", "Готовые переводы фраз забудутся — следующие повторы снова пойдут к переводчику.", "Очистить", () => act("cache_clear"));

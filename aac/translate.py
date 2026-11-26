@@ -21,6 +21,9 @@ def provider_has_key(name):
     keys = {"gemini": config.API_KEY, "claude": config.CLAUDE_API_KEY, "mistral": config.MISTRAL_API_KEY, "groq": config.GROQ_API_KEY,
             "deepl": config.DEEPL_API_KEY}
     key = (keys.get(name) or "").strip()
+    if name == "offline":
+        from . import offline_mt
+        return offline_mt.ready()
     return name in ("ollama", "google", "microsoft") or (bool(key) and "ВСТАВЬТЕ" not in key)
 
 
@@ -56,7 +59,7 @@ def chain_ready_in():
 OCR_AI = {  # режим «OCR + ИИ»: текст распознаётся на ПК, нейросеть получает только текст (в разы меньше токенов)
     "groq_ocr": "groq", "gemini_ocr": "gemini", "claude_ocr": "claude", "mistral_ocr": "mistral",
 }
-OCR_BASED = ("google", "microsoft", "deepl") + tuple(OCR_AI)  # переводчики, которые сначала распознают текст на ПК
+OCR_BASED = ("google", "microsoft", "deepl", "offline") + tuple(OCR_AI)  # переводчики, которые сначала распознают текст на ПК
 dialogue_history = []                     # [(оригинал, перевод)] последних реплик субтитров
 
 
@@ -182,7 +185,7 @@ def translate_short(src):
 def _ask(name, img_b64, prompt):
     if name in OCR_AI:
         return ask_ocr_ai(name, img_b64, prompt)
-    if name in ("google", "microsoft", "deepl"):
+    if name in ("google", "microsoft", "deepl", "offline"):
         return mt.ask_ocr_mt(name, img_b64, prompt)
     if name == "ollama":
         return llm.ask_ollama(img_b64, prompt)
@@ -193,7 +196,7 @@ def _ask(name, img_b64, prompt):
     return llm.ask_gemini(img_b64, prompt)
 
 
-MT_PROVIDERS = ("google", "microsoft", "deepl")
+MT_PROVIDERS = ("google", "microsoft", "deepl", "offline")
 
 
 def clean_translation(text, strict=True):

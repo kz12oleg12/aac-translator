@@ -2128,6 +2128,44 @@ def test_tts_cache(monkey):
     assert tts._cache_key("Привет, путник.", True, None) != k, "ускоренная — другой звук"
 
 
+def test_offline_mt(monkey):
+    """Офлайн-переводчик: модель Argos ставится из архива и переводит построчно (на Windows в CI — по-настоящему)."""
+    from aac import offline_mt
+    import tempfile as _tf
+    import zipfile as _zf
+    d = _tf.mkdtemp()
+    monkey(offline_mt.config, "APP_DIR", d)
+    bad = os.path.join(d, "bad.zip")
+    with _zf.ZipFile(bad, "w") as z:
+        z.writestr("x/readme.txt", "hi")
+    try:
+        offline_mt._unpack(bad)
+        assert False, "не модель — должна быть ошибка"
+    except ValueError:
+        pass
+    if not offline_mt.available() or os.name != "nt":
+        print("   (нет ctranslate2/sentencepiece или не Windows — настоящий перевод не проверяю)")
+        return
+    import requests
+    zpath = os.path.join(d, "m.argosmodel")
+    try:
+        with requests.get(offline_mt.MODEL_URLS[0], stream=True, timeout=60) as r:
+            r.raise_for_status()
+            with open(zpath, "wb") as f:
+                for ch in r.iter_content(1 << 20):
+                    f.write(ch)
+    except Exception as e:
+        print(f"   (модель не скачалась: {e} — пропуск)")
+        return
+    offline_mt._unpack(zpath)
+    assert offline_mt.ready()
+    t0 = time.time()
+    out = offline_mt.translate("A rental fee is required.\nWhere is the blacksmith?")
+    print(f"   офлайн: {out!r} за {time.time() - t0:.2f} с")
+    lines = out.split("\n")
+    assert len(lines) == 2 and all(any("а" <= ch <= "я" for ch in ln.lower()) for ln in lines), out
+
+
 def test_scene_on_new_npc(monkey):
     """Снимок сцены — когда заговорил другой персонаж, а не только раз в 6 реплик."""
     from aac import editor

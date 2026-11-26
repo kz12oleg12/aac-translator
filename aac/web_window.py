@@ -47,10 +47,11 @@ class Api:
                                             file_types=("Резервная копия AAC (*.zip)",))
         return (r[0] if isinstance(r, (list, tuple)) else r) or ""
 
-    def open_file(self):
+    def open_file(self, kind=""):
         import webview
-        r = self._window.create_file_dialog(webview.OPEN_DIALOG, file_types=("Резервная копия AAC (*.zip)",
-                                                                             "Все файлы (*.*)"))
+        types = (("Модель перевода (*.argosmodel;*.zip)", "Все файлы (*.*)") if kind == "model"
+                 else ("Резервная копия AAC (*.zip)", "Все файлы (*.*)"))
+        r = self._window.create_file_dialog(webview.OPEN_DIALOG, file_types=types)
         return (r[0] if r else "") or ""
 
     def quit(self):
