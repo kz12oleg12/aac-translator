@@ -2061,8 +2061,18 @@ def test_editor_voice(monkey):
     monkey(c, "SETTINGS", {})
     monkey(c, "save_settings", lambda: None)
     editor._keep_speech("Я пришла за тобой, Аргус.", r)
-    assert editor.speech_for("Я пришла за тобой,  Аргус.")["voice"].startswith("Я пришл+а")
+    assert editor.speech_for("Я пришла за тобой,  Аргус.")["voice"].startswith("Я пришла за тобой, Арг+ус")
     assert c.SETTINGS["stress"]["аргус"] == "арг+ус"
+    assert editor.filter_stress("Н+ужно заплат+ить, Арг+ус.") == "Нужно заплатить, Арг+ус.", "в обычных словах — нет"
+    editor._learn_stress("Н+ужно идт+и.")
+    assert "нужно" not in c.SETTINGS["stress"], "слово в начале предложения — не имя"
+    from aac import custom_ai
+    monkey(editor, "name", lambda: "c_lm")
+    monkey(custom_ai, "is_custom", lambda e: True)
+    monkey(custom_ai, "get", lambda e: {"url": "http://localhost:1234/v1"})
+    assert editor.filter_stress("Арг+ус пришёл.") == "Аргус пришёл.", "от локальной модели — все убрать"
+    monkey(editor, "name", lambda: "claude")
+    monkey(custom_ai, "is_custom", lambda e: False)
     assert editor.mark_bad("Hi", "Привет") and "Привет" in editor.bad_hint()
     assert editor.apply_stress("Где Аргус?") == "Где Арг+ус?"
     assert "Known stresses" in editor.stress_prompt("Argus Аргус")
@@ -2072,12 +2082,12 @@ def test_editor_voice(monkey):
     monkey(tts.config, "TTS_ENABLED", True)
     monkey(voices, "note_line", lambda tr, orig=None: None)
     tts.speak_subtitle("Я пришла за тобой, Аргус.", orig="I came for you, Argus.")
-    assert said and said[-1] == "Я пришл+а за тоб+ой, Арг+ус!"
+    assert said and said[-1] == "Я пришла за тобой, Арг+ус!"
     monkey(tts.config, "TTS_READ_NAME", False)
     editor._keep_speech("Коллекционер: Ты опять пришёл?", {"text": "Коллекционер: Ты опять пришёл?",
                                                           "voice": "Коллекцион+ер: Ты оп+ять пришёл?"})
     tts.speak_subtitle("Коллекционер: Ты опять пришёл?", orig="Collector: You came again?")
-    assert said[-1].startswith("Ты оп+ять"), said[-1]
+    assert said[-1].startswith("Ты опять"), said[-1]
     assert tts.speech_text("Джиеллини Чем могу помочь?", "Джиеллини\nMay Ай help you?") == "Чем могу помочь?"
     assert tts.speech_text("Джиелл+ини: Чем могу помочь?", "Джиеллини / May I help you?") == "Чем могу помочь?"
     assert tts.speech_text("Джанеллини, чем помочь?", "Gianellini\nHow can I help?") == "чем помочь?"
@@ -2199,7 +2209,7 @@ def test_bench(monkey):
     rows = bench.state["rows"]
     assert len(rows) == 1 and rows[0]["text"].endswith("Нужна плата."), rows
     assert "A rental fee is required." in seen["src"], seen
-    assert rows[0]["ed"]["voice"] == "Нужно заплат+ить." and rows[0]["ed"]["gender"] == "f"
+    assert rows[0]["ed"]["voice"] == "Нужно заплатить." and rows[0]["ed"]["gender"] == "f"
     assert not bench.active()
 
 

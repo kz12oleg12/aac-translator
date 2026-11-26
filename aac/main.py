@@ -43,6 +43,7 @@ def apply_view_settings():
     config.SUBS_HISTORY = int(core.SETTINGS.get("subs_history", config.SUBS_HISTORY))
     config.TTS_ENABLED = bool(core.SETTINGS.get("tts_enabled", config.TTS_ENABLED))
     config.TTS_VOICE = str(core.SETTINGS.get("tts_voice", config.TTS_VOICE))
+    config.EDITOR_STRESS = bool(core.SETTINGS.get("editor_stress", config.EDITOR_STRESS))
     config.TTS_DUCK = bool(core.SETTINGS.get("tts_duck", config.TTS_DUCK))
     config.TTS_CACHE = bool(core.SETTINGS.get("tts_cache", config.TTS_CACHE))
     config.TTS_NO_WAIT = bool(core.SETTINGS.get("tts_no_wait", config.TTS_NO_WAIT))
@@ -336,6 +337,12 @@ def main():
     try:              # окно панели по ошибке приняли за игру — убираем такой пресет
         from . import profiles as _pr
         _pr.drop_self()
+    except Exception:
+        pass
+    try:              # ударения: забыть обычные слова, запомненные по ошибке (один раз)
+        from . import editor as _ed, profiles as _pr2
+        _pr2.bind(core.active_profile)
+        _ed.migrate_stress()
     except Exception:
         pass
     try:              # свои ИИ-переводчики: ключи из Windows и подключение к остальной программе

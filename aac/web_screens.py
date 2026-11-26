@@ -45,6 +45,7 @@ FLAGS = {  # переключатели: имя → (атрибут config, кл
     "tts_nowait": ("TTS_NO_WAIT", "tts_no_wait", "tts"),
     "tts_duck": ("TTS_DUCK", "tts_duck", "tts"),
     "tts_cache": ("TTS_CACHE", "tts_cache", "tts"),
+    "ed_stress": ("EDITOR_STRESS", "editor_stress", None),
     "ed_shot": ("EDITOR_SCENE_IMAGE", "editor_scene_image", None),
     "tts_read_name": ("TTS_READ_NAME", "tts_read_name", "tts"),
     "tts_russian_only": ("TTS_RUSSIAN_ONLY", "tts_russian_only", "tts"),
@@ -225,6 +226,7 @@ def _s_voice():
             "voicepack": dict(voicepack.state) if hasattr(voicepack, "state") else {},
             "chars": chars, "char_voices": vpool,
             "type_voices": _type_voices(),
+            "ed_stress": config.EDITOR_STRESS,
             "stress": [{"k": k, "v": v} for k, v in reversed(list(core.SETTINGS.get("stress", {}).items()))][:300], "game": _clean(_safe(lambda: __import__("aac.profiles",
                                                                                          fromlist=["x"]).name()))}
 
@@ -519,6 +521,10 @@ def do(name, arg, app):
             core.log(f"Ударение: {v}", "ok")
         else:
             core.log("Ударение: поставьте один «+» перед ударной гласной, само слово не меняйте", "warn")
+    elif name == "stress_clear":
+        from . import editor
+        editor.clear_stress()
+        core.log("Запомненные ударения очищены — голос снова ставит их сам", "ok")
     elif name == "stress_del":
         core.SETTINGS.setdefault("stress", {}).pop(str(a.get("k") or ""), None)
         core.save_settings()

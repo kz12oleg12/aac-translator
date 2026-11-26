@@ -32,8 +32,8 @@ PROMPT = """You are a professional video game localization editor (English → R
 - never include the speaker's name (not as a prefix, not on its own line); no brackets, no markup, no emoji;
 - write numbers, fractions, percents, "x2", "HP", "lvl", "3/5" etc. as Russian words, correctly declined;
 - write any remaining Latin words in Russian letters the way they are pronounced;
-- put "+" right before the stressed vowel in names, invented/fantasy words, rare words and homographs
-  (з+амок / зам+ок, вс+ё); do not mark ordinary unambiguous words;
+- put "+" right before the stressed vowel ONLY in character names, place names and invented game words
+  (Арг+ус, Эмберх+олд); never mark ordinary Russian words — the voice knows their stress;
 - use punctuation for natural pauses and intonation (commas, «—», «…», «!», «?»);
 - if the line is longer than about {maxlen} characters, condense VOICE to the essential meaning.
 {voice_only}
@@ -279,6 +279,7 @@ def _note_traits(info, shown=None):
 def _keep_speech(shown, info):
     if not shown or not info.get("voice"):
         return
+    info["voice"] = filter_stress(info["voice"])
     if _norm(shown) not in _speech:
         _note_traits(info, shown)
     with _lock:
@@ -332,15 +333,85 @@ def _stress_map():
     return core.SETTINGS.setdefault("stress", {})
 
 
+def _known_names():
+    """Русские имена и термины игры: персонажи и словарь (в нижнем регистре, по словам)."""
+    out = set()
+    try:
+        for _k, c in voices.all_chars():
+            for w in (c.get("ru") or "").split():
+                out.add(w.lower())
+    except Exception:
+        pass
+    try:
+        for _en, ru, _a in glossary.entries():
+            for w in ru.split():
+                out.add(w.lower().strip(".,!?«»\"'"))
+    except Exception:
+        pass
+    return out
+
+
+def _name_words(voice):
+    """Позиции слов-имён в тексте: с большой буквы не в начале предложения — или известное имя/термин."""
+    import re
+    names = _known_names()
+    res = []
+    for m in re.finditer(r"[А-Яа-яЁё+]+", voice or ""):
+        w = m.group(0)
+        plain = w.replace("+", "")
+        if not plain[:1].isupper():
+            continue
+        before = voice[:m.start()].rstrip()
+        start = not before or before[-1] in ".!?…\n—-:«\""
+        if not start or plain.lower() in names:
+            res.append((m.start(), m.end()))
+    return res
+
+
+def trusted_stress():
+    """Ставить ли ударения ИИ-редактора: маленькие локальные модели ставят их почти наугад — тогда не ставим,
+    ударения расставит сам голос (Silero делает это хорошо)."""
+    try:
+        from . import custom_ai
+        e = name()
+        return not (custom_ai.is_custom(e) and custom_ai.is_local((custom_ai.get(e) or {}).get("url")))
+    except Exception:
+        return True
+
+
+def filter_stress(voice):
+    """Оставить «+» только в именах и терминах игры. В обычных словах ударение лучше знает сам голос —
+    а ИИ часто ошибается. От локальной модели — убрать все."""
+    import re
+    if not voice or "+" not in voice:
+        return voice
+    if not config.EDITOR_STRESS or not trusted_stress():
+        return voice.replace("+", "")
+    keep = _name_words(voice)
+    out, pos = [], 0
+    for m in re.finditer(r"\+", voice):
+        i = m.start()
+        if any(a <= i < b for a, b in keep):
+            continue
+        out.append(voice[pos:i])
+        pos = i + 1
+    out.append(voice[pos:])
+    return "".join(out)
+
+
 def _learn_stress(voice):
     import re
     d = _stress_map()
     changed = False
-    for w in re.findall(r"[А-Яа-яЁё+]+", voice):
+    if not trusted_stress() or not config.EDITOR_STRESS:
+        return
+    spans = _name_words(voice)
+    for m in re.finditer(r"[А-Яа-яЁё+]+", voice):
+        w = m.group(0)
         if w.count("+") != 1 or len(w) < 4:
             continue
         plain = w.replace("+", "")
-        if not (plain[:1].isupper() or len(plain) >= 9):     # имена, термины и длинные редкие слова
+        if not any(a <= m.start() < b for a, b in spans):     # только имена и термины игры
             continue
         k = plain.lower()
         if d.get(k) != w.lower():
@@ -353,6 +424,26 @@ def _learn_stress(voice):
             core.save_settings()
         except Exception:
             pass
+
+
+def migrate_stress():
+    """Раньше запоминались и обычные слова (с большой буквы в начале предложения) — часто с неверным ударением.
+    Один раз чистим: оставляем только имена и термины игры (персонажи, словарь)."""
+    if core.SETTINGS.get("stress_v2"):
+        return
+    d = core.SETTINGS.get("stress") or {}
+    names = _known_names()
+    keep = {k: v for k, v in d.items() if k in names}
+    core.SETTINGS["stress"] = keep
+    core.SETTINGS["stress_v2"] = True
+    if len(keep) != len(d):
+        core.log(f"Ударения: забыл {len(d) - len(keep)} обычных слов с неверным ударением, имена оставил ({len(keep)})")
+    core.save_settings()
+
+
+def clear_stress():
+    core.SETTINGS["stress"] = {}
+    core.save_settings()
 
 
 def stress_prompt(text):

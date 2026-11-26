@@ -367,6 +367,7 @@ HANDLERS.edon = b => act("editor_on", b.getAttribute("aria-checked") != "true");
 HANDLERS.ed = b => act("editor", b.value);
 HANDLERS.strs = b => act("stress_set", {k: b.dataset.k, v: b.value});
 HANDLERS.strp = b => act("stress_play", {v: b.dataset.v});
+HANDLERS.strclr = () => confirmDlg("Забыть все ударения?", "Голос снова будет ставить их сам; имена редактор отметит заново.", "Забыть", () => act("stress_clear"));
 HANDLERS.strd = b => act("stress_del", {k: b.dataset.k});
 HANDLERS.badd = b => act("bad_del", {i: +b.dataset.i});
 HANDLERS.badc = () => act("bad_clear");
@@ -449,8 +450,10 @@ function voiceTab() {
   </div>
   <h2 style="font-size:15px;padding-top:6px">Ударения</h2>
   <div class="card" style="padding:14px 18px;display:flex;flex-direction:column;gap:8px">
-    <span style="font-size:12px;color:var(--m)">ИИ-редактор запоминает ударения в именах и редких словах — дальше они звучат так всегда. Неверное — поправьте: «+» ставится перед ударной гласной. Работает для голосов Silero.</span>
+    <div class="row" style="gap:12px"><span style="display:flex;flex-direction:column;gap:2px;flex-grow:1"><span style="font-size:13px">Ударения от ИИ-редактора в именах</span><span style="font-size:12px;color:var(--m)">Только в именах персонажей, местах и выдуманных словах — обычные слова голос ударяет сам. От локальной модели (LM Studio, Ollama) не берутся: она ставит их почти наугад</span></span>${sw(D.ed_stress, 'data-a="flag" data-n="ed_stress"')}</div>
+    <span style="font-size:12px;color:var(--m)">Запомненные ударения звучат так всегда. Неверное — поправьте («+» перед ударной гласной) или забудьте. Работает для голосов Silero.</span>
     ${D.stress.length ? `<div class="lst">${D.stress.map(x => `<div class="row" style="padding:6px 0;gap:10px"><span style="flex-grow:1;font-size:14px">${esc(x.v.replace(/\+(.)/, (m, c) => c.toUpperCase()))}</span><input class="inp" style="width:170px;height:32px" value="${esc(x.v)}" data-c="strs" data-k="${esc(x.k)}"><button class="ib" style="color:var(--acc2)" title="Прослушать" data-a="strp" data-v="${esc(x.v)}">${svg("play", 14)}</button><button class="ib" title="Забыть" data-a="strd" data-k="${esc(x.k)}">${svg("x", 14)}</button></div>`).join("")}</div>` : `<span style="font-size:13px;color:var(--f)">Пока пусто — появятся, когда редактор встретит имена в игре.</span>`}
+    ${D.stress.length ? `<button class="btn" style="align-self:flex-start" data-a="strclr">Забыть все (${D.stress.length})</button>` : ""}
   </div>`;
 }
 function chars() {

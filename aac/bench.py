@@ -42,7 +42,7 @@ def _one(pid, src, kind):
         t1 = time.time()
         try:
             info = editor.parse(editor._ask(editor.build_prompt(src, row["text"], kind)))
-            row["ed"] = {"text": info.get("text", ""), "voice": info.get("voice", ""),
+            row["ed"] = {"text": info.get("text", ""), "voice": editor.filter_stress(info.get("voice", "")),
                          "speaker": info.get("speaker", ""), "gender": info.get("gender", ""),
                          "mood": info.get("mood", ""), "type": info.get("type", ""),
                          "time": round(time.time() - t1, 2), "by": editor.name_of(editor.name())}
