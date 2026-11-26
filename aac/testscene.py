@@ -78,7 +78,10 @@ class Scene:
         self.text.pack(fill="both", expand=True)
         # перевод и голос — прямо в окне сцены (видно на скриншоте; окна перевода программы на время сцены не нужны)
         self.tr = tk.Frame(w, bg="#1d2230", padx=20, pady=14)
-        self.tr.place(relx=0.5, rely=0.10, anchor="n", relwidth=0.86, relheight=0.50)
+        self.tr.place(relx=0.93, rely=0.10, anchor="ne", relwidth=0.60, relheight=0.52)
+        # «кадр игры»: кто говорит — простая картинка (для редактора, который смотрит на экран)
+        self.pic = tk.Canvas(w, bg="#232a3a", highlightthickness=0)
+        self.pic.place(relx=0.07, rely=0.10, anchor="nw", relwidth=0.24, relheight=0.52)
         tk.Label(self.tr, text="ПЕРЕВОД", bg="#1d2230", fg=MUTED, font=("Segoe UI", 9, "bold"),
                  anchor="w").pack(fill="x")
         self.tr_text = tk.Label(self.tr, text="…", bg="#1d2230", fg=TEXT, font=("Segoe UI", 15), anchor="nw",
@@ -88,7 +91,13 @@ class Scene:
         self.voice = tk.Label(self.tr, text="", bg="#1d2230", fg="#9db0ff", font=("Segoe UI", 11), anchor="w",
                               justify="left")
         self.voice.pack(fill="x")
+        self.seen = tk.Label(self.tr, text="", bg="#1d2230", fg=MUTED, font=("Segoe UI", 10), anchor="w",
+                             justify="left")
+        self.seen.pack(fill="x", pady=(6, 0))
+        self.tr.bind("<Configure>", lambda e: (self.tr_text.config(wraplength=max(200, e.width - 50)),
+                                               self.seen.config(wraplength=max(200, e.width - 50))), add="+")
         self._voice_t = 0
+        self._seen_t = 0
         w.lift()
         w.attributes("-topmost", True)
         w.after(400, self._start)
@@ -137,9 +146,66 @@ class Scene:
         self.count.config(text=f"реплика {self.i + 1} из {len(SCRIPT)}")
         self.name.config(text=name)
         self.text.config(text=line)
+        self._draw(name)
         self.tr_text.config(text="…", fg=MUTED)
         self.voice.config(text="")
         self._plan()
+
+    def _draw(self, name):
+        """Простой «портрет» говорящего: девушка, старуха, старик, барон, мальчик, голем, торговец."""
+        c = self.pic
+        c.delete("all")
+        c.update_idletasks()
+        W, H = max(120, c.winfo_width()), max(160, c.winfo_height())
+        cx, base = W // 2, H - 20
+        skin, k = "#e0b48f", min(W, H) / 300
+        n = (name or "").lower()
+
+        def person(h, body, hair=None, beard=False, crown=False, cane=False, bag=False, dress=False):
+            top = base - h * k
+            head = 26 * k * (h / 220)
+            if dress:
+                c.create_polygon(cx - 50 * k, base, cx + 50 * k, base, cx + 22 * k, top + head * 2.2,
+                                 cx - 22 * k, top + head * 2.2, fill=body, outline="")
+            else:
+                c.create_rectangle(cx - 30 * k, top + head * 2.2, cx + 30 * k, base, fill=body, outline="")
+            c.create_oval(cx - head, top, cx + head, top + head * 2.2, fill=skin, outline="")
+            if hair:
+                c.create_arc(cx - head - 2, top - 2, cx + head + 2, top + head * 2, start=0, extent=180,
+                             fill=hair, outline="")
+            if beard:
+                c.create_polygon(cx - head * .8, top + head * 1.4, cx + head * .8, top + head * 1.4,
+                                 cx, top + head * 3.2, fill="#e8e8e8", outline="")
+            if crown:
+                c.create_polygon(cx - head, top + 4, cx - head, top - head * .9, cx - head * .4, top - head * .3,
+                                 cx, top - head, cx + head * .4, top - head * .3, cx + head, top - head * .9,
+                                 cx + head, top + 4, fill="#e8c170", outline="")
+            if cane:
+                c.create_line(cx + 45 * k, top + head * 2.6, cx + 52 * k, base, fill="#8b5a2b", width=max(3, 5 * k))
+            if bag:
+                c.create_oval(cx + 26 * k, base - 70 * k, cx + 70 * k, base - 20 * k, fill="#8b6b3d", outline="")
+
+        if "golem" in n:
+            g = "#7d7f86"
+            c.create_rectangle(cx - 70 * k, base - 230 * k, cx + 70 * k, base, fill=g, outline="#5c5e64", width=3)
+            c.create_rectangle(cx - 45 * k, base - 300 * k, cx + 45 * k, base - 225 * k, fill=g, outline="#5c5e64",
+                               width=3)
+            for dx in (-20, 20):
+                c.create_oval(cx + dx * k - 8, base - 270 * k - 6, cx + dx * k + 8, base - 270 * k + 6, fill="#ff8a3d")
+        elif "lyra" in n:
+            person(220, "#3f7d5a", hair="#b8462e", dress=True)
+        elif "rotild" in n:
+            person(190, "#5b4a6b", hair="#d9d9d9", dress=True, cane=True)
+        elif "bram" in n:
+            person(200, "#5a4a3a", hair="#d9d9d9", beard=True, cane=True)
+        elif "baron" in n:
+            person(240, "#7a1f2b", hair="#3a2a1a", crown=True)
+        elif "tim" in n:
+            person(130, "#3c6fb0", hair="#c99a4b")
+        elif "merchant" in n or "gorran" in n:
+            person(215, "#a86b2d", hair="#3a2a1a", beard=True, bag=True)
+        else:
+            c.create_text(cx, H // 2, text="🏰", font=("Segoe UI Emoji", int(48 * k) or 24), fill="#9aa")
 
     # ---------- перевод и голос в окне сцены ----------
     def on_translation(self, text):
@@ -157,6 +223,25 @@ class Scene:
             if lv and lv["t"] != self._voice_t:
                 self._voice_t = lv["t"]
                 self.voice.config(text="🔊 " + lv["desc"])
+        except Exception:
+            pass
+        try:                                   # что редактор понял о сцене (по скриншоту или по тексту)
+            from . import editor
+            st = editor._state
+            if not config.EDITOR_ON:
+                note = "ИИ-редактор выключен — сцену никто не «смотрит»"
+            elif editor.is_custom_id(editor.name()) and config.EDITOR_SCENE_IMAGE:
+                note = ("«Смотреть на экран»: свой ИИ (" + editor.name_of(editor.name()) + ") картинки не получает — "
+                        "заметка о сцене только по тексту")
+            else:
+                note = ""
+            if st.get("scene_at_t", 0) != self._seen_t and st.get("scene"):
+                self._seen_t = st["scene_at_t"]
+                note = ("🖼 Редактор посмотрел на экран: " if st.get("scene_shot") else "📝 Заметка о сцене по тексту: ") \
+                    + st["scene"][:220]
+                self.seen.config(text=note)
+            elif note and not self.seen.cget("text").startswith(("🖼", "📝")):
+                self.seen.config(text=note)
         except Exception:
             pass
         try:

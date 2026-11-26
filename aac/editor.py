@@ -447,6 +447,8 @@ def _update_scene():
     if out and len(out) < 400:
         with _lock:
             _state["scene"] = out
+            _state["scene_shot"] = by_shot
+            _state["scene_at_t"] = time.time()
         stats["scenes"] = stats.get("scenes", 0) + 1
         core.log(("🖼 ИИ-редактор посмотрел на экран: " if by_shot else "📝 Заметка о сцене (по тексту): ") + out[:160])
 
