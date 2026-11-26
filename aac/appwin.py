@@ -967,10 +967,16 @@ class App:
             while True:
                 kind, payload = core.events.get_nowait()
                 if kind == "text":
-                    self.subs.push(payload)
+                    sc = getattr(self, "_scene", None)
+                    if sc is not None:          # «Тестовая сцена»: перевод — прямо в её окне
+                        sc.on_translation(payload[0] if isinstance(payload, tuple) else payload)
+                    else:
+                        self.subs.push(payload)
                 elif kind == "text_improve":
                     # ИИ-редактор ответил позже — тихо подменяем ещё показанный черновик
                     draft, better = payload
+                    if getattr(self, "_scene", None) is not None:
+                        self._scene.on_improve(draft, better)
                     for ov in (self.subs, self.answers, self.quest):
                         if ov.visible and ov.label.cget("text") == draft:
                             ov.label.config(text=better)

@@ -266,7 +266,7 @@ def speak_subtitle(translation, seen=None, orig=None):
         text = editor.apply_stress(text)
     except Exception:
         info = None
-    vp = None
+    vp = key = None
     try:
         if info and info.get("speaker") and not voices.speaker(translation, orig):
             orig = f"{info['speaker']}\n{orig or translation}"      # редактор понял, кто говорит
@@ -286,11 +286,43 @@ def speak_subtitle(translation, seen=None, orig=None):
                     vp = None
     except Exception as e:
         core.log(f"Голоса персонажей: {e}", "error")
+    if core.test_scene:
+        _note_voice(key, vp, info)
     _key_box["key"] = _line_key(translation)
     try:
         _say(text, seen, vp)
     finally:
         _key_box["key"] = None
+
+
+last_voice = None      # для «Тестовой сцены»: кто и каким голосом озвучен последним
+
+
+def _note_voice(key, vp, info):
+    """Описание голоса последней реплики: «Lyra · женский · молодая · голос Ксения, выше»."""
+    global last_voice
+    try:
+        c = {}
+        if key:
+            with voices._lock:
+                voices._load()
+                c = dict(voices._data["chars"].get(key) or {})
+        g = voices.gender(c) if c else (info or {}).get("gender", "")
+        kind = c.get("type") or (info or {}).get("type", "")
+        eng = config.TTS_ENGINE
+        pool = dict(tts_silero.VOICES) if eng == "silero" else dict(NEURAL_VOICES) if eng == "neural" else {}
+        if vp and vp[0]:
+            vname = pool.get(vp[0], vp[0]).split(" — ")[0]
+        else:
+            vname = "основной голос"
+        shift = (vp[1] if vp else 0) or 0
+        parts = [c.get("ru") or c.get("en") or "без имени",
+                 {"m": "мужской", "f": "женский"}.get(g, "пол не понят"),
+                 voices.TYPE_NAMES.get(kind, "") if kind else "",
+                 f"голос {vname}" + (" · ниже" if shift < 0 else " · выше" if shift > 0 else "")]
+        last_voice = {"t": time.time(), "desc": " · ".join(p for p in parts if p)}
+    except Exception as e:
+        last_voice = {"t": time.time(), "desc": f"голос: {e}"}
 
 
 _line_chars = {}       # реплика → персонаж, которого озвучка в ней узнала (для поздних подсказок редактора)

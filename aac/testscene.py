@@ -11,20 +11,25 @@ import tkinter as tk
 from . import config, core
 
 PID = "testscene"
-# (имя, реплика) — реплика без имени: рассказчик; список — варианты ответа
+# (имя, реплика); реплика без имени — рассказчик. Отрывок одной истории: в ней заняты все голоса —
+# девушка, старуха, старик, барон, мальчик, чудовище, торговец.
 SCRIPT = [
-    ("", "The gates of Emberhold creak open as the evening bell rings."),
+    ("", "Night falls over Emberhold. A low rumble echoes from the old quarry beyond the walls."),
     ("Lyra", "There you are! I was starting to think you'd gotten lost in the marsh."),
-    ("Lyra", "I came back as soon as I heard. I was so worried. Tell me, are you hurt?"),
-    ("", ["I'm fine. Who are you?", "What happened here?", "Leave"]),
-    ("Old Rotild", "Sit down, child. These old bones have seen three wars, and this one frightens me the most."),
-    ("Old Rotild", "The archive lost 12 scrolls last night. Each one is worth 300 gold."),
+    ("Lyra", "I came back as soon as I heard the bells. I was so worried about you."),
+    ("Elder Bram", "Quiet, both of you. I have lived in this town for seventy years, and I know that sound."),
+    ("Old Rotild", "Bram is right. My grandmother told me about it. The quarry golem is waking up."),
+    ("Old Rotild", "The archive lost 12 scrolls last night. Someone took the binding runes on purpose."),
     ("Baron Alderich", "Enough! I am the lord of this keep, and I will not have rumors spread in my hall."),
-    ("Tim", "Mister, mister! I saw a big stone monster near the well! Can I come with you?"),
+    ("Baron Alderich", "Guards, close the gates. No one leaves Emberhold until morning."),
+    ("Tim", "Mister, mister! I saw it! A big stone monster near the well, taller than the church!"),
+    ("Lyra", "Tim, stay with your mother. I'll go with the stranger. I'm not afraid."),
+    ("Merchant Gorran", "Wait, friend! Potions, three for 50 gold. Each one restores 40% HP. You'll need them."),
     ("Stone Golem", "WHO... DISTURBS... MY... SLEEP?"),
-    ("Lyra", "Stay behind me. I'll handle this."),
-    ("Merchant Gorran", "Potions! Three for 50 gold, each one restores 40% HP. Don't die out there, friend."),
-    ("", ["Buy 3 potions", "Ask about the golem", "Goodbye"]),
+    ("Stone Golem", "THE RUNES... ARE GONE. NOW... EMBERHOLD... WILL... FALL."),
+    ("Elder Bram", "Run! Get the children inside, now!"),
+    ("Lyra", "No. I found the runes. Give me a minute, and I'll put him back to sleep."),
+    ("", "The ground stops shaking. Somewhere a bird starts to sing again."),
 ]
 
 BG, BOX, NAME, TEXT, MUTED = "#151922", "#0b0d12", "#e8c170", "#f2f2f2", "#8a8f9c"
@@ -71,13 +76,19 @@ class Scene:
                              justify="left")
         self.box.bind("<Configure>", lambda e: self.text.config(wraplength=max(200, e.width - 50)))
         self.text.pack(fill="both", expand=True)
-        # варианты ответа — справа
-        self.ans = tk.Frame(w, bg=BOX, padx=18, pady=12)
-        self.ans.place(relx=0.97, rely=0.08, anchor="ne", relwidth=0.36, relheight=0.30)
-        self.ans_lbl = tk.Label(self.ans, text="", bg=BOX, fg=TEXT, font=("Segoe UI", 13), anchor="nw",
+        # перевод и голос — прямо в окне сцены (видно на скриншоте; окна перевода программы на время сцены не нужны)
+        self.tr = tk.Frame(w, bg="#1d2230", padx=20, pady=14)
+        self.tr.place(relx=0.5, rely=0.10, anchor="n", relwidth=0.86, relheight=0.50)
+        tk.Label(self.tr, text="ПЕРЕВОД", bg="#1d2230", fg=MUTED, font=("Segoe UI", 9, "bold"),
+                 anchor="w").pack(fill="x")
+        self.tr_text = tk.Label(self.tr, text="…", bg="#1d2230", fg=TEXT, font=("Segoe UI", 15), anchor="nw",
                                 justify="left")
-        self.ans.bind("<Configure>", lambda e: self.ans_lbl.config(wraplength=max(150, e.width - 40)))
-        self.ans_lbl.pack(fill="both", expand=True)
+        self.tr_text.pack(fill="both", expand=True, pady=(4, 0))
+        self.tr.bind("<Configure>", lambda e: self.tr_text.config(wraplength=max(200, e.width - 50)))
+        self.voice = tk.Label(self.tr, text="", bg="#1d2230", fg="#9db0ff", font=("Segoe UI", 11), anchor="w",
+                              justify="left")
+        self.voice.pack(fill="x")
+        self._voice_t = 0
         w.lift()
         w.attributes("-topmost", True)
         w.after(400, self._start)
@@ -90,7 +101,8 @@ class Scene:
             profs[PID] = {"name": "Тестовая сцена", "exes": [], "test": True,
                           "desc": "a fantasy role-playing game (built-in test scene)",
                           "about": "Fantasy RPG. Town of Emberhold: a young woman Lyra, an old archivist woman Rotild, "
-                                   "Baron Alderich, a little boy Tim, a stone golem monster, merchant Gorran."}
+                                   "old Elder Bram, Baron Alderich, a little boy Tim, a stone golem monster, "
+                                   "merchant Gorran."}
             core.save_settings(profiles=profs)
         d = profiles.folder(PID)
         for f in ("characters.json", "translation_cache.json"):          # каждый раз — с нуля
@@ -103,11 +115,10 @@ class Scene:
     def _start(self):
         from . import profiles
         self.win.update_idletasks()
-        b, a = self.box, self.ans
+        b = self.box
         reg = (b.winfo_rootx(), b.winfo_rooty(), b.winfo_width(), b.winfo_height())
-        areg = (a.winfo_rootx(), a.winfo_rooty(), a.winfo_width(), a.winfo_height())
         profs = profiles.all_profiles()
-        profs[PID].update(region=list(reg), answers_region=list(areg), region2=None, chat_region=None,
+        profs[PID].update(region=list(reg), answers_region=None, region2=None, chat_region=None,
                           menu_region=None)
         core.save_settings(profiles=profs)
         core.test_scene = True
@@ -117,30 +128,49 @@ class Scene:
         game.game_active.set()            # «в игре» — иначе автоперевод стоит на паузе «жду игру»
         core.log("🧪 Тестовая сцена: реплики сменяются сами — программа читает их с экрана, как в игре", "ok")
         core.events.put(("panel", None))
+        self._poll_voice()
         self.next()
 
     # ---------- показ ----------
     def show(self):
         name, line = SCRIPT[self.i]
         self.count.config(text=f"реплика {self.i + 1} из {len(SCRIPT)}")
-        if isinstance(line, list):
-            self.ans_lbl.config(text="\n".join(f"{n}. {t}" for n, t in enumerate(line, 1)))
-            self.name.config(text="")
-            self.text.config(text="")
-        else:
-            self.ans_lbl.config(text="")
-            self.name.config(text=name)
-            self.text.config(text=line)
+        self.name.config(text=name)
+        self.text.config(text=line)
+        self.tr_text.config(text="…", fg=MUTED)
+        self.voice.config(text="")
         self._plan()
+
+    # ---------- перевод и голос в окне сцены ----------
+    def on_translation(self, text):
+        self.tr_text.config(text=text, fg=TEXT)
+
+    def on_improve(self, draft, better):
+        if self.tr_text.cget("text") == draft:
+            self.tr_text.config(text=better)
+
+    def _poll_voice(self):
+        """Кем озвучивается реплика: голос, пол, характер (из озвучки)."""
+        from . import tts
+        try:
+            lv = getattr(tts, "last_voice", None)
+            if lv and lv["t"] != self._voice_t:
+                self._voice_t = lv["t"]
+                self.voice.config(text="🔊 " + lv["desc"])
+        except Exception:
+            pass
+        try:
+            self.win.after(300, self._poll_voice)
+        except tk.TclError:
+            pass
 
     def _plan(self):
         if self.timer:
             self.win.after_cancel(self.timer)
             self.timer = None
         if self.playing:
-            answers = 0 <= self.i < len(SCRIPT) and isinstance(SCRIPT[self.i][1], list)
-            if self.delay or answers:             # варианты ответа не озвучиваются — просто 6 с
-                self.timer = self.win.after((self.delay or 6) * 1000, self._auto)
+            if self.delay:
+                self.timer = self.win.after(self.delay * 1000, self._auto)
             else:
                 import time
                 self._shown_at, self._heard = time.time(), False
@@ -174,7 +204,6 @@ class Scene:
         """Между репликами коротко пусто — как в играх при смене реплики."""
         self.name.config(text="")
         self.text.config(text="")
-        self.ans_lbl.config(text="")
         self.win.after(250, fn)
 
     def next(self):

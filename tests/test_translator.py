@@ -2151,8 +2151,17 @@ def test_test_scene(monkey):
         sc = app._scene
         assert c.active_profile == testscene.PID and c.test_scene and c.auto_on.is_set()
         reg = profiles.all_profiles()[testscene.PID]["region"]
+        from aac import tts as _t
+        monkey(_t, "_say", lambda *a, **k: None)
+        monkey(_t.config, "TTS_ENABLED", True)
+        _t.speak_subtitle("Лира\nЯ так волновалась.", orig="Lyra\nI was so worried.")
+        assert _t.last_voice and "Lyra" in _t.last_voice["desc"] or "Лира" in _t.last_voice["desc"], _t.last_voice
         assert reg[2] > 200 and reg[3] > 50, reg
-        assert sc.text.cget("text") or sc.ans_lbl.cget("text") or sc.i == 0
+        assert sc.text.cget("text") or sc.i == 0
+        assert all(isinstance(line, str) for _, line in testscene.SCRIPT), "только реплики, без ответов"
+        sc.on_translation("Привет.")
+        assert sc.tr_text.cget("text") == "Привет."
+        assert profiles.all_profiles()[testscene.PID].get("answers_region") is None
         assert testscene.PID not in profiles.game_profiles(), "в списке игр не показывается"
         from aac import appwin as _aw
         app.chat = type("C", (), {"win": None})()
