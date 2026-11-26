@@ -2154,6 +2154,12 @@ def test_test_scene(monkey):
         assert reg[2] > 200 and reg[3] > 50, reg
         assert sc.text.cget("text") or sc.ans_lbl.cget("text") or sc.i == 0
         assert testscene.PID not in profiles.game_profiles(), "в списке игр не показывается"
+        from aac import appwin as _aw
+        app.chat = type("C", (), {"win": None})()
+        _aw.App._update_own_rects(app)
+        x, y, w_, h_ = reg
+        assert not any(rx <= x and ry <= y and rx + rw >= x + w_ and ry + rh >= y + h_
+                       for rx, ry, rw, rh in c.own_rects), "окно сцены не закрашивается на снимках"
         from aac import game as _g
         monkey(_g.config, "GAMES_ONLY", True)
         assert not _g.no_game() and profiles.is_running() and _g.game_active.is_set(), "сцена — как запущенная игра"

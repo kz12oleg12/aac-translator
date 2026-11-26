@@ -23,7 +23,7 @@ TARGET = Path.home() / "AAC Translator"
 DOWNLOADS = Path.home() / "Downloads"
 SETTINGS = "aac_translator_settings.json"
 PACKAGES = [
-    "mss", "pillow", "keyboard", "requests", "pynput", "pystray", "pywebview", "pycaw", "ctranslate2", "sentencepiece",
+    "mss", "pillow", "keyboard", "requests", "pynput", "pystray", "pywebview", "pycaw", "ctranslate2", "sentencepiece", "truststore",
     "winrt-Windows.Media.Ocr", "winrt-Windows.Graphics.Imaging", "winrt-Windows.Globalization",
     "winrt-Windows.Foundation", "winrt-Windows.Storage.Streams",
 ]

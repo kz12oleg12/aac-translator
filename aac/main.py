@@ -309,6 +309,13 @@ def main():
         web_window.run(a[a.index("--webpanel") + 1], int(a[a.index("--parent") + 1]) if "--parent" in a else None)
         return
     try:
+        # сертификаты — из хранилища Windows, а не только встроенные: за корпоративным VPN/прокси, который
+        # подменяет сертификаты своим (доверенным в Windows), иначе каждое соединение — CERTIFICATE_VERIFY_FAILED
+        import truststore
+        truststore.inject_into_ssl()
+    except Exception:
+        pass
+    try:
         from . import keys
         keys.load_from_windows()      # ключи и адрес для отчётов — из Windows, даже после «Перезапустить»
     except Exception:

@@ -48,8 +48,8 @@ class Scene:
         w.protocol("WM_DELETE_WINDOW", self.close)
         bar = tk.Frame(w, bg="#20242e")
         bar.pack(fill="x")
-        tk.Label(bar, text="Тестовая сцена · реплики сменяются сами — смотрите перевод, голоса и журнал в панели",
-                 bg="#20242e", fg=MUTED, font=("Segoe UI", 10)).pack(side="left", padx=12, pady=8)
+        tk.Label(bar, text="Тестовая сцена", bg="#20242e", fg=MUTED,
+                 font=("Segoe UI", 10)).pack(side="left", padx=12, pady=8)
         for t, fn in (("Закрыть", self.close), ("Далее ▶", self.next), ("◀ Назад", self.back)):
             tk.Button(bar, text=t, command=fn, bg="#2d3240", fg="#fff", relief="flat", padx=12,
                       activebackground="#5865f2", activeforeground="#fff").pack(side="right", padx=4, pady=6)
@@ -61,20 +61,22 @@ class Scene:
         self.stage = tk.Canvas(w, bg=BG, highlightthickness=0)
         self.stage.pack(fill="both", expand=True)
         self.count = tk.Label(w, text="", bg=BG, fg=MUTED, font=("Segoe UI", 9))
-        self.count.place(relx=0.01, rely=0.06)
+        self.count.place(relx=0.015, rely=0.08)
         # окно субтитров «игры»: имя сверху, реплика ниже
         self.box = tk.Frame(w, bg=BOX, padx=24, pady=16)
-        self.box.place(relx=0.5, rely=0.84, anchor="center", relwidth=0.8, height=140)
-        self.name = tk.Label(self.box, text="", bg=BOX, fg=NAME, font=("Segoe UI", 15, "bold"), anchor="w")
+        self.box.place(relx=0.5, rely=0.97, anchor="s", relwidth=0.86, relheight=0.30)
+        self.name = tk.Label(self.box, text="", bg=BOX, fg=NAME, font=("Segoe UI", 13, "bold"), anchor="w")
         self.name.pack(fill="x")
-        self.text = tk.Label(self.box, text="", bg=BOX, fg=TEXT, font=("Segoe UI", 16), anchor="nw",
-                             justify="left", wraplength=int(W * 0.8) - 60)
+        self.text = tk.Label(self.box, text="", bg=BOX, fg=TEXT, font=("Segoe UI", 14), anchor="nw",
+                             justify="left")
+        self.box.bind("<Configure>", lambda e: self.text.config(wraplength=max(200, e.width - 50)))
         self.text.pack(fill="both", expand=True)
         # варианты ответа — справа
         self.ans = tk.Frame(w, bg=BOX, padx=18, pady=12)
-        self.ans.place(relx=0.97, rely=0.40, anchor="e", width=360, height=160)
-        self.ans_lbl = tk.Label(self.ans, text="", bg=BOX, fg=TEXT, font=("Segoe UI", 14), anchor="nw",
-                                justify="left", wraplength=320)
+        self.ans.place(relx=0.97, rely=0.08, anchor="ne", relwidth=0.36, relheight=0.30)
+        self.ans_lbl = tk.Label(self.ans, text="", bg=BOX, fg=TEXT, font=("Segoe UI", 13), anchor="nw",
+                                justify="left")
+        self.ans.bind("<Configure>", lambda e: self.ans_lbl.config(wraplength=max(150, e.width - 40)))
         self.ans_lbl.pack(fill="both", expand=True)
         w.lift()
         w.attributes("-topmost", True)

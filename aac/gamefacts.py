@@ -145,7 +145,7 @@ def gather(pid, force=False, wait=False):
     """Собрать данные об игре в фоне (один раз; force — заново). Без ключа Groq — ничего не делаем."""
     from . import profiles
     p = profiles.all_profiles().get(pid)
-    if not p or p.get("free") or pid in _running or not available():
+    if not p or p.get("free") or p.get("test") or pid in _running or not available():
         return False
     if p.get("facts_at") and not force:
         return False

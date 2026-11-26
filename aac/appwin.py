@@ -486,6 +486,9 @@ class App:
         for w in [self.root] + [c for c in self.root.winfo_children() if isinstance(c, tk.Toplevel)]:
             if config.CHAT_COVER and w is self.chat.win:
                 continue      # окно чата поверх области на время снимка становится прозрачным само
+            sc = getattr(self, "_scene", None)
+            if sc is not None and w is getattr(sc, "win", None):
+                continue      # «Тестовая сцена» изображает игру — её как раз нужно читать
             try:
                 if w.winfo_ismapped() and w.state() != "withdrawn":
                     rects.append((w.winfo_rootx(), w.winfo_rooty(), w.winfo_width(), w.winfo_height()))
