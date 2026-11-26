@@ -44,6 +44,7 @@ def apply_view_settings():
     config.TTS_ENABLED = bool(core.SETTINGS.get("tts_enabled", config.TTS_ENABLED))
     config.TTS_VOICE = str(core.SETTINGS.get("tts_voice", config.TTS_VOICE))
     config.EDITOR_STRESS = bool(core.SETTINGS.get("editor_stress", config.EDITOR_STRESS))
+    config.TTS_PUNCT_PAUSES = bool(core.SETTINGS.get("tts_punct_pauses", config.TTS_PUNCT_PAUSES))
     config.TTS_DUCK = bool(core.SETTINGS.get("tts_duck", config.TTS_DUCK))
     config.TTS_CACHE = bool(core.SETTINGS.get("tts_cache", config.TTS_CACHE))
     config.TTS_NO_WAIT = bool(core.SETTINGS.get("tts_no_wait", config.TTS_NO_WAIT))

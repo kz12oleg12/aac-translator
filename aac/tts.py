@@ -703,7 +703,7 @@ CACHE_MAX = 3000
 def _cache_key(text, faster, voice_pitch):
     import hashlib
     raw = repr((config.TTS_ENGINE, text, voice_pitch, bool(faster), config.TTS_RATE, config.TTS_SILERO_VOICE,
-                config.TTS_NEURAL_VOICE, config.TTS_EXPRESSIVE))
+                config.TTS_NEURAL_VOICE, config.TTS_EXPRESSIVE, config.TTS_PUNCT_PAUSES))
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 

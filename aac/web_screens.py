@@ -44,6 +44,7 @@ FLAGS = {  # переключатели: имя → (атрибут config, кл
     "tts_skip": ("TTS_SKIP_FAST", "tts_skip_fast", "tts"),
     "tts_nowait": ("TTS_NO_WAIT", "tts_no_wait", "tts"),
     "tts_duck": ("TTS_DUCK", "tts_duck", "tts"),
+    "tts_punct": ("TTS_PUNCT_PAUSES", "tts_punct_pauses", "tts"),
     "tts_cache": ("TTS_CACHE", "tts_cache", "tts"),
     "ed_stress": ("EDITOR_STRESS", "editor_stress", None),
     "ed_shot": ("EDITOR_SCENE_IMAGE", "editor_scene_image", None),

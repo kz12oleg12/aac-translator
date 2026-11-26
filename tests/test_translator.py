@@ -2293,6 +2293,17 @@ def test_steam_about(monkey):
     assert gamefacts.steam_about("ArcheAge Chronicles") == "An action RPG & open world. Genres: RPG."
 
 
+def test_punct_pauses(monkey):
+    """Silero: паузы на знаках препинания — <break> в разметке, не перед другим знаком и не в конце."""
+    from aac import tts_silero as S
+    monkey(S.config, "TTS_PUNCT_PAUSES", True)
+    b = S.ssml_body("Тише, вы оба… Что?! Да.")
+    assert b == 'Тише,<break time="160ms"/> вы оба…<break time="450ms"/> Что?!<break time="330ms"/> Да.', b
+    assert S.ssml_body("A & B") == "A &amp; B"
+    monkey(S.config, "TTS_PUNCT_PAUSES", False)
+    assert "<break" not in S.ssml_body("Тише, вы.")
+
+
 def test_paragraph_pause():
     """Новый абзац (строка кончилась точкой) — отдельная фраза с паузой; перенос длинной строки — нет."""
     from aac import tts

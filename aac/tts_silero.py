@@ -391,6 +391,29 @@ def _apply(model, kw, **text_kw):
 _PITCHES = {-2: "x-low", -1: "low", 0: "medium", 1: "high", 2: "x-high"}
 
 
+PAUSES = [(r"…|\.\.\.", 450), (r"[.!?]", 330), (r"[;:]", 220), (r"\s[—–-]\s", 200), (r",", 160)]
+
+
+def ssml_body(text):
+    """Текст для разметки: паузы на знаках препинания — <break>. Не все голоса Silero сами делают паузу
+    на запятой или многоточии, с явной паузой речь звучит естественнее."""
+    import re
+    if not config.TTS_PUNCT_PAUSES:
+        return escape(text)
+    out, pos = [], 0
+    rx = re.compile("|".join(f"(?:{p})" for p, _ in PAUSES))
+    for m in rx.finditer(text):
+        tok = m.group(0)
+        ms = next(t for p, t in PAUSES if re.fullmatch(p, tok))
+        end = m.end()
+        out.append(escape(text[pos:end]))
+        if end < len(text) and not re.match(r"\s*[.!?…,;:]", text[end:]):   # не перед другим знаком и не в конце
+            out.append(f'<break time="{ms}ms"/>')
+        pos = end
+    out.append(escape(text[pos:]))
+    return "".join(out)
+
+
 TIMBRE = {-3: 0.80, -2: 0.88, -1: 0.94, 1: 1.07, 2: 1.18}   # характер голоса: чудовище … ребёнок
 
 
@@ -430,12 +453,13 @@ def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
     kw = dict(speaker=voice, sample_rate=SAMPLE_RATE, put_accent=True, put_yo=True)
     with torch.no_grad():
         audio = None
-        if rate != "medium" or pitch != "medium":
-            attrs = (f' rate="{rate}"' if rate != "medium" else "") + (f' pitch="{pitch}"' if pitch != "medium" else "")
+        attrs = (f' rate="{rate}"' if rate != "medium" else "") + (f' pitch="{pitch}"' if pitch != "medium" else "")
+        body = ssml_body(text)
+        if attrs or "<break" in body:
             try:
-                audio = _apply(model, kw, ssml_text=f'<speak><prosody{attrs}>{escape(text)}</prosody></speak>')
+                audio = _apply(model, kw, ssml_text=f'<speak><prosody{attrs}>{body}</prosody></speak>')
             except Exception:
-                audio = None     # модель не поняла разметку скорости/высоты — читаем обычным голосом
+                audio = None     # модель не поняла разметку — читаем обычным голосом
         if audio is None:
             audio = _apply(model, kw, text=text)
     _write_wav(path, _timbre(audio, timbre, torch), torch)
@@ -472,10 +496,11 @@ def _synth_cis(text, path, voice, rate_level=0, pitch_level=0):
     kw = dict(speaker=voice, sample_rate=SAMPLE_RATE)
     with torch.no_grad():
         audio = None
-        if rate != "medium" or pitch != "medium":
-            attrs = (f' rate="{rate}"' if rate != "medium" else "") + (f' pitch="{pitch}"' if pitch != "medium" else "")
+        attrs = (f' rate="{rate}"' if rate != "medium" else "") + (f' pitch="{pitch}"' if pitch != "medium" else "")
+        body = ssml_body(stressed)
+        if attrs or "<break" in body:
             try:
-                audio = model.apply_tts(ssml_text=f'<speak><prosody{attrs}>{escape(stressed)}</prosody></speak>', **kw)
+                audio = model.apply_tts(ssml_text=f'<speak><prosody{attrs}>{body}</prosody></speak>', **kw)
             except Exception:
                 audio = None
         if audio is None:
