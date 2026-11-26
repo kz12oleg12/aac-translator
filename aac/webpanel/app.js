@@ -30,7 +30,7 @@ const I = {
   wave:'<path d="M2 12h2M6 8v8M10 5v14M14 8v8M18 10v4"/>', end:'<path d="M5 12h14M13 6l6 6-6 6"/>',
   ru:'<path d="M4 6h16M4 12h16M4 18h16"/>', folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   img:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5L5 20"/>',
-  check:'<path d="M20 6 9 17l-5-5"/>', trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', pin:'<path d="M12 17v5M9 3h6l-1 6 3 3H7l3-3z"/>'
+  check:'<path d="M20 6 9 17l-5-5"/>', bench:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3M7.5 15h9"/>', trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', pin:'<path d="M12 17v5M9 3h6l-1 6 3 3H7l3-3z"/>'
 };
 const svg = (k, s = 17, w = 1.8) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">${I[k] || ""}</svg>`;
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -48,7 +48,7 @@ async function act(name, arg) {
 async function get(url) { try { const r = await fetch(url, {headers: H}); return r.ok ? await r.json() : null; } catch (e) { return null; } }
 
 // ---------- навигация ----------
-const NAV = [["home","Главная"],["games","Игры"],["tr","Переводчики"],["voice","Озвучка"],["hist","История"],["keys","Клавиши"]];
+const NAV = [["home","Главная"],["games","Игры"],["tr","Переводчики"],["voice","Озвучка"],["bench","Проверка"],["hist","История"],["keys","Клавиши"]];
 let SCR = "home", SUB = {voice: "voice", game: null, histKind: "Все", histQ: "", charQ: "", charG: "all"};
 function nav() {
   const cur = {win: "games", gloss: "tr", win_default: "tr"}[SCR] || SCR;
@@ -258,6 +258,49 @@ HANDLERS.adraw = b => act("area_draw", {id: SUB.game, key: b.dataset.k});
 HANDLERS.aclear = b => act("area_clear", {id: SUB.game, key: b.dataset.k});
 HANDLERS.unng = b => act("unmark_not_game", b.dataset.v);
 HANDLERS.gochars = () => { SUB.voice = "chars"; go("voice"); };
+
+// ---------- проверка: своя фраза всеми переводчиками сразу ----------
+const BENCH_EX = [
+  ["Имя + реплика", "Rotild\nA rental fee is required. Settlement leases last for 30 days and may be renewed at the Resident Board."],
+  ["Женщина о себе", "Lyra\nI came here alone. I was so tired, but I'm ready now."],
+  ["Цифры и HP", "Merchant\nThat'll be 250 gold for 3 potions. Each restores 40% HP."],
+  ["Варианты ответа", "What is a settlement?\nIs there anything I should remember?\nLeave"],
+];
+R.bench = () => {
+  if (!D) return null;
+  SUB.bench = SUB.bench || {src: D.src || BENCH_EX[0][1], kind: "subs", sel: null};
+  const B = SUB.bench;
+  if (!B.sel) B.sel = [D.main, ...D.fallback].filter(id => (D.providers.find(p => p.id == id) || {}).has);
+  const chip = p => `<label class="chip" style="height:32px;cursor:${p.has ? "pointer" : "default"};opacity:${p.has ? 1 : .45};gap:6px"><input type="checkbox" data-c="bsel" data-id="${p.id}" ${B.sel.includes(p.id) ? "checked" : ""} ${p.has ? "" : "disabled"}>${esc(p.name)}${p.has ? "" : " · нет ключа"}</label>`;
+  const tag = (t, v) => v ? `<span class="chip" style="height:22px;font-size:11px;padding:0 8px">${t}: ${esc(v)}</span>` : "";
+  const play = (text, g, k) => `<button class="ib" style="height:28px;width:28px;color:var(--acc2);flex-shrink:0" title="Прослушать" data-a="bsay" data-t="${esc(text)}" data-g="${g || ""}" data-k="${k || ""}">${svg("play", 12)}</button>`;
+  const res = r => r.wait ? `<div class="card" style="padding:14px;display:flex;gap:10px;align-items:center"><span style="font-weight:600;flex-grow:1">${esc(r.name)}</span><span class="d">перевожу…</span></div>` :
+    `<div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+      <div class="row"><span style="font-weight:600;flex-grow:1">${esc(r.name)}</span><span class="d">${r.time} с</span></div>
+      ${r.error ? `<span style="color:var(--err);font-size:13px">${esc(r.error)}</span>` : `<div class="row" style="align-items:flex-start;gap:8px"><span style="flex-grow:1;white-space:pre-wrap;font-size:14px;line-height:1.5">${esc(r.text)}</span>${play(r.text)}</div>`}
+      ${r.ed ? (r.ed.error ? `<span style="font-size:12px;color:var(--err)">Редактор: ${esc(r.ed.error)}</span>` : `<div style="border-top:.5px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px">
+        <div class="row"><span style="font-size:12px;color:var(--acc2);flex-grow:1">${svg("spark", 12)} ИИ-редактор · ${esc(r.ed.by || "")}</span><span class="d">${r.ed.time} с</span></div>
+        <span style="white-space:pre-wrap;font-size:14px;line-height:1.5;${r.ed.text.trim() == r.text.trim() ? "color:var(--m)" : ""}">${r.ed.text.trim() == r.text.trim() ? "без правок" : esc(r.ed.text)}</span>
+        <div class="row" style="align-items:flex-start;gap:8px"><span style="flex-grow:1;font-size:13px;color:var(--t3);white-space:pre-wrap"><span style="color:var(--f)">для озвучки:</span> ${esc(r.ed.voice)}</span>${play(r.ed.voice, r.ed.gender, r.ed.type)}</div>
+        <div class="row" style="gap:6px;flex-wrap:wrap">${tag("кто", r.ed.speaker)}${tag("пол", {m: "мужской", f: "женский"}[r.ed.gender])}${tag("характер", {young: "молодой", old: "пожилой", child: "ребёнок", noble: "знатный", monster: "чудовище"}[r.ed.type])}${tag("настроение", {shout: "крик", whisper: "шёпот", question: "вопрос", sad: "грусть"}[r.ed.mood])}</div></div>`) : ""}
+    </div>`;
+  return `<div style="display:flex;flex-direction:column;gap:4px"><h1>Проверка</h1><span class="subt">Своя фраза — сразу всеми выбранными переводчиками и редактором, без игры. Кэш не используется: каждый раз настоящий запрос.</span></div>
+  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+    <span class="lbl">Текст на английском — как в игре: имя говорящего отдельной строкой</span>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><span class="d" style="margin-right:2px">примеры:</span>${BENCH_EX.map((x, i) => `<button class="btn" style="height:28px;font-size:12px" data-a="bex" data-i="${i}">${x[0]}</button>`).join("")}</div>
+    <textarea class="inp" id="bsrc" rows="4" oninput="SUB.bench.src=this.value" style="height:auto;padding:10px;font-family:inherit;resize:vertical">${esc(B.src)}</textarea>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><span class="lbl" style="margin-right:4px">Как</span>${[["subs", "реплика"], ["answers", "варианты ответа"]].map(([k, t]) => `<button class="chip" style="height:30px;${B.kind == k ? "background:var(--acc);color:#fff" : ""}" data-a="bkind" data-k="${k}">${t}</button>`).join("")}</div>
+    <div style="display:flex;flex-direction:column;gap:6px"><span class="lbl">Переводчики</span><div class="row" style="gap:6px;flex-wrap:wrap">${D.providers.map(chip).join("")}</div></div>
+    <div class="row"><span class="d" style="flex-grow:1">${D.editor_on ? "ИИ-редактор: " + esc(D.editor) + " — покажу его правки и текст для озвучки" : "ИИ-редактор выключен — включите на странице «Переводчики», чтобы проверить и его"}</span>
+      <button class="btnp" style="padding:8px 22px" data-a="brun" ${D.busy || !B.sel.length ? "disabled" : ""}>${D.busy ? "Перевожу…" : "Перевести"}</button></div>
+  </div>
+  ${D.rows.length ? `<div style="display:flex;flex-direction:column;gap:8px">${D.rows.map(res).join("")}</div>` : ""}`;
+};
+HANDLERS.bex = b => { SUB.bench.src = BENCH_EX[+b.dataset.i][1]; if (BENCH_EX[+b.dataset.i][0] == "Варианты ответа") SUB.bench.kind = "answers"; else SUB.bench.kind = "subs"; render(); };
+HANDLERS.bkind = b => { SUB.bench.src = $("bsrc").value; SUB.bench.kind = b.dataset.k; render(); };
+HANDLERS.bsel = b => { const B = SUB.bench; B.src = $("bsrc").value; B.sel = b.checked ? [...new Set([...B.sel, b.dataset.id])] : B.sel.filter(x => x != b.dataset.id); };
+HANDLERS.brun = () => { const B = SUB.bench; B.src = $("bsrc").value; act("bench_run", {src: B.src, providers: B.sel, kind: B.kind}); };
+HANDLERS.bsay = b => act("bench_say", {text: b.dataset.t, g: b.dataset.g, k: b.dataset.k});
 
 // ---------- переводчики ----------
 R.tr = () => {

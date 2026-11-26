@@ -286,6 +286,15 @@ def _type_voices():
     return d
 
 
+def _s_bench():
+    from . import bench, editor, tts
+    provs = [{"id": p["id"], "name": p["name"], "has": p["has"]} for p in _s_tr()["providers"]]
+    return {"providers": provs, "main": config.PROVIDER, "fallback": list(config.FALLBACK_PROVIDERS),
+            "editor_on": config.EDITOR_ON, "editor": editor.name_of(editor.name()) if config.EDITOR_ON else "",
+            "busy": bench.state["busy"], "src": bench.state["src"], "rows": bench.state["rows"],
+            "engine": config.TTS_ENGINE}
+
+
 def _s_start():
     """Мастер первого запуска: шаги отмечаются сами."""
     from . import hotkeys, profiles, translate
@@ -487,6 +496,15 @@ def do(name, arg, app):
         core.log(f"Переводчик: {v} (запасной — {config.FALLBACK_PROVIDERS[0]})", "ok")
     elif name == "wizard_done":
         core.save_settings(wizard_done=True)
+    elif name == "bench_run":
+        from . import bench
+        bench.run(str(a.get("src") or ""), list(a.get("providers") or []), a.get("kind") or "subs")
+    elif name == "bench_say":
+        from . import tts
+        from . import voices
+        txt = tts.speech_text(str(a.get("text") or "")).strip()
+        if txt:
+            _bg(tts.say_test, voices.line_voice(a.get("g") or "", a.get("k") or ""), txt)
     elif name == "stress_set":
         import re as _re
         k, v = str(a.get("k") or "").lower(), str(a.get("v") or "").strip().lower()

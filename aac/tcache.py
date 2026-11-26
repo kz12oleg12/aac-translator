@@ -67,8 +67,16 @@ def fresh():
         _local.fresh = old
 
 
+def _bench():
+    try:
+        from . import bench
+        return bench.active()
+    except Exception:
+        return False
+
+
 def get(key, allow_mt=True):
-    if not config.CACHE_ENABLED or getattr(_local, "fresh", False):
+    if not config.CACHE_ENABLED or getattr(_local, "fresh", False) or _bench():
         return None
     with _lock:
         _load()
@@ -83,7 +91,7 @@ def get(key, allow_mt=True):
 
 def put(key, text, quality="ai"):
     global _dirty
-    if not config.CACHE_ENABLED or not text or "НЕТ_ТЕКСТА" in text:
+    if not config.CACHE_ENABLED or not text or "НЕТ_ТЕКСТА" in text or _bench():
         return
     with _lock:
         _load()

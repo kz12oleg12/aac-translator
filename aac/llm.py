@@ -352,6 +352,13 @@ def ask_openai_compat(name, img, prompt):
         }
         if name == "groq" and "qwen" in model:
             body["reasoning_effort"] = "none"  # без «размышлений» — быстрее
+        elif re.search(r"qwen3|qwq|deepseek-r1", model.lower()) and name not in ("groq",):
+            # локальные «думающие» модели (LM Studio, Ollama): выключаем размышления — иначе ответ в разы дольше
+            msg = body["messages"][0]
+            if isinstance(msg["content"], str):
+                msg["content"] += "\n/no_think"
+            else:
+                msg["content"][0]["text"] += "\n/no_think"
         r = _compat_request(name, url, headers, body)
         print(f"  ответ {r.status_code} за {time.time() - t0:.1f} с")
         if r.status_code == 401:

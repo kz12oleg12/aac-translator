@@ -53,6 +53,9 @@ _ocr_lock = threading.Lock()   # распознаватель Windows не ум�
 
 def ocr_lines(img):
     """Возвращает список строк текста с картинки."""
+    from . import bench
+    if bench.active():                  # стенд проверки: текст из поля ввода, а не с экрана
+        return list(bench.lines())
     with _ocr_lock:
         return _ocr_lines(img)
 

@@ -2128,6 +2128,29 @@ def test_tts_cache(monkey):
     assert tts._cache_key("Привет, путник.", True, None) != k, "ускоренная — другой звук"
 
 
+def test_bench(monkey):
+    """Стенд проверки: фраза идёт через переводчик как из игры (без OCR и кэша), редактор — отдельно."""
+    from aac import bench, mt, translate, editor, tcache
+    import threading as _th
+    seen = {}
+    monkey(mt, "_mt_google", lambda text, sl=None, tl=None: seen.setdefault("src", text) and "Ротильд\nНужна плата.")
+    monkey(translate, "provider_has_key", lambda p: p == "google")
+    monkey(editor.config, "EDITOR_ON", True)
+    monkey(editor, "candidates", lambda: ["claude"])
+    monkey(editor, "_ask", lambda prompt: "TEXT:\nНужно заплатить.\nVOICE:\nНужно заплат+ить.\nSPEAKER: Rotild\nGENDER: f\nMOOD: -")
+    tcache.put("x", "y")
+    bench.run("Rotild\nA rental fee is required.", ["google", "deepl"], "subs")
+    for _ in range(100):
+        if not bench.state["busy"]:
+            break
+        time.sleep(0.05)
+    rows = bench.state["rows"]
+    assert len(rows) == 1 and rows[0]["text"].endswith("Нужна плата."), rows
+    assert "A rental fee is required." in seen["src"], seen
+    assert rows[0]["ed"]["voice"] == "Нужно заплат+ить." and rows[0]["ed"]["gender"] == "f"
+    assert not bench.active()
+
+
 def test_offline_mt(monkey):
     """Офлайн-переводчик: модель Argos ставится из архива и переводит построчно (на Windows в CI — по-настоящему)."""
     from aac import offline_mt

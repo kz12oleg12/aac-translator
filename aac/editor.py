@@ -100,6 +100,9 @@ def name():
 
 def ready():
     """Редактор включён и хотя бы у одной из его нейросетей есть ключ и нет паузы."""
+    from . import bench
+    if bench.active():          # на стенде редактор вызывается отдельно, чтобы показать его работу
+        return False
     return any(_usable(e) for e in candidates())
 
 
