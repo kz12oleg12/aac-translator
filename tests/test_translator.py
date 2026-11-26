@@ -1360,7 +1360,10 @@ def test_silero(monkey):
     monkey(sil, "_model", {"m": Model(), "torch": fake_torch, "error": None})
     path = os.path.join(TMP, "s.wav")
     sil.synth_to_wav("Привет, мир", path, "aidar", 0)
-    assert calls[-1]["text"] == "Привет, мир" and calls[-1]["speaker"] == "aidar"
+    assert calls[-1]["ssml_text"] == '<speak>Привет,<break time="160ms"/> мир</speak>' \
+        and calls[-1]["speaker"] == "aidar", calls[-1]                 # пауза на запятой
+    sil.synth_to_wav("Привет мир", path, "aidar", 0)
+    assert calls[-1]["text"] == "Привет мир"                         # знаков нет — обычный текст
     with wv.open(path) as w:
         assert w.getframerate() == sil.SAMPLE_RATE and w.getnframes() == 400
     sil.synth_to_wav("Быстрее & лучше", path, "xenia", 3)
@@ -1383,7 +1386,8 @@ def test_silero(monkey):
         monkey(sil, "_cis", {"m": CisModel(), "acc": lambda t: t.replace("Привет", "Прив+ет"), "error": None,
                              "speakers_logged": False})
         sil.synth_to_wav("Привет, мир", path, "ru_eduard")
-        assert cis_calls[-1] == {"text": "Прив+ет, мир", "speaker": "ru_eduard", "sample_rate": sil.SAMPLE_RATE}
+        assert cis_calls[-1] == {"ssml_text": '<speak>Прив+ет,<break time="160ms"/> мир</speak>',
+                                 "speaker": "ru_eduard", "sample_rate": sil.SAMPLE_RATE}, cis_calls[-1]
         calls.clear()
         sil.synth_to_wav("Привет, мир", path, "ru_igor")            # такого голоса нет в модели → Айдар
         assert calls and calls[-1]["speaker"] == "aidar", calls

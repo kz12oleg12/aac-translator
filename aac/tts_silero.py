@@ -414,6 +414,10 @@ def ssml_body(text):
     return "".join(out)
 
 
+def _ssml(attrs, body):
+    return f"<speak><prosody{attrs}>{body}</prosody></speak>" if attrs else f"<speak>{body}</speak>"
+
+
 TIMBRE = {-3: 0.80, -2: 0.88, -1: 0.94, 1: 1.07, 2: 1.18}   # характер голоса: чудовище … ребёнок
 
 
@@ -457,7 +461,7 @@ def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
         body = ssml_body(text)
         if attrs or "<break" in body:
             try:
-                audio = _apply(model, kw, ssml_text=f'<speak><prosody{attrs}>{body}</prosody></speak>')
+                audio = _apply(model, kw, ssml_text=_ssml(attrs, body))
             except Exception:
                 audio = None     # модель не поняла разметку — читаем обычным голосом
         if audio is None:
@@ -500,7 +504,7 @@ def _synth_cis(text, path, voice, rate_level=0, pitch_level=0):
         body = ssml_body(stressed)
         if attrs or "<break" in body:
             try:
-                audio = model.apply_tts(ssml_text=f'<speak><prosody{attrs}>{body}</prosody></speak>', **kw)
+                audio = model.apply_tts(ssml_text=_ssml(attrs, body), **kw)
             except Exception:
                 audio = None
         if audio is None:
