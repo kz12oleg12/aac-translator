@@ -198,8 +198,37 @@ def known_gender(c):
 
 
 AI_PROMPT = ("In the fantasy MMORPG ArcheAge Chronicles an NPC named \"{name}\" says: \"{line}\"\n"
-             "Is this character male or female? Judge by the name and the line. "
-             "Answer with exactly one letter: m (male), f (female) or u (cannot tell).")
+             "Is this character male or female, and what kind of voice suits them? Judge by the name, title and line.\n"
+             "Answer with exactly two words: m, f or u (cannot tell) — then one of: adult, young, old, child, noble, "
+             "monster. Example: f old")
+
+# характер по имени/титулу — сразу, ещё до ответа нейросети (Old Rotild, Baron Alderich, Stone Golem, Tim the boy…)
+TYPE_WORDS = {
+    "monster": ("golem", "beast", "demon", "dragon", "troll", "orc", "ogre", "wolf", "spider", "undead", "skeleton",
+                "zombie", "creature", "monster", "wraith", "голем", "зверь", "демон", "дракон", "тролль", "орк", "огр",
+                "волк", "паук", "скелет", "зомби", "чудовищ", "монстр", "нежит"),
+    "old": ("old", "elder", "grandma", "grandpa", "granny", "grandmother", "grandfather", "старый", "старая",
+            "старик", "старух", "старейшин", "бабушк", "дедушк", "дед "),
+    "child": ("boy", "girl", "kid", "child", "little", "мальчик", "девочк", "малыш", "ребён", "ребен"),
+    "noble": ("baron", "baroness", "lord", "lady", "king", "queen", "prince", "princess", "duke", "duchess", "count",
+              "countess", "emperor", "empress", "барон", "лорд", "леди", "король", "королев", "принц", "герцог",
+              "граф", "император"),
+    "young": ("young", "apprentice", "recruit", "squire", "novice", "юн", "молод", "ученик", "новобран", "оруженос"),
+}
+
+
+def guess_type(en, ru):
+    """Характер по имени и титулу персонажа или ""."""
+    words = f" {en or ''} {ru or ''} ".lower().replace("-", " ").split()
+    for kind, keys in TYPE_WORDS.items():
+        for w in words:
+            w = w.strip(".,!?:;'\"()")
+            for k in keys:
+                k = k.strip()
+                # английские — целым словом (Littleton — не «little»), русские — по началу (старая, старейшина)
+                if (w == k or w == k + "s") if k.isascii() else w.startswith(k):
+                    return kind
+    return ""
 ask_ai = None        # функция prompt -> ответ (подставляет translate: та же нейросеть, что переводит)
 
 
@@ -212,10 +241,13 @@ def _ai_gender(key, en, line):
     except Exception:
         return
     g = ans[:1] if ans[:1] in ("m", "f") else "u"
+    kind = next((k for k in ("young", "old", "child", "noble", "monster") if k in ans.split()[1:2]), "")
     with _lock:
         c = _data["chars"].get(key)
         if c is not None:
             c["ai"] = g
+            if kind and not c.get("type") and not c.get("type_manual"):
+                c["type"] = kind
             _save()
 
 
@@ -268,6 +300,10 @@ def note_line(translation, orig=None):
                     key = k
                     break
         c = _data["chars"].setdefault(key, {"en": en, "ru": ru, "guess": guess_by_name(en, ru), "f": 0, "m": 0})
+        if not c.get("type") and not c.get("type_manual"):
+            t = guess_type(en, ru)
+            if t:
+                c["type"] = t
         if en and not c.get("en"):
             c["en"] = en
         if ru and not c.get("ru"):

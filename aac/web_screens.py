@@ -47,6 +47,7 @@ FLAGS = {  # переключатели: имя → (атрибут config, кл
     "tts_punct": ("TTS_PUNCT_PAUSES", "tts_punct_pauses", "tts"),
     "tts_cache": ("TTS_CACHE", "tts_cache", "tts"),
     "ed_stress": ("EDITOR_STRESS", "editor_stress", None),
+    "ed_strict": ("EDITOR_STRICT", "editor_strict", None),
     "ed_shot": ("EDITOR_SCENE_IMAGE", "editor_scene_image", None),
     "tts_read_name": ("TTS_READ_NAME", "tts_read_name", "tts"),
     "tts_russian_only": ("TTS_RUSSIAN_ONLY", "tts_russian_only", "tts"),
@@ -147,8 +148,9 @@ def _s_tr():
     return {"main": config.PROVIDER, "fallback": list(config.FALLBACK_PROVIDERS),
             "chain": chain, "providers": provs, "editor_on": bool(config.EDITOR_ON), "editor": config.EDITOR,
             "editors": eds, "editor2": config.EDITOR2, "ed_shot": config.EDITOR_SCENE_IMAGE,
+            "ed_strict": config.EDITOR_STRICT,
             "bad": [{"en": x.get("en", ""), "ru": x.get("ru", "")} for x in core.SETTINGS.get("bad_lines", [])],
-            "editor_stats": {k: s.get(k, 0) for k in ("edited", "same", "late", "failed", "voice_up", "skipped")},
+            "editor_stats": {k: s.get(k, 0) for k in ("edited", "same", "late", "failed", "voice_up", "skipped", "rejected")},
             "flags": {k: bool(getattr(config, FLAGS[k][0], False))
                       for k in ("cache", "skip_system", "gloss_auto", "save_history")},
             "cache_size": tcache.size(), "gloss_count": _gloss_count(), "default_style": _style_summary(),

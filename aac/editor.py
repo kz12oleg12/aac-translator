@@ -20,13 +20,15 @@ EDITORS = {
 PROMPT = """You are a professional video game localization editor (English → Russian) for {game}.
 {about}A machine translator produced a Russian draft. Your job has two parts.
 
-1) TEXT — the subtitle the player reads. Edit the draft into natural, correct Russian game dialogue:
-- fix grammar, noun cases and gender agreement: figure out who speaks and to whom (gender hints below, the
-  speaker's name, the scene) and make verbs/adjectives match («я пришла» for a woman, «я готов» for a man);
-- use the glossary spellings for names and terms, declined correctly;
-- keep the meaning, keep the same number of lines and the numbering of reply options;
-- keep the tone of the game; use the same "ты"/"вы" as the previous lines;
-- if the draft is already good, keep it unchanged.
+1) TEXT — the subtitle the player reads. Make the MINIMUM changes. Fix ONLY real errors:
+- gender agreement: figure out who speaks and to whom (gender hints below, the speaker's name, the scene) and fix
+  verb/adjective endings («я пришла» for a woman, «я готов» for a man);
+- names and terms: the glossary spelling, declined correctly;
+- "ты"/"вы": the same as in the previous lines;
+- a clear mistranslation that changes the meaning.
+Do NOT rephrase, do NOT pick synonyms, do NOT change word order, style, capitalization or punctuation
+(keep ALL CAPS shouting and «…» as they are). Keep the same number of lines and the numbering of reply options.
+If there is no real error — return the draft exactly as it is.
 
 2) VOICE — the same line prepared for a Russian text-to-speech voice (it reads letters literally):
 - never include the speaker's name (not as a prefix, not on its own line); no brackets, no markup, no emoji;
@@ -74,7 +76,7 @@ _state = {"scene": "", "since_scene": 0, "history": []}
 _speech = {}            # показанный текст → {"voice", "speaker", "gender", "mood"} — для озвучки
 _SPEECH_MAX = 200
 _lock = threading.Lock()
-stats = {"edited": 0, "same": 0, "late": 0, "failed": 0, "voice_up": 0, "skipped": 0}
+stats = {"edited": 0, "same": 0, "late": 0, "failed": 0, "voice_up": 0, "skipped": 0, "rejected": 0}
 
 
 def _usable(e):
@@ -289,6 +291,8 @@ def _keep_speech(shown, info):
             _speech.pop(next(iter(_speech)))
     _learn_stress(info["voice"])
     for en, ru in info.get("terms") or []:
+        if not all(w[:1].isupper() for w in en.split() if w[:1].isalpha()):
+            continue                     # в словарь — только имена и названия, не обычные слова (archive, scrolls)
         try:
             if glossary.learn(en, ru, "ИИ-редактор"):
                 pass
@@ -471,6 +475,35 @@ def apply_stress(text):
     return re.sub(r"(?<![+\w])[А-Яа-яЁё]{4,}(?![+\w])", rep, text)
 
 
+def similarity(a, b):
+    """Похожесть двух текстов по буквам (0..1) — без регистра, знаков и «+» ударений.
+    Исправленное окончание («пришёл» → «пришла») — почти 1, переписанная фраза — около 0.5."""
+    import difflib
+    import re
+    na = re.sub(r"[^\w ]", "", (a or "").replace("+", "").lower())
+    nb = re.sub(r"[^\w ]", "", (b or "").replace("+", "").lower())
+    if not na and not nb:
+        return 1.0
+    return difflib.SequenceMatcher(None, na, nb).ratio()
+
+
+def diff_words(a, b):
+    """Что поменял редактор: [(op, текст)], op — "=", "-", "+" (для подсветки на стенде)."""
+    import difflib
+    import re
+    ta, tb = re.findall(r"\S+|\s+", a or ""), re.findall(r"\S+|\s+", b or "")
+    out = []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, ta, tb).get_opcodes():
+        if op == "equal":
+            out.append(("=", "".join(ta[i1:i2])))
+        else:
+            if i2 > i1:
+                out.append(("-", "".join(ta[i1:i2])))
+            if j2 > j1:
+                out.append(("+", "".join(tb[j1:j2])))
+    return out
+
+
 def _clean(out, draft):
     """Ответ редактора → текст. Пусто, не по-русски, сильно длиннее черновика — значит, что-то пошло не так."""
     from . import translate
@@ -485,6 +518,13 @@ def _clean(out, draft):
         return None
     if len(out) > 2.2 * len(draft) + 40:
         return None
+    letters = [ch for ch in draft if ch.isalpha()]
+    if letters and sum(ch.isupper() for ch in letters) > 0.8 * len(letters):
+        out = out.upper()        # крик (ВСЁ ЗАГЛАВНЫМИ) — оставляем криком
+    if config.EDITOR_STRICT and similarity(out, draft) < config.EDITOR_MAX_REWRITE:
+        stats["rejected"] = stats.get("rejected", 0) + 1
+        core.log(f"✏️ Редактор переписал слишком много — оставил перевод: {out.replace(chr(10), ' / ')[:90]}")
+        return draft             # строгий режим: правки только точечные (род, имена, «ты/вы»)
     return out
 
 
@@ -584,6 +624,8 @@ def improve(src, draft, kind, on_late=None):
             txt = _clean(info.get("text"), draft)
             if txt:
                 info["text"] = txt
+                if info.get("voice") and similarity(info["voice"], txt) < 0.45:
+                    info["voice"] = ""       # текст для голоса «уехал» от субтитра — читаем сам субтитр
                 if info.get("voice"):
                     info["voice"] = info["voice"] if len(info["voice"]) <= 3 * len(draft) + 60 else ""
                 box["info"] = info

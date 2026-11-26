@@ -899,6 +899,11 @@ class _Neural:
     def _apply_upgrade(self, job, text, player):
         """Фразы, которые ещё не начали звучать, заменить вариантом редактора (уже прозвучавшее — не трогаем)."""
         i = job["idx"]                                    # фразы [0, i) уже звучат/прозвучали
+        if i > 0:
+            from . import editor
+            rest_old = " ".join(job["chunks"][i - 1:])
+            if editor.similarity(rest_old, text) < 0.35 and editor.similarity(" ".join(job["chunks"]), text) < 0.6:
+                return            # вариант редактора совсем другой — дочитываем как начали, без «склейки»
         played = " ".join(job["chunks"][:i]).strip()
         sent = [p.strip() for p in re.split(r"(?<=[.!?…])\s+", text) if p.strip()]
         if played:

@@ -42,10 +42,14 @@ def _one(pid, src, kind):
         t1 = time.time()
         try:
             info = editor.parse(editor._ask(editor.build_prompt(src, row["text"], kind)))
+            fixed = editor._clean(info.get("text"), row["text"]) or row["text"]       # как в игре: строгий режим
+            rejected = fixed == row["text"] and editor.similarity(info.get("text", ""), row["text"]) < 0.999
+            info["text"] = fixed
             row["ed"] = {"text": info.get("text", ""), "voice": editor.filter_stress(info.get("voice", "")),
                          "speaker": info.get("speaker", ""), "gender": info.get("gender", ""),
                          "mood": info.get("mood", ""), "type": info.get("type", ""),
-                         "time": round(time.time() - t1, 2), "by": editor.name_of(editor.name())}
+                         "time": round(time.time() - t1, 2), "by": editor.name_of(editor.name()),
+                         "diff": editor.diff_words(row["text"], fixed), "rejected": rejected}
         except Exception as e:
             row["ed"] = {"error": str(e)[:200], "time": round(time.time() - t1, 2)}
     return row

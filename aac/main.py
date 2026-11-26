@@ -43,6 +43,7 @@ def apply_view_settings():
     config.SUBS_HISTORY = int(core.SETTINGS.get("subs_history", config.SUBS_HISTORY))
     config.TTS_ENABLED = bool(core.SETTINGS.get("tts_enabled", config.TTS_ENABLED))
     config.TTS_VOICE = str(core.SETTINGS.get("tts_voice", config.TTS_VOICE))
+    config.EDITOR_STRICT = bool(core.SETTINGS.get("editor_strict", config.EDITOR_STRICT))
     config.EDITOR_STRESS = bool(core.SETTINGS.get("editor_stress", config.EDITOR_STRESS))
     config.TTS_PUNCT_PAUSES = bool(core.SETTINGS.get("tts_punct_pauses", config.TTS_PUNCT_PAUSES))
     config.TTS_DUCK = bool(core.SETTINGS.get("tts_duck", config.TTS_DUCK))

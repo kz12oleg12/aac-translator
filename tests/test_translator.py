@@ -2317,6 +2317,15 @@ def test_paragraph_pause():
     assert ch[0].endswith("\n") and ch[-1] == "Договор длится тридцать дней и продлевается."
 
 
+def test_guess_type():
+    """Характер по имени и титулу — сразу, без нейросети."""
+    from aac import voices
+    assert voices.guess_type("Old Rotild", "") == "old" and voices.guess_type("Elder Bram", "") == "old"
+    assert voices.guess_type("Baron Alderich", "") == "noble" and voices.guess_type("Stone Golem", "") == "monster"
+    assert voices.guess_type("", "Бабушка Нюра") == "old" and voices.guess_type("Littleton", "") == ""
+    assert voices.guess_type("Lyra", "Лира") == ""
+
+
 def test_line_voice(monkey):
     """Реплика без имени: пол и характер от ИИ-редактора — голос нужного пола и высоты."""
     from aac import voices
@@ -2510,11 +2519,16 @@ def test_ai_editor(monkey):
 
     def slow(prompt):
         time.sleep(0.6)
-        return "Ну привет, путник."
+        return "Привет, путешественница."
     monkey(editor, "_ask", slow)
     assert editor.improve("Hi there, traveler.", "Привет, путешественник.", "subs", on_late=late.append) is None
     time.sleep(0.6)
-    assert late == ["Ну привет, путник."], late
+    assert late == ["Привет, путешественница."], late
+    # строгий режим: переписал фразу целиком — оставляем перевод; крик остаётся криком
+    monkey(editor, "_ask", lambda prompt: "TEXT:\nкто потревожил мой сон?\nVOICE:\nкто потревожил мой сон?")
+    assert editor.improve("WHO DISTURBS MY SLEEP?", "КТО МЕШАЕТ МОЕМУ СНУ?", "subs") is None
+    assert editor._clean("Я пришла.", "Я ПРИШЁЛ.") == "Я ПРИШЛА."
+    assert editor.similarity("Я пришёл за тобой.", "Я пришла за тобой.") > 0.6
     # ошибка / ответ не по-русски — None
     monkey(editor, "_ask", lambda prompt: (_ for _ in ()).throw(T.ApiError("лимит")))
     assert editor.improve("Bye.", "Пока.", "subs") is None
