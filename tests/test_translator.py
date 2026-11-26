@@ -2154,6 +2154,9 @@ def test_test_scene(monkey):
         assert reg[2] > 200 and reg[3] > 50, reg
         assert sc.text.cget("text") or sc.ans_lbl.cget("text") or sc.i == 0
         assert testscene.PID not in profiles.game_profiles(), "в списке игр не показывается"
+        from aac import game as _g
+        monkey(_g.config, "GAMES_ONLY", True)
+        assert not _g.no_game() and profiles.is_running() and _g.game_active.is_set(), "сцена — как запущенная игра"
         sc.close()
         assert c.active_profile is None and not c.test_scene and not c.auto_on.is_set()
     finally:

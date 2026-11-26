@@ -376,6 +376,8 @@ def no_game():
     """Программа «ждёт игру»: ни одна игра из списка не запущена — значит, ничего не переводим.
     (Закреплённый пресет и выключенное «Только игры из списка» — исключения: там игра — любое окно.)"""
     from . import profiles
+    if core.test_scene:
+        return False                      # «Тестовая сцена» — сама себе игра
     return config.GAMES_ONLY and not locked() and not profiles.is_running()
 
 

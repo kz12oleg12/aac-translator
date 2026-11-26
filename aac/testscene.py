@@ -111,6 +111,8 @@ class Scene:
         core.test_scene = True
         profiles.activate(PID, hold=True)
         core.auto_on.set()
+        from . import game
+        game.game_active.set()            # «в игре» — иначе автоперевод стоит на паузе «жду игру»
         core.log("🧪 Тестовая сцена: реплики сменяются сами — программа читает их с экрана, как в игре", "ok")
         core.events.put(("panel", None))
         self.next()

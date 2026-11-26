@@ -315,7 +315,10 @@ def running():
 
 
 def is_running(pid=None):
-    return (pid or core.active_profile) in running()
+    pid = pid or core.active_profile
+    if core.test_scene and pid == "testscene":
+        return True                       # окно «Тестовой сцены» открыто — считаем игру запущенной
+    return pid in running()
 
 
 def drop_self():
