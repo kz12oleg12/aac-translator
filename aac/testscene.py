@@ -8,7 +8,7 @@
 import os
 import tkinter as tk
 
-from . import core
+from . import config, core
 
 PID = "testscene"
 # (имя, реплика) — реплика без имени: рассказчик; список — варианты ответа
@@ -35,7 +35,7 @@ class Scene:
         self.app = app
         self.i = -1
         self.playing = True
-        self.delay = 6
+        self.delay = 0             # 0 — «по озвучке»: следующая реплика, когда текущая дочитана
         self.timer = None
         self.prev = {"pid": core.active_profile, "auto": core.auto_on.is_set()}
         self._make_profile()
@@ -56,8 +56,8 @@ class Scene:
         self.pbtn = tk.Button(bar, text="⏸ Пауза", command=self.toggle, bg="#2d3240", fg="#fff", relief="flat",
                               padx=12, activebackground="#5865f2", activeforeground="#fff")
         self.pbtn.pack(side="right", padx=4, pady=6)
-        self.spd = tk.StringVar(value="6 с")
-        tk.OptionMenu(bar, self.spd, "3 с", "4 с", "6 с", "8 с", "12 с", command=self._speed).pack(side="right")
+        self.spd = tk.StringVar(value="по озвучке")
+        tk.OptionMenu(bar, self.spd, "по озвучке", "3 с", "6 с", "10 с", command=self._speed).pack(side="right")
         self.stage = tk.Canvas(w, bg=BG, highlightthickness=0)
         self.stage.pack(fill="both", expand=True)
         self.count = tk.Label(w, text="", bg=BG, fg=MUTED, font=("Segoe UI", 9))
@@ -138,7 +138,28 @@ class Scene:
             self.win.after_cancel(self.timer)
             self.timer = None
         if self.playing:
-            self.timer = self.win.after(self.delay * 1000, self._auto)
+            answers = 0 <= self.i < len(SCRIPT) and isinstance(SCRIPT[self.i][1], list)
+            if self.delay or answers:             # варианты ответа не озвучиваются — просто 6 с
+                self.timer = self.win.after((self.delay or 6) * 1000, self._auto)
+            else:
+                import time
+                self._shown_at, self._heard = time.time(), False
+                self.timer = self.win.after(500, self._wait_voice)
+
+    def _wait_voice(self):
+        """Ждём, пока реплику переведут и дочитают (как игрок, который слушает), потом — следующая."""
+        import time
+        from . import tts
+        self.timer = None
+        if not self.playing:
+            return
+        talking = tts.speaking()
+        self._heard = self._heard or talking
+        waited = time.time() - self._shown_at
+        if (self._heard and not talking and waited > 2) or waited > 30 or (not config.TTS_ENABLED and waited > 6):
+            self.timer = self.win.after(800, self._auto)    # короткая пауза после реплики
+        else:
+            self.timer = self.win.after(250, self._wait_voice)
 
     def _auto(self):
         self.timer = None
@@ -178,7 +199,7 @@ class Scene:
         self._plan()
 
     def _speed(self, v):
-        self.delay = int(str(v).split()[0])
+        self.delay = 0 if str(v).startswith("по") else int(str(v).split()[0])
         self._plan()
 
     def close(self):

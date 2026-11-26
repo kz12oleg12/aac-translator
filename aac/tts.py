@@ -365,6 +365,14 @@ def _windows_queue(text):
         _send("add" if config.TTS_FINISH_LINE else "say", text)
 
 
+def speaking():
+    """Звучит ли (или готовится) сейчас реплика — для «Тестовой сцены», чтобы ждать конца озвучки."""
+    try:
+        return bool(getattr(_neural, "active", False)) or not _neural.q.empty()
+    except Exception:
+        return False
+
+
 def stop():
     _neural.stop()
     _send("stop")
@@ -1016,6 +1024,7 @@ class _Neural:
                 if job:
                     job["t0"] = min(job["t0"], time.time())
             self._duck(job is not None and (job["cur"] is not None or job["idx"] > 0))
+            self.active = job is not None or waiting is not None
 
 
 _neural = _Neural()
