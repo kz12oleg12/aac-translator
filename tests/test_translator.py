@@ -672,7 +672,10 @@ def test_second_subs_region(monkey):
         T.events.put(("text", ("Стражник\nПроходи, не задерживайся.", None)))
         app.root.after(150, step2)
 
-    def step2():
+    def step2(n=0):
+        if not app.subs.visible and n < 20:            # медленная машина: ждём, пока субтитры покажутся
+            app.root.after(100, lambda: step2(n + 1))
+            return
         res["anchor2"] = app.subs.anchor() == (100, 100, 300, 80)
         T.events.put(("subs_hide", None))          # основная область пуста — чужую реплику не трогает
         app.root.after(150, step3)
