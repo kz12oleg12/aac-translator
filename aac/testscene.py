@@ -64,7 +64,48 @@ ABOUT = ("Fantasy RPG, chapter one «The Lost Caravan». The player meets: a you
          "Fenwick the alchemist, a cheerful merchant; King Aldric; a wise old woman mentor Ysolde; "
          "an old wizard Orren; a little boy Pip who dreams of adventure; an ancient stone golem monster guarding the ruins.")
 
-BG, NAME, TEXT, MUTED, INFO = "#0b0d12", "#e8c170", "#f4f1ea", "#8a8f9c", "#161a22"
+BG, NAME, TEXT, MUTED, INFO = "#0b0d12", "#e8c170", "#f4f1ea", "#9C9A92", "#262624"
+# цвета панели программы
+SIDE, LINE, LINE2, T2, ACC, ACC_H = "#1F1E1D", "#3D3D3A", "#4D4C48", "#DEDCD1", "#5865F2", "#6d78f4"
+INFO_H = 84                      # полоса перевода фиксированной высоты — кадр не прыгает
+
+
+class Pill(getattr(tk, "Canvas", object)):
+    """Кнопка в стиле панели программы: скруглённая, тонкая рамка, подсветка при наведении; primary — акцентная."""
+
+    def __init__(self, master, text, command, primary=False, bg=SIDE):
+        super().__init__(master, height=30, bg=bg, highlightthickness=0, bd=0, cursor="hand2")
+        self.command, self.primary, self.active, self.hover = command, primary, False, False
+        self.font = ("Segoe UI", -13)
+        self.set_text(text)
+        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Leave>", lambda e: self._set_hover(False))
+        self.bind("<Button-1>", lambda e: self.command())
+
+    def set_text(self, text):
+        self.text = text
+        import tkinter.font as tkf
+        self.config(width=tkf.Font(font=self.font).measure(text) + 30)
+        self._paint()
+
+    def set_active(self, on):
+        self.active = on
+        self._paint()
+
+    def _set_hover(self, on):
+        self.hover = on
+        self._paint()
+
+    def _paint(self):
+        self.delete("all")
+        w, h, r = int(self.cget("width")), 30, 8
+        filled = self.primary or self.active
+        fill = (ACC_H if self.hover else ACC) if filled else ("#2b2b29" if self.hover else self.cget("bg"))
+        outline = fill if filled else (LINE2 if self.hover else LINE)
+        pts = (r, 0, w - r, 0, w - 1, 0, w - 1, r, w - 1, h - r, w - 1, h - 1, w - r, h - 1, r, h - 1, 0, h - 1,
+               0, h - r, 0, r, 0, 0)
+        self.create_polygon(pts, smooth=True, fill=fill, outline=outline)
+        self.create_text(w // 2, h // 2, text=self.text, fill="#fff" if filled else T2, font=self.font)
 SUB_TOP, SUB_BOTTOM, SUB_SIDE = 0.775, 0.985, 0.11     # где на «экране игры» субтитры (доли кадра)
 
 
@@ -86,36 +127,40 @@ class Scene:
         w.configure(bg=BG)
         sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
         W = min(1280, sw - 80, int((sh - 220) * 16 / 9))
-        H = W * 9 // 16 + 130
+        H = W * 9 // 16 + 50 + INFO_H
         w.geometry(f"{W}x{H}+{(sw - W) // 2}+{max(0, (sh - H) // 2 - 20)}")
         w.protocol("WM_DELETE_WINDOW", self.close)
-        bar = tk.Frame(w, bg="#20242e")
+        bar = tk.Frame(w, bg=SIDE)
         bar.pack(fill="x")
-        tk.Label(bar, text="Тестовая сцена", bg="#20242e", fg=MUTED,
-                 font=("Segoe UI", 10)).pack(side="left", padx=(12, 6), pady=8)
-        self.count = tk.Label(bar, text="", bg="#20242e", fg=MUTED, font=("Segoe UI", 9))
-        self.count.pack(side="left", pady=8)
-        for t, fn in (("Закрыть", self.close), ("Далее ▶", self.next), ("◀ Назад", self.back)):
-            tk.Button(bar, text=t, command=fn, bg="#2d3240", fg="#fff", relief="flat", padx=12,
-                      activebackground="#5865f2", activeforeground="#fff").pack(side="right", padx=4, pady=6)
-        self.pbtn = tk.Button(bar, text="⏸ Пауза", command=self.toggle, bg="#2d3240", fg="#fff", relief="flat",
-                              padx=12, activebackground="#5865f2", activeforeground="#fff")
-        self.pbtn.pack(side="right", padx=4, pady=6)
-        self.spd = tk.StringVar(value="по озвучке")
-        tk.OptionMenu(bar, self.spd, "по озвучке", "3 с", "6 с", "10 с", command=self._speed).pack(side="right")
+        tk.Label(bar, text="Тестовая сцена", bg=SIDE, fg="#FAF9F5",
+                 font=("Segoe UI Semibold", -14)).pack(side="left", padx=(14, 8), pady=10)
+        self.count = tk.Label(bar, text="", bg=SIDE, fg=MUTED, font=("Segoe UI", -12))
+        self.count.pack(side="left", pady=10)
+        Pill(bar, "Закрыть", self.close).pack(side="right", padx=(4, 12), pady=8)
+        Pill(bar, "Далее ›", self.next).pack(side="right", padx=4, pady=8)
+        Pill(bar, "‹ Назад", self.back).pack(side="right", padx=4, pady=8)
+        Pill(bar, "↺ Заново", self.restart).pack(side="right", padx=4, pady=8)
+        self.pbtn = Pill(bar, "Пауза", self.toggle)
+        self.pbtn.pack(side="right", padx=(4, 14), pady=8)
+        self.speeds = {}
+        for t in ("10 с", "6 с", "3 с", "По озвучке"):          # справа налево
+            b_ = Pill(bar, t, lambda t=t: self._speed(t))
+            b_.pack(side="right", padx=2, pady=8)
+            self.speeds[t] = b_
+        self.speeds["По озвучке"].set_active(True)
+        tk.Label(bar, text="Смена реплик:", bg=SIDE, fg=MUTED, font=("Segoe UI", -12)).pack(side="right", padx=(0, 6))
         # перевод и голос — полоса над «экраном игры» (на сам кадр не ложится)
-        self.tr = tk.Frame(w, bg=INFO, padx=14, pady=6)
+        tk.Frame(w, bg=LINE, height=1).pack(fill="x")
+        self.tr = tk.Frame(w, bg=INFO, padx=14, pady=8, height=INFO_H)
         self.tr.pack(fill="x")
-        self.tr_text = tk.Label(self.tr, text="…", bg=INFO, fg=MUTED, font=("Segoe UI", 12), anchor="w",
+        self.tr.pack_propagate(False)              # высота не меняется от длины перевода — кадр не прыгает
+        self.tr_text = tk.Label(self.tr, text="…", bg=INFO, fg=MUTED, font=("Segoe UI", -15), anchor="w",
                                 justify="left")
         self.tr_text.pack(fill="x")
-        self.voice = tk.Label(self.tr, text="", bg=INFO, fg="#9db0ff", font=("Segoe UI", 10), anchor="w",
-                              justify="left")
+        self.voice = tk.Label(self.tr, text="", bg=INFO, fg=ACC_H, font=("Segoe UI", -12), anchor="w")
         self.voice.pack(fill="x")
-        self.seen = tk.Label(self.tr, text="", bg=INFO, fg=MUTED, font=("Segoe UI", 9), anchor="w", justify="left")
+        self.seen = tk.Label(self.tr, text="", bg=INFO, fg=MUTED, font=("Segoe UI", -11), anchor="w")
         self.seen.pack(fill="x")
-        self.tr.bind("<Configure>", lambda e: [x.config(wraplength=max(200, e.width - 30))
-                                               for x in (self.tr_text, self.voice, self.seen)])
         # «экран игры»: кадр во всё окно, субтитры внизу поверх кадра
         self.stage = tk.Canvas(w, bg=BG, highlightthickness=0)
         self.stage.pack(fill="both", expand=True)
@@ -240,21 +285,27 @@ class Scene:
             pass
         if blank or self.i < 0:
             return
-        fs = max(11, int(H / 34))
-        y = int(H * (SUB_TOP + 0.02))
+        fs = max(14, int(H / 32))                 # в пикселях — не зависит от масштаба экрана Windows
+        y = int(H * (SUB_TOP + 0.025))
         if name:
-            c.create_text(W // 2, y, text=name, fill=NAME, font=("Georgia", max(10, int(fs * 0.85))), anchor="n")
-            y += int(fs * 1.9)
-        c.create_text(W // 2, y, text=line, fill=TEXT, font=("Georgia", fs), anchor="n", justify="center",
-                      width=int(W * (1 - 2 * SUB_SIDE) - 20))
+            c.create_text(W // 2, y, text=name, fill=NAME, font=("Georgia", -max(12, int(fs * 0.82))), anchor="n")
+            y += int(fs * 1.45)
+        c.create_text(W // 2, y, text=line, fill=TEXT, font=("Georgia", -fs), anchor="n", justify="center",
+                      width=int(W * (1 - 2 * SUB_SIDE) - 40))
 
     # ---------- перевод и голос в окне сцены ----------
+    @staticmethod
+    def _one_line(text, n=170):
+        t = " ".join(str(text or "").split())
+        return t if len(t) <= n else t[:n - 1].rstrip() + "…"
+
     def on_translation(self, text):
-        self.tr_text.config(text=text, fg=TEXT)
+        self.tr_text.config(text=self._one_line(text), fg=TEXT)
+        self._tr_full = text
 
     def on_improve(self, draft, better):
-        if self.tr_text.cget("text") == draft:
-            self.tr_text.config(text=better)
+        if getattr(self, "_tr_full", None) == draft:
+            self.on_translation(better)
 
     def _poll_voice(self):
         """Кем озвучивается реплика: голос, пол, характер (из озвучки)."""
@@ -263,7 +314,7 @@ class Scene:
             lv = getattr(tts, "last_voice", None)
             if lv and lv["t"] != self._voice_t:
                 self._voice_t = lv["t"]
-                self.voice.config(text="🔊 " + lv["desc"])
+                self.voice.config(text=self._one_line("🔊 " + lv["desc"], 200))
         except Exception:
             pass
         try:                                   # что редактор понял о сцене (по скриншоту или по тексту)
@@ -280,9 +331,9 @@ class Scene:
                 self._seen_t = st["scene_at_t"]
                 note = ("🖼 Редактор посмотрел на экран: " if st.get("scene_shot") else "📝 Заметка о сцене по тексту: ") \
                     + st["scene"][:220]
-                self.seen.config(text=note)
+                self.seen.config(text=self._one_line(note, 220))
             elif note and not self.seen.cget("text").startswith(("🖼", "📝")):
-                self.seen.config(text=note)
+                self.seen.config(text=self._one_line(note, 220))
         except Exception:
             pass
         try:
@@ -327,7 +378,7 @@ class Scene:
         self.timer = None
         if self.i >= len(SCRIPT) - 1:
             self.playing = False
-            self.pbtn.config(text="▶ Сначала")
+            self.pbtn.set_text("↺ Сначала")
             core.log("🧪 Тестовая сцена закончилась — посмотрите «Озвучка → Персонажи»: кто какого пола и характера")
             return
         self.next()
@@ -352,16 +403,40 @@ class Scene:
         if not self.playing and self.i >= len(SCRIPT) - 1:
             self.i = -1
             self.playing = True
-            self.pbtn.config(text="⏸ Пауза")
+            self.pbtn.set_text("Пауза")
             self.next()
             return
         self.playing = not self.playing
-        self.pbtn.config(text="⏸ Пауза" if self.playing else "▶ Дальше")
+        self.pbtn.set_text("Пауза" if self.playing else "▶ Дальше")
         self._plan()
 
     def _speed(self, v):
-        self.delay = 0 if str(v).startswith("по") else int(str(v).split()[0])
+        self.delay = 0 if str(v).lower().startswith("по") else int(str(v).split()[0])
+        for t, b in getattr(self, "speeds", {}).items():
+            b.set_active(t == v)
         self._plan()
+
+    def restart(self):
+        """С первой реплики, с чистого листа: персонажи и кэш переводов сцены сбрасываются."""
+        from . import voices
+        self._make_profile()
+        try:
+            with voices._lock:
+                voices._data["loaded"] = False
+        except Exception:
+            pass
+        try:
+            from . import editor
+            editor.reset()
+        except Exception:
+            pass
+        self.i = -1
+        self.playing = True
+        self.pbtn.set_text("Пауза")
+        self.tr_text.config(text="…", fg=MUTED)
+        self.seen.config(text="")
+        core.log("🧪 Тестовая сцена — заново, с первой реплики")
+        self.next()
 
     def close(self):
         from . import profiles

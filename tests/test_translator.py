@@ -2182,6 +2182,24 @@ def test_test_scene(monkey):
             time.sleep(0.03)
         sc._move_region()
         assert c.region == sc.sub_rect() and tuple(profiles.all_profiles()[testscene.PID]["region"]) == c.region
+        h0 = sc.stage.winfo_height()
+        sc.on_translation("Очень длинный перевод. " * 30)
+        for _ in range(10):
+            root.update()
+            time.sleep(0.03)
+        assert sc.stage.winfo_height() == h0, "длинный перевод не сдвигает кадр"
+        sc.next(); sc.next()
+        for _ in range(15):
+            root.update()
+            time.sleep(0.03)
+        sc.restart()
+        for _ in range(15):
+            root.update()
+            time.sleep(0.03)
+        assert sc.i == 0
+        sc._speed("6 с")
+        assert sc.delay == 6 and sc.speeds["6 с"].active and not sc.speeds["По озвучке"].active
+        sc._speed("По озвучке")
         sc.on_translation("Привет.")
         assert sc.tr_text.cget("text") == "Привет."
         assert profiles.all_profiles()[testscene.PID].get("answers_region") is None
