@@ -3146,6 +3146,33 @@ def test_voice_only(monkey):
     assert translate.config.VOICE_ONLY is True and translate.config.VOICE_ONLY_LANG == "ru"
 
 
+def test_ocr_bright_pass(monkey):
+    """Пёстрый фон за субтитрами: вторая попытка «только светлый текст» и выбор того, что больше похоже на текст."""
+    from aac import ocr
+    if not hasattr(ocr, "bright_text"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    from PIL import Image
+    img = Image.new("RGB", (40, 10), (40, 120, 30))           # трава
+    img.putpixel((5, 5), (250, 250, 245))                      # белая буква
+    img.putpixel((6, 5), (255, 140, 0))                        # оранжевый цветок
+    bt = ocr.bright_text(img).convert("L")
+    assert bt.getpixel((5, 5)) == 0 and bt.getpixel((6, 5)) == 255 and bt.getpixel((0, 0)) == 255
+    assert ocr.text_score(["Фокси", "Уже пробовали нашу знаменитую лепешку?"]) > \
+        ocr.text_score(["окси", "же пробова. енитую лепешку?"])
+    assert ocr.text_score(["Привет, путник!"]) > ocr.text_score(["IBaTbr 3AVl, VI 01--la"])
+    calls = []
+
+    def raw(im):
+        calls.append(im.mode)
+        return [("окси", None), ("куд, онечно, ак кусо", None)] if len(calls) == 1 else \
+            [("Фокси", None), ("Оксид, конечно, как кусок", None)]
+    monkey(ocr, "_ocr_raw", raw)
+    monkey(ocr, "_ocr_kind", "windows")
+    monkey(ocr.config, "OCR_BRIGHT_PASS", True)
+    assert ocr._ocr_lines(img) == ["Фокси", "Оксид, конечно, как кусок"] and len(calls) == 2
+
+
 def test_netfix(monkey):
     """Рабочий VPN: Python доверяет сертификатам Windows (truststore), проверка сертификатов не отключается."""
     import ssl

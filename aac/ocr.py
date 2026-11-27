@@ -211,13 +211,62 @@ def _clean_line(ln, clean):
     return ln
 
 
-def _ocr_lines(img):
+def _clean_all(raw):
     clean = []
-    for t, _ in _ocr_raw(img):
+    for t, _ in raw:
         ln = _clean_line(t, clean)
         if ln:
             clean.append(ln)
     return clean
+
+
+def bright_text(img):
+    """Светлый текст (белые, кремовые субтитры) — чёрным по белому, всё остальное — белым.
+    Пёстрый фон (трава, одежда, огни) исчезает, и распознаватель видит буквы целиком."""
+    g = img.convert("RGB")
+    try:
+        import numpy as np
+        a = np.asarray(g).astype(np.int16)
+        mx, mn = a.max(2), a.min(2)
+        mask = (mx > 185) & (mx - mn < 60)
+        return Image.fromarray(np.where(mask, 0, 255).astype("uint8"))
+    except ImportError:
+        hsv = g.convert("HSV")
+        h, s_, v = hsv.split()
+        m = Image.eval(v, lambda x: 255 if x > 185 else 0)
+        m2 = Image.eval(s_, lambda x: 255 if x < 70 else 0)
+        from PIL import ImageChops
+        return ImageChops.invert(ImageChops.multiply(m, m2))
+
+
+_WORD = re.compile(r"[^\W\d_]{2,}")
+
+
+def text_score(lines):
+    """Насколько строки похожи на настоящий текст: буквы в словах с гласными минус мусор."""
+    good = bad = 0
+    for ln in lines:
+        for w in _WORD.findall(ln):
+            mixed = re.search(r"[a-zа-яё][A-ZА-ЯЁ]", w) or (re.search(r"[A-Za-z]", w) and re.search(r"[А-Яа-яЁё]", w))
+            if any(ch in _VOWELS for ch in w) and not mixed:
+                good += len(w)
+            else:
+                bad += len(w)
+        bad += len(re.findall(r"[^\w\s.,!?…:;'\"«»()\-—–/]", ln)) * 2
+    return good - bad
+
+
+def _ocr_lines(img):
+    """Две попытки: картинка как есть и «только светлый текст» — берём ту, что больше похожа на текст.
+    На пёстром фоне вторая читает строку целиком, где первая теряет буквы («окси» вместо «Фокси»)."""
+    first = _clean_all(_ocr_raw(img))
+    if _ocr_kind != "windows" or not config.OCR_BRIGHT_PASS:
+        return first
+    try:
+        second = _clean_all(_ocr_raw(bright_text(img)))
+    except Exception:
+        return first
+    return second if text_score(second) > text_score(first) else first
 
 
 def ocr_boxes(img):
