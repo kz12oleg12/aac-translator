@@ -158,7 +158,8 @@ class Living:
                 v = Image.open(vpath)
                 if getattr(v, "n_frames", 1) > 1:
                     self.video, self.n = v, v.n_frames
-                    self.fps = 1000 / max(20, v.info.get("duration", 83))
+                    v.load()                                   # длительность кадра видна после загрузки
+                    self.fps = 1000 / max(20, v.info.get("duration") or 42)
                     k = max(W / v.width, H / v.height)
                     self.vsize = (max(W, round(v.width * k)), max(H, round(v.height * k)))
                     self.vcrop = ((self.vsize[0] - W) // 2, (self.vsize[1] - H) // 2)
@@ -181,6 +182,12 @@ class Living:
         self.still = im.crop((m, m, m + W, m + H))
         if self.video is not None:
             self.still = self._vframe(0)               # полоса субтитров — из первого кадра ролика
+        # заранее готовые куски: на каждый кадр ролика смешивается только узкая полоса перехода
+        self.span = min(span, H - top)
+        b = (0, top, W, top + self.span)
+        self.final_still = Image.composite(self.black, self.still, self.shade)
+        self.strip = (self.still.crop(b), self.ramp.crop(b), self.black.crop(b), self.shade.crop(b))
+        self.bottom = self.final_still.crop((0, top + self.span, W, H))
 
     def _vframe(self, i):
         from PIL import Image
@@ -192,18 +199,30 @@ class Living:
         x, y = self.vcrop
         return fr.crop((x, y, x + self.W, y + self.H))
 
+    def vframe_final(self, i):
+        """Кадр ролика i, готовый к показу: сверху ролик, снизу — неподвижная полоса субтитров."""
+        from PIL import Image
+        out = self._vframe(i)
+        top, W = self.still_y, self.W
+        if self.span > 0:
+            still, ramp, black, shade = self.strip
+            st = out.crop((0, top, W, top + self.span))
+            st = Image.composite(black, Image.composite(still, st, ramp), shade)
+            out.paste(st, (0, top))
+        if self.bottom.height > 0:
+            out.paste(self.bottom, (0, top + self.span))
+        return out
+
     def frame(self, t):
         import math
         if self.video is not None:
-            from PIL import Image
+            if not t:
+                return self.final_still
             try:
-                out = self._vframe(int(t * self.fps)) if t else self.still
+                return self.vframe_final(int(t * self.fps))
             except Exception:
                 self.video = None
                 return self.frame(t)
-            if t:
-                out = Image.composite(self.still, out, self.ramp)
-            return Image.composite(self.black, out, self.shade)
         from PIL import Image, ImageChops
         W, H, m = self.W, self.H, self.m
         if t:
@@ -234,6 +253,7 @@ class Scene:
         self._reg = None
         self._reg_job = None
         self.prev = {"pid": core.active_profile, "auto": core.auto_on.is_set()}
+        self._closed = False
         self._make_profile()
         w = self.win = tk.Toplevel(app.root)
         w.title("Тестовая сцена — AAC Translator")
@@ -377,17 +397,54 @@ class Scene:
             self._ph, self._frame_key = ImageTk.PhotoImage(self.live.frame(0.0)), key
         return self._ph
 
+    def _video_worker(self, L):
+        """Готовит кадры ролика в фоне (распаковка, масштаб, полоса субтитров) — окно только показывает их.
+        Кадры идут строго подряд (пропуск в WebP всё равно требует распаковать пропущенный кадр) и отдаются
+        точно в своё время; не успел — кадр показывается сразу, ролик чуть замедляется вместо рывков."""
+        import time
+        i, t0 = 0, time.time()
+        while not self._closed and getattr(self, "live", None) is L and L.video is not None:
+            if not self.alive:
+                time.sleep(0.1)
+                t0 = time.time() - i / L.fps
+                continue
+            i += 1
+            try:
+                img = L.vframe_final(i)
+            except Exception:
+                L.video = None
+                break
+            due = t0 + i / L.fps
+            wait = due - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            elif wait < -0.25:                     # сильно отстали (компьютер занят) — не догоняем
+                t0 = time.time() - i / L.fps
+            self._ready = (L, i, img)
+
     def _animate(self):
-        """«Оживление» кадра ~10 раз в секунду: мерцают огни, кадр чуть плывёт. Субтитры не трогаются."""
+        """Живой кадр. Ролик — кадры готовит фоновый поток, здесь только показ (часто, дёшево).
+        Без ролика — мерцание огней и «плавание» ~10 раз в секунду. Субтитры не трогаются."""
+        import threading
         import time
         try:
-            if self.alive and getattr(self, "live", None) is not None and self._frame_key:
+            L = getattr(self, "live", None)
+            if L is not None and L.video is not None and self._frame_key:
+                if getattr(self, "_worker_for", None) is not L:
+                    self._worker_for = L
+                    threading.Thread(target=self._video_worker, args=(L,), daemon=True).start()
+                r = getattr(self, "_ready", None)
+                if self.alive and r and r[0] is L and r[1] != getattr(self, "_shown", None):
+                    self._shown = r[1]
+                    self._ph.paste(r[2])
+                self.win.after(12, self._animate)
+                return
+            if self.alive and L is not None and self._frame_key:
                 t0 = time.perf_counter()
                 self._ph.paste(self.live.frame(time.time()))
                 cost = time.perf_counter() - t0
                 self._anim_slow = cost > 0.07                 # слабый компьютер — реже
-            fast = 80 if getattr(getattr(self, "live", None), "video", None) is not None else 100
-            self.win.after(200 if getattr(self, "_anim_slow", False) else fast, self._animate)
+            self.win.after(200 if getattr(self, "_anim_slow", False) else 100, self._animate)
         except tk.TclError:
             pass
 
@@ -567,6 +624,7 @@ class Scene:
         from . import profiles
         if self.timer:
             self.win.after_cancel(self.timer)
+        self._closed = True
         core.test_scene = False
         if not self.prev["auto"]:
             core.auto_on.clear()

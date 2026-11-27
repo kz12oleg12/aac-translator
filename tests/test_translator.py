@@ -2190,7 +2190,8 @@ def test_test_scene(monkey):
         assert L.has_glow and _IC.difference(f1, f2).getbbox() is not None
         assert _IC.difference(f1.crop((0, top, 640, 360)), f2.crop((0, top, 640, 360))).getbbox() is None
         V = testscene.Living("king", 640, 360)              # у этого кадра есть ролик
-        assert V.video is not None and V.n > 20
+        assert V.video is not None and V.n > 20 and V.fps > 20, (V.n, V.fps)          # 24 кадра в секунду
+        assert V.vframe_final(5).size == (640, 360)
         v1, v2 = V.frame(100.0), V.frame(101.5)
         assert v1.size == (640, 360) and _IC.difference(v1, v2).getbbox() is not None
         assert _IC.difference(v1.crop((0, top, 640, 360)), v2.crop((0, top, 640, 360))).getbbox() is None
