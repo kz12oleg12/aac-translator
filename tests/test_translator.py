@@ -2955,14 +2955,15 @@ def test_character_understanding(monkey):
     assert c["type"] == "child" and c["type_src"] == "описание игры" and voices.gender(c) == "m", c
     k = voices.note_line("Лира\nСпокойно.", "Lyra\nEasy.")
     assert voices.gender(voices._data["chars"][k]) == "f"
-    # переводит офлайн-переводчик, редактор выключен — про персонажа спрашиваем нейросеть с ключом
+    # про персонажа спрашивается только ИИ-редактор; выключен — никакие нейросети не вызываются
     asked = []
-    monkey(translate, "provider_chain", lambda: ["offline"])
-    monkey(editor, "_usable", lambda e: e == "groq")
-    monkey(editor, "_ask_one", lambda e, p: asked.append(e) or "m child")
-    monkey(translate.config, "EDITOR_ON", False)
-    assert translate.ask_character("q") == "m child" and asked == ["groq"]
-    assert translate.ask_text("q") is None, "перевод надписей нейросеть сам не берёт"
+    monkey(translate, "provider_chain", lambda: ["gemini"])
+    monkey(editor, "_ask", lambda p: asked.append("editor") or "m child")
+    monkey(translate.llm, "ask_gemini", lambda *a: asked.append("gemini") or "f adult")
+    monkey(editor, "ready", lambda: False)
+    assert translate.ask_character("q") is None and asked == []
+    monkey(editor, "ready", lambda: True)
+    assert translate.ask_character("q") == "m child" and asked == ["editor"]
 
 
 def test_netfix(monkey):
