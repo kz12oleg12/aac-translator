@@ -3173,6 +3173,43 @@ def test_ocr_bright_pass(monkey):
     assert ocr._ocr_lines(img) == ["Фокси", "Оксид, конечно, как кусок"] and len(calls) == 2
 
 
+def test_tts_growing_line(monkey):
+    """Текст в игре появляется постепенно: та же реплика, только длиннее, — не начинать заново, а дочитать."""
+    from aac import tts
+    if not hasattr(tts, "_growth"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    said, ups = [], []
+    monkey(tts, "speak_subtitle", lambda t, seen=None, orig=None: said.append(t))
+    monkey(tts, "engine_ready", lambda: True)
+    monkey(tts, "_speech_only", lambda t, o: t)
+    monkey(tts.config, "TTS_ENABLED", True)
+    monkey(tts, "_last", {"text": None, "t": 0.0})
+    import queue as _q
+    fake = type("N", (), {})()
+    fake.q, fake.active = _q.Queue(), False
+    fake.upgrade = lambda key, text, grow=False: ups.append((key, text, grow))
+    monkey(tts, "_neural", fake)
+    p1 = "Фокси\nОксид, конечно, как кусок"
+    full = "Фокси\nОксид, конечно, как кусок ссохшейся глины. Зато ею можно ковать, и она вообще никогда не портится!"
+    tts.speak_subtitle_once(p1, None, p1)
+    assert said == [p1]
+    fake.active = True                                     # первая часть ещё звучит
+    tts.speak_subtitle_once(full, None, full)
+    assert said == [p1] and len(ups) == 1 and ups[0][2] is True and ups[0][1] == full
+    tts.speak_subtitle_once(full.replace("ссохшейся", "сохшейся"), None, full)     # перечитали — то же самое
+    assert said == [p1] and len(ups) == 1
+    # всё уже прозвучало, а реплика дописалась ещё — читаем только новое
+    fake.active = False
+    longer = full + " Попробуй сам."
+    tts.speak_subtitle_once(longer, None, longer)
+    assert said[-1] == "Попробуй сам.", said
+    # другая реплика того же персонажа — читается целиком
+    other = "Фокси\nАжабли к нам залетают редко, так что запасы приходится делать наперёд."
+    tts.speak_subtitle_once(other, None, other)
+    assert said[-1] == other
+
+
 def test_netfix(monkey):
     """Рабочий VPN: Python доверяет сертификатам Windows (truststore), проверка сертификатов не отключается."""
     import ssl

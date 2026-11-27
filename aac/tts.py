@@ -534,10 +534,85 @@ def repeat_line(translation, orig=None):
     _say(text, None, vp)
 
 
+def _growth(prev, new):
+    """Как новая реплика связана с прошлой: "same" — та же (перечитана, буквы чуть иначе), "grew" — та же,
+    но дописалась (текст в игре появляется постепенно), None — другая реплика."""
+    import difflib
+    from . import editor
+    a, b = editor._norm(prev), editor._norm(new)
+    if len(a) < 6 or len(b) < 6:
+        return None
+    if len(b) <= len(a) * 1.12:
+        head = a[:len(b)] if len(b) < len(a) else a
+        if difflib.SequenceMatcher(None, head, b[:len(head)]).ratio() >= 0.78:
+            return "same"
+        return None
+    if difflib.SequenceMatcher(None, a, b[:len(a)]).ratio() >= 0.72:
+        return "grew"
+    return None
+
+
+def _tail(prev, new):
+    """Что в дописавшейся реплике новое: фразы, которых в прошлом варианте не было."""
+    import difflib
+    from . import editor
+    a = editor._norm(prev)
+    lines = [ln for ln in (new or "").splitlines() if ln.strip()]
+    body = " ".join(lines[1:]) if len(lines) > 1 and voices.speaker(new, new) else " ".join(lines)
+    out = []
+    for s in [p for p in re.split(r"(?<=[.!?…])\s+", body) if p.strip()]:
+        ns = editor._norm(s)
+        m = difflib.SequenceMatcher(None, ns, a).find_longest_match(0, len(ns), 0, len(a))
+        if out or m.size < 0.7 * len(ns):
+            out.append(s)
+    return " ".join(out)
+
+
+def _speech_only(translation, orig):
+    """Текст для озвучки реплики (без выбора голоса) — как в speak_subtitle."""
+    text = speech_text(translation, orig)
+    try:
+        from . import editor
+        info = editor.speech_for(translation)
+        if info and info.get("voice"):
+            text = _with_mood(speech_text(info["voice"], _with_speaker(info, orig)), info.get("mood"))
+        text = editor.apply_stress(text)
+    except Exception:
+        pass
+    return text
+
+
 def speak_subtitle_once(translation, seen=None, orig=None):
-    if translation == _last["text"] and time.time() - _last["t"] < 30:
+    """Озвучить реплику один раз. Текст в игре часто появляется постепенно (по буквам, по словам) —
+    программа читает его несколько раз, и каждый раз он длиннее. Это одна реплика: не начинаем её
+    заново, а дочитываем — недозвучавшие фразы заменяются полным текстом, а если всё уже прозвучало,
+    читается только новое."""
+    now = time.time()
+    prev = _last["text"]
+    if translation == prev and now - _last["t"] < 30:
         return
-    _last.update(text=translation, t=time.time())
+    rel = _growth(prev, translation) if prev and now - _last["t"] < 20 else None
+    if rel == "same":
+        _last["t"] = now
+        if len(translation) > len(prev):
+            _last["text"] = translation
+        return
+    if rel == "grew" and config.TTS_ENABLED:
+        _last.update(text=translation, t=now)
+        if engine_ready() and not _neural.q.empty():
+            # прошлый вариант ещё не начал звучать (ждёт в очереди) — просто ставим полный вместо него
+            _last["key"] = _line_key(translation)
+            speak_subtitle(translation, seen, orig)
+            return
+        if engine_ready() and getattr(_neural, "active", False) and _last.get("key"):
+            _neural.upgrade(_last["key"], _speech_only(translation, orig), grow=True)
+            return
+        tail = _tail(prev, translation)
+        if tail and sum(ch.isalpha() for ch in tail) >= 4:
+            _last["key"] = _line_key(tail)
+            speak_subtitle(tail, seen, orig)
+        return
+    _last.update(text=translation, t=now, key=_line_key(translation))
     speak_subtitle(translation, seen, orig)
 
 
@@ -822,11 +897,12 @@ class _Neural:
         self._ensure()
         self.q.put(("say", (text, seen or time.time(), voice_pitch, key), self.gen))
 
-    def upgrade(self, key, text):
-        """Подменить ещё не прозвучавшие фразы реплики key (обрабатывается в потоке озвучки)."""
+    def upgrade(self, key, text, grow=False):
+        """Подменить ещё не прозвучавшие фразы реплики key (обрабатывается в потоке озвучки).
+        grow — реплика дописалась в игре (не вариант редактора): заменяем, даже если текст стал намного длиннее."""
         if key and text:
             with self.up_lock:
-                self.ups.append((key, text))
+                self.ups.append((key, text, grow))
 
     def stop(self):
         if self.thread is None:
@@ -969,17 +1045,26 @@ class _Neural:
                 except Exception:
                     pass
 
-    def _apply_upgrade(self, job, text, player):
+    def _apply_upgrade(self, job, text, player, grow=False):
         """Фразы, которые ещё не начали звучать, заменить вариантом редактора (уже прозвучавшее — не трогаем)."""
         i = job["idx"]                                    # фразы [0, i) уже звучат/прозвучали
-        if i > 0:
+        if i > 0 and not grow:
             from . import editor
             rest_old = " ".join(job["chunks"][i - 1:])
             if editor.similarity(rest_old, text) < 0.35 and editor.similarity(" ".join(job["chunks"]), text) < 0.6:
                 return            # вариант редактора совсем другой — дочитываем как начали, без «склейки»
         played = " ".join(job["chunks"][:i]).strip()
         sent = [p.strip() for p in re.split(r"(?<=[.!?…])\s+", text) if p.strip()]
-        if played:
+        if played and grow:
+            # реплика дописалась: в полном тексте пропускаем столько слов, сколько уже прозвучало
+            from . import editor
+            need, got, words = len(editor._norm(played)), 0, text.split()
+            k = 0
+            while k < len(words) and got < need * 0.97:
+                got += len(editor._norm(words[k]))
+                k += 1
+            rest = [" ".join(words[k:])] if k < len(words) else []
+        elif played:
             done = [p for p in re.split(r"(?<=[.!?…])\s+", played) if p.strip()]
             n = len(done)
             if played.endswith((".", "!", "?", "…")):
@@ -1005,10 +1090,12 @@ class _Neural:
     def _take_upgrades(self, jobs, player):
         with self.up_lock:
             ups, self.ups = self.ups, []
-        for key, text in ups:
+        for key, text, grow in ups:
             for jb in jobs:
                 if jb and not jb["dead"] and jb.get("key") == key:
-                    self._apply_upgrade(jb, text, player)
+                    self._apply_upgrade(jb, text, player, grow)
+                    if grow:
+                        continue
                     try:
                         from . import editor
                         editor.stats["voice_up"] = editor.stats.get("voice_up", 0) + 1
