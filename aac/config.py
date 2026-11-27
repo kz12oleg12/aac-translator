@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "16.00"
+VERSION = "16.01"
 import sys as _sys
 FROZEN = bool(getattr(_sys, "frozen", False))      # собранная программа (AAC Translator.exe), без Python
 # папка программы (настройки, словарь, история, иконки): рядом с .exe или с aac_translator.py
@@ -223,8 +223,10 @@ SKIP_SYSTEM = False        # системные сообщения игры в �
 SHOW_INDICATOR = True      # маленький значок «● AAC: перевод вкл» поверх игры, пока включён автоперевод
 ANSWERS_DOCKED = False     # ответы одним окном с субтитрами (вплотную под ними)
 TTS_ENABLED = False        # озвучивать перевод субтитров
-TTS_ENGINE = "neural"     # "neural" — нейроголоса Microsoft (онлайн), "silero" — Silero (офлайн), "windows"
+TTS_ENGINE = "neural"     # "neural" — нейроголоса Microsoft (онлайн), "gemini" — Gemini TTS (онлайн, «играет»), "silero" — Silero (офлайн), "windows"
 TTS_NEURAL_VOICE = "ru-RU-SvetlanaNeural"
+TTS_GEMINI_VOICE = "Charon"           # Gemini TTS: голос рассказчика и реплик без имени
+TTS_GEMINI_MODEL = "gemini-3.1-flash-tts-preview"
 TTS_SILERO_VOICE = "xenia"   # офлайн-голос Silero: xenia, baya, kseniya, aidar, eugene
 TTS_VOICE = ""             # имя голоса Windows ("" — голос по умолчанию)
 TTS_RATE = 0               # скорость: от -10 (медленно) до 10 (быстро)
@@ -241,8 +243,8 @@ TTS_RUSSIAN_ONLY = False
 TTS_EXPRESSIVE = True      # интонация: «!» — живее и громче, «?» — выше, «…» — медленнее
 TTS_VARY_IN_GENDER = True  # у каждого мужчины/женщины свой голос; выкл — всем мужчинам один, всем женщинам один
 # голос для всех мужчин и для всех женщин (по движкам) — когда TTS_VARY_IN_GENDER выключено
-TTS_TYPE_VOICES = {"neural": {}, "silero": {}}   # голос для характера: {"m_old": "eugene", …}; нет — голос пола
-TTS_DEFAULT_VOICES = {"neural": {"m": "", "f": ""}, "silero": {"m": "", "f": ""}}   # персонажам — только русские голоса (без многоязычных с акцентом)
+TTS_TYPE_VOICES = {"neural": {}, "silero": {}, "gemini": {}}   # голос для характера: {"m_old": "eugene", …}; нет — голос пола
+TTS_DEFAULT_VOICES = {"neural": {"m": "", "f": ""}, "silero": {"m": "", "f": ""}, "gemini": {"m": "", "f": ""}}   # персонажам — только русские голоса (без многоязычных с акцентом)
 TTS_READ_NAME = False      # читать имя говорящего перед репликой
 
 # Слова интерфейса игры, которые попадают в область, но переводить их не нужно (кнопки и т.п.).

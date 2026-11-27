@@ -19,7 +19,7 @@ import sys
 import threading
 import time
 
-from . import config, core, tts_silero, voices
+from . import config, core, tts_gemini, tts_silero, voices
 
 # PowerShell-процесс, который держит синтезатор речи и читает команды построчно: «команда<TAB>текст».
 _PS_SCRIPT = r"""
@@ -286,6 +286,8 @@ def speak_subtitle(translation, seen=None, orig=None):
                     vp = None
     except Exception as e:
         core.log(f"Голоса персонажей: {e}", "error")
+    if config.TTS_ENGINE == "gemini":
+        vp = _gemini_vp(key, vp, info)
     if core.test_scene:
         _note_voice(key, vp, info)
     _key_box["key"] = _line_key(translation)
@@ -296,6 +298,30 @@ def speak_subtitle(translation, seen=None, orig=None):
 
 
 last_voice = None      # для «Тестовой сцены»: кто и каким голосом озвучен последним
+
+
+def _gemini_vp(key, vp, info):
+    """Gemini TTS: (голос, 0, режиссёрская подсказка) — кто говорит и как, словами."""
+    c = {}
+    if key:
+        try:
+            with voices._lock:
+                voices._load()
+                c = dict(voices._data["chars"].get(key) or {})
+        except Exception:
+            c = {}
+    g = voices.gender(c) if c else (info or {}).get("gender", "")
+    kind = c.get("type") or (info or {}).get("type", "")
+    kind = "" if kind == "adult" else kind
+    narrator = not key and not (info or {}).get("speaker") and not (info or {}).get("gender")
+    if not config.TTS_PER_CHARACTER:
+        voice = None                               # «один голос для всех» — основной голос, но играет роль
+    elif vp and vp[0]:
+        voice = vp[0]
+    else:
+        voice = None if narrator else (voices.line_voice(g, kind, "gemini") or (None,))[0]
+    style = tts_gemini.style_for(g, kind, (info or {}).get("mood", ""), narrator=narrator)
+    return (voice or config.TTS_GEMINI_VOICE, 0, style)
 
 
 def _note_voice(key, vp, info):
@@ -310,7 +336,8 @@ def _note_voice(key, vp, info):
         g = voices.gender(c) if c else (info or {}).get("gender", "")
         kind = c.get("type") or (info or {}).get("type", "")
         eng = config.TTS_ENGINE
-        pool = dict(tts_silero.VOICES) if eng == "silero" else dict(NEURAL_VOICES) if eng == "neural" else {}
+        pool = (dict(tts_silero.VOICES) if eng == "silero" else dict(NEURAL_VOICES) if eng == "neural"
+                else dict(tts_gemini.VOICES) if eng == "gemini" else {})
         if vp and vp[0]:
             vname = pool.get(vp[0], vp[0]).split(" — ")[0]
         else:
@@ -321,6 +348,8 @@ def _note_voice(key, vp, info):
                  (voices.TYPE_NAMES.get(kind, kind) + (f" ({c['type_src']})" if c.get("type_src") else "")) if kind
                  else ("характер: обычный" if key else ""),
                  f"голос {vname}" + (" · ниже" if shift < 0 else " · выше" if shift > 0 else "")]
+        if eng == "gemini" and vp and len(vp) > 2:
+            parts.append("Gemini: «" + vp[2].split(" as ", 1)[-1] + "»")
         fb = getattr(tts_silero, "fallback", None)
         if eng == "silero" and vp and vp[0] and tts_silero.is_cis(vp[0]) and fb:
             parts.append(f"доп. голос не работает — звучит {tts_silero.voice_name(fb['base'])}")
@@ -566,6 +595,12 @@ def engine_ready():
     """Готов ли выбранный нейродвижок (иначе читаем голосом Windows)."""
     if config.TTS_ENGINE == "neural":
         return neural_available()
+    if config.TTS_ENGINE == "gemini":
+        if not tts_gemini.ready() and not _silero_warned.get("gemini"):
+            _silero_warned["gemini"] = True
+            core.log("Gemini TTS: нет ключа Gemini (Перевод → Gemini → «добавить ключ»). Пока читаю нейроголосом "
+                     "Microsoft.", "warn")
+        return tts_gemini.ready() or neural_available()
     if config.TTS_ENGINE == "silero":
         if tts_silero.installed():
             return True
@@ -813,6 +848,9 @@ class _Neural:
         self.q.put(("noop", None, -1))
 
     def _warm_step(self, player):
+        if self.warm_req and self.loop and config.TTS_ENGINE == "gemini":
+            self.warm_req = False                  # не тратим лимит Gemini на прогрев
+            self.warmed = True
         if self.warm_req and self.loop:
             self.warm_req = False
             self.warmed = True
@@ -837,8 +875,10 @@ class _Neural:
     def _synth_coro(self, text, path_base, faster=False, voice_pitch=None):
         """Корутина синтеза фразы выбранным движком → путь к звуковому файлу."""
         extra = CATCHUP_RATE if faster else 0
-        pv, pitch = voice_pitch if voice_pitch else (None, 0)
+        pv, pitch = tuple(voice_pitch[:2]) if voice_pitch else (None, 0)
         mood = mood_of(text)
+        if config.TTS_ENGINE == "gemini":
+            return self._gemini_coro(text, path_base, voice_pitch, mood, extra)
         if config.TTS_ENGINE == "silero":
             d_rate, d_pitch = MOOD_SILERO.get(mood, (0, 0))
             voice, level = pv or config.TTS_SILERO_VOICE, int(config.TTS_RATE) + extra + d_rate
@@ -858,6 +898,33 @@ class _Neural:
             return path_base + ".mp3"
         return run()
 
+    def _gemini_coro(self, text, path_base, voice_pitch, mood, extra):
+        """Gemini TTS; не вышло (лимит, сеть, ключ) — эта фраза нейроголосом Microsoft того же пола."""
+        voice = (voice_pitch[0] if voice_pitch else None) or config.TTS_GEMINI_VOICE
+        style = voice_pitch[2] if voice_pitch and len(voice_pitch) > 2 else tts_gemini.style_for("", "", "", True)
+        if mood == "excl" and "shout" not in style:
+            style += ", with energy"
+        elif mood == "pause" and "," not in style.split(" as ", 1)[-1]:
+            style += ", slowly with pauses"
+
+        async def run():
+            loop = asyncio.get_running_loop()
+            try:
+                return await loop.run_in_executor(None, tts_gemini.synth, text, path_base + ".wav", voice, style)
+            except Exception as e:
+                now = time.time()
+                if now - tts_gemini.state["warned"] > 60:
+                    tts_gemini.state["warned"] = now
+                    core.log(f"Gemini TTS: {str(e)[:160]} — эту реплику читаю нейроголосом Microsoft", "warn")
+                if not neural_available():
+                    raise
+                g = tts_gemini.GENDER.get(voice, "m")
+                ev = voices.default_voice("neural", g) or voices.NEURAL_POOL[g][0]
+                t = re.sub(r"(?<=\w)\+|\+(?=[а-яёА-ЯЁ])", "", text)
+                await _synth_async(t, path_base + ".mp3", ev, _rate_str(extra))
+                return path_base + ".mp3"
+        return run()
+
     def _synth_futs(self, chunks, tag, faster, voice_pitch):
         async def timed(c, base):
             c = c.strip()
@@ -866,13 +933,15 @@ class _Neural:
             if hit:
                 return hit, time.time()
             path = await self._synth_coro(c, base, faster, voice_pitch)
-            _cache_put(key, path)
+            if not (config.TTS_ENGINE == "gemini" and not str(path).endswith(".wav")):   # запасной голос не кэшируем
+                _cache_put(key, path)
             return path, time.time()
         return [asyncio.run_coroutine_threadsafe(timed(c, os.path.join(self.dir, f"{tag}_{i}")), self.loop)
                 for i, c in enumerate(chunks)]
 
     def _new_job(self, text, seen, gen, faster=False, voice_pitch=None, key=None):
-        chunks = split_chunks(text)
+        # Gemini играет реплику целиком (одна интонация на всю фразу) — режем только очень длинные
+        chunks = split_chunks(text, 500, 500) if config.TTS_ENGINE == "gemini" else split_chunks(text)
         futs = self._synth_futs(chunks, f"g{gen % 4}", faster, voice_pitch)
         return {"gen": gen, "chunks": chunks, "futs": futs, "idx": 0, "cur": None, "next": None,
                 "seen": seen, "t0": time.time(), "dead": False, "faster": faster, "vp": voice_pitch, "key": key}
@@ -1090,4 +1159,6 @@ def voice_title():
         return neural_label(config.TTS_NEURAL_VOICE).split(" — ")[0] + " (нейроголос онлайн)"
     if config.TTS_ENGINE == "silero":
         return tts_silero.label(config.TTS_SILERO_VOICE).split(" — ")[0] + " (Silero, офлайн)"
+    if config.TTS_ENGINE == "gemini":
+        return config.TTS_GEMINI_VOICE + " (Gemini TTS, онлайн)"
     return config.TTS_VOICE or "голос Windows по умолчанию"

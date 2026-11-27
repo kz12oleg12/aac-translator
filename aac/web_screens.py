@@ -177,6 +177,8 @@ def _voice_list(eng):
         return [{"id": v, "name": lab} for v, lab in tts.NEURAL_VOICES]
     if eng == "silero":
         return [{"id": v, "name": lab} for v, lab in tts.tts_silero.VOICES]
+    if eng == "gemini":
+        return [{"id": v, "name": lab} for v, lab in tts.tts_gemini.VOICES]
     found = _win_voices["list"]
     if found is None:
         _win_voices["list"] = []
@@ -192,10 +194,12 @@ def _voice_list(eng):
 def _s_voice():
     from . import hotkeys, tts, voicepack, voices
     eng = config.TTS_ENGINE
-    cur = {"neural": config.TTS_NEURAL_VOICE, "silero": config.TTS_SILERO_VOICE}.get(eng, config.TTS_VOICE)
+    cur = {"neural": config.TTS_NEURAL_VOICE, "silero": config.TTS_SILERO_VOICE,
+           "gemini": config.TTS_GEMINI_VOICE}.get(eng, config.TTS_VOICE)
     chars = []
-    e2 = "silero" if eng == "silero" else "neural"
-    pool = dict(tts.tts_silero.VOICES) if e2 == "silero" else dict(tts.NEURAL_VOICES)
+    e2 = voices.ekey(eng)
+    pool = dict(tts.tts_silero.VOICES) if e2 == "silero" else dict(tts.tts_gemini.VOICES) if e2 == "gemini" \
+        else dict(tts.NEURAL_VOICES)
     for key, c in voices.all_chars()[:300]:
         g = voices.gender(c)
         if c.get("gender_manual") in ("m", "f"):
@@ -214,9 +218,9 @@ def _s_voice():
                       "type": voices.TYPE_NAMES.get(c.get("type", ""), ""), "addr": c.get("address", ""),
                       "type_id": c.get("type", ""), "type_manual": bool(c.get("type_manual"))})
     vpool = [{"id": v, "name": pool.get(v, v).split(" — ")[0], "g": g}
-             for g in ("f", "m") for v in (voices.SILERO_POOL if e2 == "silero" else voices.NEURAL_POOL)[g]]
+             for g in ("f", "m") for v in voices.pool_of(e2, g)]
     gpool = {g: [{"id": v, "name": pool.get(v, v).split(" — ")[0]}
-                 for v in (voices.SILERO_POOL if e2 == "silero" else voices.NEURAL_POOL)[g]] for g in ("m", "f")}
+                 for v in voices.pool_of(e2, g)] for g in ("m", "f")}
     gvoice = {g: (_safe(lambda g=g: voices.default_voice(e2, g)) or (gpool[g][0]["id"] if gpool[g] else ""))
               for g in ("m", "f")}
     mode = ("one" if not config.TTS_PER_CHARACTER else "each" if config.TTS_VARY_IN_GENDER else "gender")
@@ -230,6 +234,7 @@ def _s_voice():
             "chars": chars, "char_voices": vpool,
             "type_voices": _type_voices(),
             "ed_stress": config.EDITOR_STRESS,
+            "gemini_key": bool(_safe(tts.tts_gemini.ready)),
             "stress": [{"k": k, "v": v} for k, v in reversed(list(core.SETTINGS.get("stress", {}).items()))][:300], "game": _clean(_safe(lambda: __import__("aac.profiles",
                                                                                          fromlist=["x"]).name()))}
 
@@ -286,7 +291,7 @@ def _screens(pid):
 
 def _type_voices():
     from . import voices
-    eng = "silero" if config.TTS_ENGINE == "silero" else "neural"
+    eng = voices.ekey()
     d = dict(config.TTS_TYPE_VOICES.get(eng) or {})
     for g in ("m", "f"):
         d[f"{g}_adult"] = voices.default_voice(eng, g)
@@ -408,6 +413,7 @@ def _save_tts():
     core.save_settings(tts_enabled=config.TTS_ENABLED, tts_read_name=config.TTS_READ_NAME,
                        tts_voice=config.TTS_VOICE, tts_engine=config.TTS_ENGINE,
                        tts_finish_line=config.TTS_FINISH_LINE, tts_neural_voice=config.TTS_NEURAL_VOICE,
+                       tts_gemini_voice=config.TTS_GEMINI_VOICE,
                        tts_silero_voice=config.TTS_SILERO_VOICE, tts_rate=config.TTS_RATE,
                        tts_volume=config.TTS_VOLUME, tts_per_character=config.TTS_PER_CHARACTER,
                        tts_russian_only=config.TTS_RUSSIAN_ONLY)
@@ -595,7 +601,7 @@ def do(name, arg, app):
         if not config.TTS_ENABLED:
             tts.stop()
         _save_tts()
-    elif name == "tts_engine" and a.get("v") in ("neural", "silero", "windows"):
+    elif name == "tts_engine" and a.get("v") in ("neural", "silero", "gemini", "windows"):
         from . import tts
         tts.stop()
         config.TTS_ENGINE = a["v"]
@@ -607,6 +613,8 @@ def do(name, arg, app):
             config.TTS_NEURAL_VOICE = a.get("v") or config.TTS_NEURAL_VOICE
         elif eng == "silero":
             config.TTS_SILERO_VOICE = a.get("v") or config.TTS_SILERO_VOICE
+        elif eng == "gemini":
+            config.TTS_GEMINI_VOICE = a.get("v") or config.TTS_GEMINI_VOICE
         else:
             config.TTS_VOICE = a.get("v") or ""
         _save_tts()
@@ -624,7 +632,7 @@ def do(name, arg, app):
         _bg(tts.say_test, None, (str(a.get("v") or "").strip()[:300] or None))
     elif name == "voice_preview" and a.get("v") is not None:
         from . import tts
-        if config.TTS_ENGINE in ("neural", "silero"):
+        if config.TTS_ENGINE in ("neural", "silero", "gemini"):
             _bg(tts.say_test, (a["v"], 0), "Привет! Так звучит этот голос.")
         else:
             _bg(tts.say_test, None, "Привет! Так звучит этот голос.")
@@ -636,10 +644,10 @@ def do(name, arg, app):
         tts.apply_settings()
     elif name == "gender_voice" and a.get("g") in ("m", "f") and a.get("v"):
         from . import voices
-        voices.set_default_voice("silero" if config.TTS_ENGINE == "silero" else "neural", a["g"], a["v"])
+        voices.set_default_voice(voices.ekey(), a["g"], a["v"])
     elif name == "gender_test" and a.get("g") in ("m", "f"):
         from . import tts, voices
-        e2 = "silero" if config.TTS_ENGINE == "silero" else "neural"
+        e2 = voices.ekey()
         vid = voices.default_voice(e2, a["g"])
         _bg(tts.say_test, (vid, 0) if vid else None, "Так звучит мужской голос персонажей." if a["g"] == "m"
             else "Так звучит женский голос персонажей.")
@@ -651,20 +659,21 @@ def do(name, arg, app):
         voices.set_manual(a.get("key"), gender_value=a.get("v") if a.get("v") in ("m", "f", "") else "")
     elif name == "char_voice":
         from . import voices
-        voices.set_manual(a.get("key"), voice=a.get("v") or "", engine="silero" if config.TTS_ENGINE == "silero"
-                          else "neural")
+        voices.set_manual(a.get("key"), voice=a.get("v") or "", engine=voices.ekey())
     elif name == "type_play":
         from . import tts, voices
         g = a.get("g") if a.get("g") in ("m", "f") else "m"
         k = a.get("k") or ""
         vp = voices.line_voice(g, k) or None
+        if config.TTS_ENGINE == "gemini" and vp:
+            vp = (vp[0], 0, tts.tts_gemini.style_for(g, k))
         names = {"": "Обычный", "young": "Молодой", "old": "Пожилой", "child": "Ребёнок", "noble": "Знатный",
                  "monster": "Чудовище"}
         _bg(tts.say_test, vp, f"{names.get(k, '')} голос. Путник, постой! Мне нужна твоя помощь.")
     elif name == "type_voice":
         from . import voices
         g = a.get("g") if a.get("g") in ("m", "f") else "m"
-        voices.set_type_voice("silero" if config.TTS_ENGINE == "silero" else "neural", g, a.get("k") or "", a.get("v") or "")
+        voices.set_type_voice(voices.ekey(), g, a.get("k") or "", a.get("v") or "")
     elif name == "char_type":
         from . import voices
         voices.set_type_manual(a.get("key"), a.get("v") or "")
@@ -682,8 +691,11 @@ def do(name, arg, app):
         voices.forget(a.get("key"))
     elif name == "char_play":
         from . import tts, voices
-        e2 = "silero" if config.TTS_ENGINE == "silero" else "neural"
-        _bg(tts.say_test, voices.voice_for(a.get("key"), e2), f"{a.get('name', '')}. Привет, путник! Так звучит мой голос.")
+        e2 = voices.ekey()
+        vp = voices.voice_for(a.get("key"), e2)
+        if e2 == "gemini":
+            vp = tts._gemini_vp(a.get("key"), vp, None)
+        _bg(tts.say_test, vp, f"{a.get('name', '')}. Привет, путник! Так звучит мой голос.")
     # --- история ---
     elif name == "hist_play":
         from . import tts

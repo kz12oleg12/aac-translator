@@ -48,6 +48,22 @@ class _SileroPool:
 
 
 SILERO_POOL = _SileroPool()
+ENGINES = ("neural", "silero", "gemini")
+
+
+def ekey(engine=None):
+    """Движок, для которого хранятся голоса персонажей ("windows" → как у нейроголосов)."""
+    engine = engine or config.TTS_ENGINE
+    return engine if engine in ENGINES else "neural"
+
+
+def pool_of(engine, g):
+    if engine == "silero":
+        return SILERO_POOL[g]
+    if engine == "gemini":
+        from . import tts_gemini
+        return tts_gemini.POOL[g]
+    return NEURAL_POOL[g]
 NEURAL_PITCH = [-6, -3, 0, 3, 6]        # сдвиг высоты, Гц
 SILERO_PITCH = [-1, 0, 1]               # low / medium / high
 
@@ -398,15 +414,24 @@ TYPE_NAMES = {"young": "молодой", "old": "пожилой", "child": "ре
 TYPE_PITCH = {"neural": {"old": -18, "monster": -32, "child": 26, "young": 8, "noble": -6},     # Гц
               # у Silero разметка высоты почти не слышна — характер задаём «тембром» (десятки: -30…+20),
               # звук потом растягивается/сжимается (tts_silero._timbre): ниже и медленнее или выше и быстрее
-              "silero": {"old": -20, "monster": -30, "child": 20, "young": 10, "noble": -10}}
+              "silero": {"old": -20, "monster": -30, "child": 20, "young": 10, "noble": -10},
+              # Gemini высоту не сдвигаем: характер ему говорится словами (tts_gemini.style_for)
+              "gemini": {}}
 
 
 def line_voice(g, kind, engine=None):
     """Голос для реплики без известного персонажа, когда ИИ-редактор понял пол и характер говорящего
     (старик, чудовище, ребёнок…): голос нужного пола со сдвигом высоты. None — читать как обычно."""
     engine = engine or config.TTS_ENGINE
-    if engine not in ("neural", "silero") or (g not in ("m", "f") and not kind):
+    if engine not in ENGINES or (g not in ("m", "f") and not kind):
         return None
+    if engine == "gemini":
+        from . import tts_gemini
+        if g not in ("m", "f"):
+            return None
+        k = "" if kind == "adult" else (kind or "")
+        return (type_voice(engine, g, k) if k else "") or (default_voice(engine, g) if not k else "") \
+            or tts_gemini.type_voice(g, k), 0
     shift = TYPE_PITCH["neural" if engine == "neural" else "silero"].get(kind, 0)
     if g not in ("m", "f"):
         return None if not shift else (None, shift)
@@ -492,7 +517,7 @@ def _line_of(text):
 def voice_for(key, engine=None, auto_only=False):
     """(голос, сдвиг высоты) для персонажа на текущем движке; None — читать основным голосом."""
     engine = engine or config.TTS_ENGINE
-    if not key or engine not in ("neural", "silero"):
+    if not key or engine not in ENGINES:
         return None
     with _lock:
         _load()
@@ -502,6 +527,21 @@ def voice_for(key, engine=None, auto_only=False):
         g = gender(c)
         manual = c.get(f"voice_{engine}")
     h = zlib.crc32(key.encode("utf-8"))
+    if engine == "gemini":
+        from . import tts_gemini
+        kind = "" if c.get("type") == "adult" else c.get("type", "")
+        if manual and not auto_only:
+            return manual, 0
+        tv = type_voice(engine, g, kind) if kind else ""
+        if tv:
+            return tv, 0
+        dv = default_voice(engine, g)
+        if dv and not kind:
+            return dv, 0
+        if kind or not config.TTS_VARY_IN_GENDER:
+            return tts_gemini.type_voice(g, kind) if kind or not dv else dv, 0
+        pool = [v for v in tts_gemini.POOL[g] if v != config.TTS_GEMINI_VOICE]
+        return pool[h % len(pool)], 0
     if engine == "neural":
         pool, pitches, main = NEURAL_POOL[g], NEURAL_PITCH, config.TTS_NEURAL_VOICE
     else:

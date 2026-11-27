@@ -66,6 +66,7 @@ def apply_view_settings():
     config.TTS_RUSSIAN_ONLY = bool(core.SETTINGS.get("tts_russian_only", config.TTS_RUSSIAN_ONLY))
     config.TTS_ENGINE = str(core.SETTINGS.get("tts_engine", config.TTS_ENGINE))
     config.TTS_NEURAL_VOICE = str(core.SETTINGS.get("tts_neural_voice", config.TTS_NEURAL_VOICE))
+    config.TTS_GEMINI_VOICE = str(core.SETTINGS.get("tts_gemini_voice", config.TTS_GEMINI_VOICE))
     config.TTS_RATE = int(core.SETTINGS.get("tts_rate", config.TTS_RATE))
     config.TTS_PARAGRAPH_PAUSE = float(core.SETTINGS.get("tts_paragraph_pause", config.TTS_PARAGRAPH_PAUSE))
     config.TTS_VOLUME = int(core.SETTINGS.get("tts_volume", config.TTS_VOLUME))

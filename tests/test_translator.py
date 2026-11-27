@@ -3036,6 +3036,79 @@ def test_type_table_rules(monkey):
     assert v("gorran")[0] in voices.SILERO_POOL.auto("m"), "«обычный» не выбран — у каждого свой"
 
 
+def test_gemini_tts(monkey):
+    """Gemini TTS: голос «играет» по подсказке; ответ PCM → wav; лимит/ошибка — фраза нейроголосом Microsoft."""
+    import base64 as _b64
+    from aac import tts, tts_gemini, voices
+    sent = []
+
+    class R:
+        def __init__(self, code, data=None, text=""):
+            self.status_code, self._d, self.text = code, data, text
+
+        def json(self):
+            return self._d
+
+    pcm = b"\x01\x00" * 24000
+    ok = {"candidates": [{"content": {"parts": [{"inlineData": {"mimeType": "audio/L16;rate=24000",
+                                                               "data": _b64.b64encode(pcm).decode()}}]}}]}
+
+    def post(url, params=None, json=None, timeout=None):
+        sent.append((url, json))
+        if "3.1" in url:
+            return R(404, None, "not found")             # первая модель отключена — берём следующую
+        return R(200, ok)
+    monkey(tts_gemini.requests, "post", post)
+    monkey(tts_gemini.config, "API_KEY", "test-key")
+    monkey(tts_gemini, "state", {"cool_until": 0.0, "dead": set(), "warned": 0.0, "ok": True, "last_error": ""})
+    d = tempfile.mkdtemp(dir=TMP)
+    out = tts_gemini.synth("Привет, п+утник!", os.path.join(d, "a.wav"), "Sadaltager",
+                           tts_gemini.style_for("m", "old", "sad"))
+    with open(out, "rb") as f:
+        head = f.read(44)
+    assert head[:4] == b"RIFF" and os.path.getsize(out) == 44 + len(pcm)
+    url, body = sent[-1]
+    assert "2.5-flash-preview-tts" in url and "gemini-3.1-flash-tts-preview" in tts_gemini.state["dead"]
+    txt = body["contents"][0]["parts"][0]["text"]
+    assert "old man" in txt and "sad" in txt and txt.endswith("Привет, путник!"), txt       # «+» убран
+    assert body["generationConfig"]["speechConfig"]["voiceConfig"]["prebuiltVoiceConfig"]["voiceName"] == "Sadaltager"
+    # лимит — пауза, дальше сразу ошибка (озвучка возьмёт запасной голос)
+    monkey(tts_gemini.requests, "post", lambda *a, **k: R(429, None, "quota"))
+    for _ in range(2):
+        try:
+            tts_gemini.synth("Ещё", os.path.join(d, "b.wav"), "Kore")
+            assert False
+        except RuntimeError as e:
+            assert "лимит" in str(e)
+    # голоса персонажей: характер → голос, подходящий под характер; выбранный в таблице — главный
+    monkey(voices, "FILE", os.path.join(d, "characters.json"))
+    monkey(voices, "_data", {"loaded": True, "chars": {"pip": {"en": "Pip", "ai": "m", "type": "child"},
+                                                        "ys": {"en": "Ysolde", "ai": "f", "type": "old"}}})
+    monkey(voices.config, "TTS_TYPE_VOICES", {"neural": {}, "silero": {}, "gemini": {"f_old": "Sulafat"}})
+    monkey(voices.config, "TTS_DEFAULT_VOICES", {"neural": {}, "silero": {}, "gemini": {}})
+    assert voices.voice_for("pip", "gemini") == ("Fenrir", 0)
+    assert voices.voice_for("ys", "gemini") == ("Sulafat", 0)
+    monkey(tts.config, "TTS_ENGINE", "gemini")
+    monkey(tts.config, "TTS_PER_CHARACTER", True)
+    vp = tts._gemini_vp("pip", voices.voice_for("pip", "gemini"), None)
+    assert vp[0] == "Fenrir" and "boy" in vp[2]
+    vp = tts._gemini_vp(None, None, None)
+    assert vp[0] == tts.config.TTS_GEMINI_VOICE and "storyteller" in vp[2]
+    # фраза не синтезировалась в Gemini — нейроголос Microsoft того же пола
+    import asyncio as _aio
+    monkey(tts_gemini, "synth", lambda *a: (_ for _ in ()).throw(RuntimeError("лимит")))
+    monkey(tts, "neural_available", lambda: True)
+    got = {}
+
+    async def fake_edge(text, path, voice, rate, *a, **k):
+        got["voice"] = voice
+        open(path, "wb").write(b"x" * 300)
+        return path
+    monkey(tts, "_synth_async", fake_edge)
+    p = _aio.run(tts._neural._gemini_coro("Ура!", os.path.join(d, "c"), ("Kore", 0, "x"), "excl", 0))
+    assert p.endswith(".mp3") and got["voice"] in voices.NEURAL_POOL["f"] + [voices.default_voice("neural", "f")]
+
+
 def test_netfix(monkey):
     """Рабочий VPN: Python доверяет сертификатам Windows (truststore), проверка сертификатов не отключается."""
     import ssl
