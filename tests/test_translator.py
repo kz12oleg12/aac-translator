@@ -223,7 +223,7 @@ def test_google_then_microsoft(monkey):
         def get(self, url, timeout=None):
             return R(200, text='IG:"ABC" data-iid="translator.5028" params_AbusePreventionHelper = [1,"tok",3600000]')
 
-        def post(self, url, params=None, data=None, timeout=None):
+        def post(self, url, params=None, data=None, timeout=None, headers=None):
             return R(200, [{"translations": [{"text": "Где собираются пираты?"}]}])
 
     monkey(T.requests, "get", get)
@@ -2887,6 +2887,44 @@ def test_web_panel(monkey):
     core.log("проверка журнала панели", "ok")
     req = urllib.request.Request(base + "api/log", headers={"X-Token": tok})
     assert any(e["msg"] == "проверка журнала панели" for e in _json.loads(urllib.request.urlopen(req, timeout=5).read()))
+
+
+def test_bing_retry_401(monkey):
+    """Bing ответил 401 {"ShowCaptcha":false} (ключи протухли) — программа сама берёт новые и переводит."""
+    from aac import mt
+    if not hasattr(mt, "_bing_keys"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    calls = {"get": 0, "post": []}
+
+    class R:
+        def __init__(self, code, data, text=""):
+            self.status_code, self._d, self.text = code, data, text
+
+        def json(self):
+            if self._d is None:
+                raise ValueError
+            return self._d
+
+    class S:
+        def __init__(self):
+            self.headers = {}
+
+        def get(self, url, **kw):
+            calls["get"] += 1
+            return R(200, None, f'IG:"AB{calls["get"]}" data-iid="translator.5028" '
+                                'params_AbusePreventionHelper = [1700,"tok",3600000]')
+
+        def post(self, url, **kw):
+            calls["post"].append(kw["headers"].get("Referer"))
+            if len(calls["post"]) == 1:
+                return R(401, {"ShowCaptcha": False}, '{"ShowCaptcha":false}')
+            return R(200, [{"translations": [{"text": "Привет"}]}])
+
+    monkey(mt.requests, "Session", S)
+    monkey(mt, "_bing", {"exp": 0.0})
+    assert mt._mt_microsoft_bing("Hello", "en", "ru") == "Привет"
+    assert calls["get"] == 2 and calls["post"] == ["https://www.bing.com/translator"] * 2
 
 
 def test_netfix(monkey):

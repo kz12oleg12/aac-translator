@@ -86,34 +86,42 @@ def _mt_microsoft_edge(text, sl=None, tl=None):
     return r.json()[0]["translations"][0]["text"]
 
 
+def _bing_keys():
+    """Ключи страницы bing.com/translator (живут до часа)."""
+    sess = requests.Session()
+    sess.headers.update({"User-Agent": _UA, "Accept-Language": "en-US,en;q=0.9,ru;q=0.8"})
+    r = sess.get("https://www.bing.com/translator", timeout=config.REQUEST_TIMEOUT)
+    html = r.text
+    ig = re.search(r'IG:"([A-Za-z0-9]+)"', html)
+    iid = re.search(r'data-iid="([^"]+)"', html)
+    aph = re.search(r'params_AbusePreventionHelper\s*=\s*\[(\d+),"([^"]+)",(\d+)', html)
+    if not (ig and aph):
+        raise core.ApiError(f"страница Bing: не нашёл ключи (код {r.status_code})")
+    _bing.update(sess=sess, ig=ig.group(1), iid=(iid.group(1) if iid else "translator.5028"),
+                 key=aph.group(1), token=aph.group(2), n=0,
+                 exp=time.time() + min(int(aph.group(3)) / 1000, 3000) - 60)
+
+
 def _mt_microsoft_bing(text, sl=None, tl=None):
-    """Способ 2: как переводит страница bing.com/translator."""
-    if time.time() > _bing["exp"]:
-        sess = requests.Session()
-        sess.headers["User-Agent"] = _UA
-        r = sess.get("https://www.bing.com/translator", timeout=config.REQUEST_TIMEOUT)
-        html = r.text
-        ig = re.search(r'IG:"([A-Za-z0-9]+)"', html)
-        iid = re.search(r'data-iid="([^"]+)"', html)
-        aph = re.search(r'params_AbusePreventionHelper\s*=\s*\[(\d+),"([^"]+)",(\d+)', html)
-        if not (ig and aph):
-            raise core.ApiError(f"страница Bing: не нашёл ключи (код {r.status_code})")
-        _bing.update(sess=sess, ig=ig.group(1), iid=(iid.group(1) if iid else "translator.5028"),
-                     key=aph.group(1), token=aph.group(2),
-                     exp=time.time() + min(int(aph.group(3)) / 1000, 3000) - 60)
-    r = _bing["sess"].post("https://www.bing.com/ttranslatev3",
-                           params={"isVertical": "1", "IG": _bing["ig"], "IID": _bing["iid"] + ".1"},
-                           data={"fromLang": sl or config.SOURCE_LANG, "to": tl or config.TARGET_LANG_CODE, "text": text,
-                                 "token": _bing["token"], "key": _bing["key"]},
-                           timeout=config.REQUEST_TIMEOUT)
-    if r.status_code == 429:
-        raise core.RateLimited("Bing ограничил запросы")
-    try:
-        data = r.json()
-        return data[0]["translations"][0]["text"]
-    except Exception:
-        _bing["exp"] = 0.0  # ключи устарели — в следующий раз получим новые
-        raise core.ApiError(f"Bing-перевод: код {r.status_code}, ответ {r.text[:120]!r}")
+    """Способ 2: как переводит страница bing.com/translator. Код 401 — ключи протухли: берём новые и пробуем ещё раз."""
+    for attempt in range(2):
+        if attempt or time.time() > _bing["exp"]:
+            _bing_keys()
+        _bing["n"] = _bing.get("n", 0) + 1
+        r = _bing["sess"].post("https://www.bing.com/ttranslatev3",
+                               params={"isVertical": "1", "IG": _bing["ig"], "IID": f'{_bing["iid"]}.{_bing["n"]}'},
+                               data={"fromLang": sl or config.SOURCE_LANG, "to": tl or config.TARGET_LANG_CODE,
+                                     "text": text, "token": _bing["token"], "key": _bing["key"], "tryFetchingGenderDebiasedTranslations": "true"},
+                               headers={"Referer": "https://www.bing.com/translator", "Origin": "https://www.bing.com"},
+                               timeout=config.REQUEST_TIMEOUT)
+        if r.status_code == 429:
+            raise core.RateLimited("Bing ограничил запросы")
+        try:
+            return r.json()[0]["translations"][0]["text"]
+        except Exception:
+            _bing["exp"] = 0.0  # ключи устарели — в следующий раз получим новые
+            if r.status_code != 401 or attempt:
+                raise core.ApiError(f"Bing-перевод: код {r.status_code}, ответ {r.text[:120]!r}")
 
 
 def _mt_microsoft(text, sl=None, tl=None):
