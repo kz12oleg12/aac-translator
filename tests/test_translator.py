@@ -2194,8 +2194,8 @@ def test_test_scene(monkey):
         v1, v2 = V.frame(100.0), V.frame(101.5)
         assert v1.size == (640, 360) and _IC.difference(v1, v2).getbbox() is not None
         assert _IC.difference(v1.crop((0, top, 640, 360)), v2.crop((0, top, 640, 360))).getbbox() is None
-        M = testscene.Living("mentor", 640, 360)            # ролика нет — оживление картинки
-        assert M.video is None
+        for _bg in {bg for _, _, bg in testscene.SCRIPT}:     # у каждого кадра — свой ролик
+            assert os.path.exists(os.path.join(testscene.IMG_DIR, _bg + ".webp")), _bg
         sc.toggle_alive(); assert not sc.alive
         sc.toggle_alive(); assert sc.alive
         h0 = sc.stage.winfo_height()
