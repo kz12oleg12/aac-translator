@@ -664,7 +664,10 @@ def test_second_subs_region(monkey):
     T.set("SETTINGS", {})
     T.load_hotkeys()
     T.set("region", (150, 700, 700, 150))
+    from aac import core as _core
+    _core.auto_on.clear()          # слежение за экраном не должно вмешиваться (на машине проверки есть свой текст)
     app = T.App()
+    _core.auto_on.clear()
     res = {}
 
     def step():
