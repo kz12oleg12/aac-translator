@@ -11,25 +11,69 @@ import tkinter as tk
 from . import config, core
 
 PID = "testscene"
-# (имя, реплика); реплика без имени — рассказчик. Отрывок одной истории: в ней заняты все голоса —
+# (имя, реплика); реплика без имени — рассказчик. «Тайна старого карьера», глава первая: в ней заняты все голоса —
 # девушка, старуха, старик, барон, мальчик, чудовище, торговец.
 SCRIPT = [
-    ("", "Night falls over Emberhold. A low rumble echoes from the old quarry beyond the walls."),
-    ("Lyra", "There you are! I was starting to think you'd gotten lost in the marsh."),
-    ("Lyra", "I came back as soon as I heard the bells. I was so worried about you."),
-    ("Elder Bram", "Quiet, both of you. I have lived in this town for seventy years, and I know that sound."),
-    ("Old Rotild", "Bram is right. My grandmother told me about it. The quarry golem is waking up."),
-    ("Old Rotild", "The archive lost 12 scrolls last night. Someone took the binding runes on purpose."),
-    ("Baron Alderich", "Enough! I am the lord of this keep, and I will not have rumors spread in my hall."),
-    ("Baron Alderich", "Guards, close the gates. No one leaves Emberhold until morning."),
-    ("Tim", "Mister, mister! I saw it! A big stone monster near the well, taller than the church!"),
-    ("Lyra", "Tim, stay with your mother. I'll go with the stranger. I'm not afraid."),
-    ("Merchant Gorran", "Wait, friend! Potions, three for 50 gold. Each one restores 40% HP. You'll need them."),
-    ("Stone Golem", "WHO... DISTURBS... MY... SLEEP?"),
-    ("Stone Golem", "THE RUNES... ARE GONE. NOW... EMBERHOLD... WILL... FALL."),
-    ("Elder Bram", "Run! Get the children inside, now!"),
-    ("Lyra", "No. I found the runes. Give me a minute, and I'll put him back to sleep."),
-    ("", "The ground stops shaking. Somewhere a bird starts to sing again."),
+    # Сцена 1. Тревожные новости — центральная площадь
+    ("", "A small medieval village, late evening. The villagers have gathered in the main square."),
+    ("Tim", "Lyra! Lyra! There's something huge in the quarry! I saw it myself! It glows orange!"),
+    ("Lyra", "Easy, Tim. What exactly did you see?"),
+    ("Tim", "A giant stone monster! It was moving! And I think it was looking right at me!"),
+    ("Merchant Gorran", "A stone monster? Ha! I hope it's not here to buy my potions. Business has been bad enough today."),
+    ("Lyra", "Gorran, this is no time for jokes."),
+    ("Merchant Gorran", "I'm not joking. If it comes to the market, it'd better pay!"),
+    # Сцена 2. Старые легенды — старая библиотека
+    ("Old Rotild", "A stone golem... I had hoped those legends would stay on the pages of books."),
+    ("Lyra", "Do you know what this creature is?"),
+    ("Old Rotild", "Many years ago, a ritual was performed in the old quarry. They say the ancient masters tried to awaken a guardian to protect the village."),
+    ("Elder Bram", "I remember that story. My father told me the golem was made to protect us, but its creators vanished."),
+    ("Lyra", "So it might not be our enemy?"),
+    ("Old Rotild", "Perhaps. But if its awakening was no accident, we are in great danger."),
+    # Сцена 3. Встреча с бароном — замок барона
+    ("Baron Alderich", "I have heard your stories. And I must say, this village panics far too easily."),
+    ("Lyra", "Tim saw the golem with his own eyes. We have to check the quarry."),
+    ("Baron Alderich", "My castle holds records of the old ritual. But they are kept in the sealed archive."),
+    ("Elder Bram", "Then open the archive. This is no time for your court games, Baron."),
+    ("Baron Alderich", "Watch your tongue, old man! But... very well. I will let you in."),
+    ("Merchant Gorran", "Wonderful! Maybe we'll find some treasure while we're at it?"),
+    ("Lyra", "Gorran, you're staying here."),
+    ("Merchant Gorran", "As you say. But if you come back without buying anything, no discounts!"),
+    # Сцена 4. Каменный страж — старый карьер
+    ("", "The heroes reach the quarry. A huge golem towers among the rocks. Its eyes glow orange."),
+    ("Tim", "That's it! That's the one!"),
+    ("Lyra", "Everyone, stay back. I'll try to talk to it."),
+    ("Elder Bram", "Careful, Lyra. We don't know what drives it."),
+    ("Lyra", "Guardian! We have not come to fight. Why have you awakened?"),
+    ("", "The golem slowly turns its head. A hollow voice rumbles from its chest."),
+    ("Stone Golem", "PROTECTION... ARTIFACT... BROKEN..."),
+    ("Old Rotild", "The artifact! Now it all makes sense. Someone broke the seal!"),
+    ("Baron Alderich", "Impossible... This was never supposed to happen!"),
+    ("Lyra", "Baron, what are you hiding?"),
+    ("Baron Alderich", "I... I ordered my men to search the quarry. We were looking for ancient treasure."),
+    ("Elder Bram", "You woke the guardian for gold?!"),
+    ("Stone Golem", "INTRUDERS... MUST... LEAVE..."),
+    ("", "The golem takes a step forward. The ground begins to shake."),
+    # Сцена 5. Неожиданная помощь
+    ("", "Gorran appears from behind the rocks with a bag of potions."),
+    ("Merchant Gorran", "Hey! I brought something useful! I hope you're not planning to die before you pay for my potions!"),
+    ("Lyra", "Gorran?! I told you to stay in the village!"),
+    ("Merchant Gorran", "And I thought you might need some help. I've got something special."),
+    ("Old Rotild", "That potion... Where did you get it?"),
+    ("Merchant Gorran", "Let's just say I know how to find interesting goods."),
+    ("Stone Golem", "ARTIFACT... RETURN..."),
+    ("Lyra", "I think it wants us to put the artifact back."),
+    ("Elder Bram", "Then we still have a chance to set things right."),
+    # Финал. Новое приключение
+    ("", "The heroes look at an ancient passage hidden behind the rocks of the quarry."),
+    ("Lyra", "We must find the artifact."),
+    ("Baron Alderich", "I will send my men to search. And... I admit my mistake."),
+    ("Old Rotild", "The old records mention a temple beyond the northern mountains. Perhaps the answer lies there."),
+    ("Tim", "Can I come with you too?"),
+    ("Elder Bram", "Grow up a little first, young hero."),
+    ("Merchant Gorran", "And I'll get the supplies ready. For a reasonable fee, of course!"),
+    ("Lyra", "Then it's settled. We set out at dawn."),
+    ("", "So began a journey that would change the fate of the village. But none of the heroes knew yet what secret lay beyond the northern mountains..."),
+    ("", "End of Chapter One."),
 ]
 
 BG, BOX, NAME, TEXT, MUTED = "#151922", "#0b0d12", "#e8c170", "#f2f2f2", "#8a8f9c"
