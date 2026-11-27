@@ -109,6 +109,82 @@ class Pill(getattr(tk, "Canvas", object)):
 SUB_TOP, SUB_BOTTOM, SUB_SIDE = 0.775, 0.985, 0.11     # где на «экране игры» субтитры (доли кадра)
 
 
+class Living:
+    """Оживление неподвижного кадра без нейросетей: огни (фонари, факелы, глаза голема) мерцают вразнобой,
+    кадр едва заметно плывёт. Низ кадра под субтитрами не меняется — программа читает их как обычно."""
+    MARGIN = 0.025                       # запас по краям для «плавания»
+
+    def __init__(self, bg, W, H):
+        from PIL import Image, ImageFilter
+        self.W, self.H = W, H
+        m = self.m = max(4, int(W * self.MARGIN))
+        BW, BH = W + 2 * m, H + 2 * m
+        path = os.path.join(IMG_DIR, bg + ".jpg")
+        if os.path.exists(path):
+            im = Image.open(path).convert("RGB")
+            k = max(BW / im.width, BH / im.height)
+            im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))), Image.LANCZOS)
+            x, y = (im.width - BW) // 2, (im.height - BH) // 2
+            im = im.crop((x, y, x + BW, y + BH))
+        else:
+            im = Image.new("RGB", (BW, BH), "#1d2230")
+        self.base = im
+        # огни: яркие тёплые пятна (по уменьшенной копии), три группы — мерцают каждая в своём ритме
+        sw, sh = 320, max(1, int(320 * BH / BW))
+        small = im.resize((sw, sh), Image.BILINEAR)
+        px = small.load()
+        cell = 18
+        groups = [Image.new("L", (sw, sh), 0) for _ in range(3)]
+        gp = [g.load() for g in groups]
+        top_band = int(sh * (SUB_TOP - 0.08))          # в полосе субтитров огни не трогаем
+        for y in range(min(sh, top_band)):
+            for x in range(sw):
+                r, g, b = px[x, y]
+                if r > 170 and r >= g >= b and r - b > 60 and r + g > 330:
+                    gp[(x // cell + 2 * (y // cell)) % 3][x, y] = min(255, (r + g - 300) * 2)
+        self.glow = []
+        for g in groups:
+            g = g.filter(ImageFilter.GaussianBlur(3)).resize((BW, BH), Image.BILINEAR)
+            g = g.point(lambda v: min(255, v * 2))
+            warm = Image.new("RGB", (BW, BH), (255, 170, 80))
+            self.glow.append(Image.composite(warm, Image.new("RGB", (BW, BH), 0), g))
+        self.has_glow = any(g.getbbox() for g in groups)
+        # затемнение под субтитры — неподвижное, по окну
+        top = int(H * (SUB_TOP - 0.10))
+        sh_ = Image.new("L", (1, H), 0)
+        for yy in range(top, H):
+            sh_.putpixel((0, yy), min(215, int(215 * (yy - top) / max(1, H * 0.12))))
+        self.shade = sh_.resize((W, H))
+        self.black = Image.new("RGB", (W, H), 0)
+        # к полосе субтитров кадр плавно «останавливается»: ниже начала затемнения — неподвижная картинка
+        self.still_y = top
+        ramp = Image.new("L", (1, H), 0)
+        span = max(1, int(H * 0.08))
+        for yy in range(top, H):
+            ramp.putpixel((0, yy), min(255, int(255 * (yy - top) / span)))
+        self.ramp = ramp.resize((W, H))
+        self.still = im.crop((m, m, m + W, m + H))
+
+    def frame(self, t):
+        import math
+        from PIL import Image, ImageChops
+        W, H, m = self.W, self.H, self.m
+        if t:
+            dx = int(round(m + m * 0.4 * math.sin(t / 9.0)))
+            dy = int(round(m + m * 0.25 * math.sin(t / 13.0 + 1.3)))
+        else:
+            dx = dy = m
+        im = self.base
+        if t and self.has_glow:
+            for i, g in enumerate(self.glow):
+                a = 0.10 + 0.08 * math.sin(t * (2.1 + i * 0.7) + i * 2.0) + 0.05 * math.sin(t * (5.3 + i) + i)
+                im = ImageChops.add(im, Image.blend(Image.new("RGB", im.size, 0), g, max(0.0, min(1.0, a))))
+        out = im.crop((dx, dy, dx + W, dy + H))
+        if t and self.still_y < H:                     # полоса субтитров — всегда из неподвижного кадра
+            out = Image.composite(self.still, out, self.ramp)
+        return Image.composite(self.black, out, self.shade)
+
+
 class Scene:
     def __init__(self, app):
         self.app = app
@@ -148,6 +224,10 @@ class Scene:
             b_.pack(side="right", padx=2, pady=8)
             self.speeds[t] = b_
         self.speeds["По озвучке"].set_active(True)
+        self.alive = True
+        self.abtn = Pill(bar, "✦ Оживление", self.toggle_alive)
+        self.abtn.pack(side="right", padx=(4, 14), pady=8)
+        self.abtn.set_active(True)
         tk.Label(bar, text="Смена реплик:", bg=SIDE, fg=MUTED, font=("Segoe UI", -12)).pack(side="right", padx=(0, 6))
         # перевод и голос — полоса над «экраном игры» (на сам кадр не ложится)
         tk.Frame(w, bg=LINE, height=1).pack(fill="x")
@@ -213,6 +293,7 @@ class Scene:
                  "Окно можно двигать и растягивать — область субтитров едет вместе с ним", "ok")
         core.events.put(("panel", None))
         self._poll_voice()
+        self._animate()
         self.next()
 
     def _follow(self):
@@ -250,27 +331,33 @@ class Scene:
         self._plan()
 
     def _frame(self, bg, W, H):
-        """Кадр «игры»: картинка во всё окно (лишнее по краям обрезается), низ затемнён под субтитры."""
-        from PIL import Image, ImageTk
+        """Кадр «игры» (PhotoImage во всё окно). Картинка готовится один раз на кадр и размер окна,
+        дальше «оживление» только перерисовывает её содержимое."""
+        from PIL import ImageTk
         key = (bg, W, H)
-        if self._frame_key == key:
-            return self._ph
-        path = os.path.join(IMG_DIR, bg + ".jpg")
-        if os.path.exists(path):
-            im = Image.open(path).convert("RGB")
-            k = max(W / im.width, H / im.height)
-            im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))), Image.LANCZOS)
-            x, y = (im.width - W) // 2, (im.height - H) // 2
-            im = im.crop((x, y, x + W, y + H))
-        else:
-            im = Image.new("RGB", (W, H), "#1d2230")
-        top = int(H * (SUB_TOP - 0.10))
-        shade = Image.new("L", (1, H), 0)
-        for yy in range(top, H):
-            shade.putpixel((0, yy), min(215, int(215 * (yy - top) / max(1, H * 0.12))))
-        im = Image.composite(Image.new("RGB", (W, H), "#000000"), im, shade.resize((W, H)))
-        self._ph, self._frame_key = ImageTk.PhotoImage(im), key
+        if self._frame_key != key:
+            self.live = Living(bg, W, H)
+            self._ph, self._frame_key = ImageTk.PhotoImage(self.live.frame(0.0)), key
         return self._ph
+
+    def _animate(self):
+        """«Оживление» кадра ~10 раз в секунду: мерцают огни, кадр чуть плывёт. Субтитры не трогаются."""
+        import time
+        try:
+            if self.alive and getattr(self, "live", None) is not None and self._frame_key:
+                t0 = time.perf_counter()
+                self._ph.paste(self.live.frame(time.time()))
+                cost = time.perf_counter() - t0
+                self._anim_slow = cost > 0.07                 # слабый компьютер — реже
+            self.win.after(200 if getattr(self, "_anim_slow", False) else 100, self._animate)
+        except tk.TclError:
+            pass
+
+    def toggle_alive(self):
+        self.alive = not self.alive
+        self.abtn.set_active(self.alive)
+        if not self.alive and getattr(self, "live", None) is not None:
+            self._ph.paste(self.live.frame(0.0))
 
     def _redraw(self, blank=False):
         c = self.stage

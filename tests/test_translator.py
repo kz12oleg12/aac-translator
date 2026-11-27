@@ -2182,6 +2182,15 @@ def test_test_scene(monkey):
             time.sleep(0.03)
         sc._move_region()
         assert c.region == sc.sub_rect() and tuple(profiles.all_profiles()[testscene.PID]["region"]) == c.region
+        # оживление: кадр меняется, а полоса субтитров (область, которую читает программа) — нет
+        L = testscene.Living("golem", 640, 360)
+        f1, f2 = L.frame(100.0), L.frame(103.7)
+        from PIL import ImageChops as _IC
+        top = int(360 * testscene.SUB_TOP)
+        assert L.has_glow and _IC.difference(f1, f2).getbbox() is not None
+        assert _IC.difference(f1.crop((0, top, 640, 360)), f2.crop((0, top, 640, 360))).getbbox() is None
+        sc.toggle_alive(); assert not sc.alive
+        sc.toggle_alive(); assert sc.alive
         h0 = sc.stage.winfo_height()
         sc.on_translation("Очень длинный перевод. " * 30)
         for _ in range(10):
