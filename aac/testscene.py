@@ -151,11 +151,40 @@ class Scene:
         self.voice.config(text="")
         self._plan()
 
+    PORTRAITS = (("golem", "golem"), ("lyra", "lyra"), ("rotild", "rotild"), ("bram", "bram"), ("baron", "baron"),
+                 ("tim", "tim"), ("gorran", "gorran"), ("merchant", "gorran"))
+
+    def _portrait(self, name):
+        """Портрет говорящего из aac/scene (картинки «как в игре»), вписанный в окно; None — нет картинки."""
+        from PIL import Image, ImageTk
+        n = (name or "").lower()
+        f = next((v for k, v in self.PORTRAITS if k in n), "narrator" if not n else None)
+        if not f:
+            return None
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scene", f + ".jpg")
+        if not os.path.exists(path):
+            return None
+        c = self.pic
+        W, H = max(120, c.winfo_width()), max(160, c.winfo_height())
+        im = Image.open(path)
+        k = max(W / im.width, H / im.height)                 # заполнить окно (лишнее по краям обрезается)
+        im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))), Image.LANCZOS)
+        x, y = (im.width - W) // 2, 0 if im.height > H else (im.height - H) // 2
+        return ImageTk.PhotoImage(im.crop((x, y, x + W, y + H)))
+
     def _draw(self, name):
-        """Простой «портрет» говорящего: девушка, старуха, старик, барон, мальчик, голем, торговец."""
+        """Портрет говорящего: картинка из aac/scene, а если её нет — простая фигурка."""
         c = self.pic
         c.delete("all")
         c.update_idletasks()
+        try:
+            ph = self._portrait(name)
+        except Exception:
+            ph = None
+        if ph is not None:
+            self._ph = ph                                   # держим ссылку, иначе картинка пропадёт
+            c.create_image(0, 0, image=ph, anchor="nw")
+            return
         W, H = max(120, c.winfo_width()), max(160, c.winfo_height())
         cx, base = W // 2, H - 20
         skin, k = "#e0b48f", min(W, H) / 300

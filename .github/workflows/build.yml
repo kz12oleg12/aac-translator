@@ -35,7 +35,7 @@ jobs:
       - name: Сборка
         run: >
           pyinstaller --noconfirm --windowed --name "AAC Translator" --icon icon.ico
-          --collect-submodules aac --collect-submodules winrt --collect-all edge_tts --collect-all webview --collect-all pythonnet --collect-all clr_loader --collect-all pycaw --collect-all ctranslate2 --collect-all sentencepiece --collect-submodules comtypes --add-data "aac/webpanel;aac/webpanel"
+          --collect-submodules aac --collect-submodules winrt --collect-all edge_tts --collect-all webview --collect-all pythonnet --collect-all clr_loader --collect-all pycaw --collect-all ctranslate2 --collect-all sentencepiece --collect-submodules comtypes --add-data "aac/webpanel;aac/webpanel" --add-data "aac/scene;aac/scene"
           --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 --hidden-import pystray._win32
           --exclude-module torch --exclude-module torchaudio aac_translator.py
       - name: Файлы рядом с программой
