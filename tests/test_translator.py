@@ -2169,11 +2169,19 @@ def test_test_scene(monkey):
         from aac import tts as _t
         monkey(_t, "_say", lambda *a, **k: None)
         monkey(_t.config, "TTS_ENABLED", True)
-        _t.speak_subtitle("Лира\nЯ так волновалась.", orig="Lyra\nI was so worried.")
-        assert _t.last_voice and "Lyra" in _t.last_voice["desc"] or "Лира" in _t.last_voice["desc"], _t.last_voice
+        _t.speak_subtitle("Мира\nЯ так волновалась.", orig="Mira\nI was so worried.")
+        assert _t.last_voice and "Mira" in _t.last_voice["desc"] or "Мира" in _t.last_voice["desc"], _t.last_voice
         assert reg[2] > 200 and reg[3] > 50, reg
-        assert sc.text.cget("text") or sc.i == 0
-        assert all(isinstance(line, str) for _, line in testscene.SCRIPT), "только реплики, без ответов"
+        assert sc.cur_line or sc.i == 0
+        assert all(isinstance(line, str) and os.path.exists(os.path.join(testscene.IMG_DIR, bg + ".jpg"))
+                   for _, line, bg in testscene.SCRIPT), "только реплики, у каждой — кадр"
+        # окно сцены двигают — область субтитров едет следом
+        sc.win.geometry(f"+{sc.win.winfo_x() + 37}+{sc.win.winfo_y() + 21}")
+        for _ in range(20):
+            root.update()
+            time.sleep(0.03)
+        sc._move_region()
+        assert c.region == sc.sub_rect() and tuple(profiles.all_profiles()[testscene.PID]["region"]) == c.region
         sc.on_translation("Привет.")
         assert sc.tr_text.cget("text") == "Привет."
         assert profiles.all_profiles()[testscene.PID].get("answers_region") is None
@@ -2942,6 +2950,11 @@ def test_character_understanding(monkey):
     assert h("Elder Bram")[1] == "old"
     assert h("Merchant Gorran") == ("", "")
     assert h("Timothy") == ("", "")                       # не путает похожие имена
+    from aac import testscene as _ts                   # описание тестовой сцены — весь состав понятен
+    h2 = lambda en: voices.about_hint(en, "", _ts.ABOUT)
+    assert h2("Mira") == ("f", "young") and h2("Pip") == ("m", "child") and h2("Mentor Ysolde") == ("f", "old")
+    assert voices.guess_type("Old Wizard Orren", "") == "old" and voices.guess_type("King Aldric", "") == "noble"
+    assert voices.guess_type("Stone Golem", "") == "monster" and h2("Alchemist Fenwick")[1] == ""
     assert voices.about_hint("Tim", "", "") == ("", "")
     # заметка в характере: откуда взят
     d = tempfile.mkdtemp(dir=TMP)
