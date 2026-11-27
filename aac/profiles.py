@@ -243,6 +243,7 @@ def activate(pid, announce=True, hold=False):
     core.active_profile = pid
     core.save_settings(active_profile=pid)
     core.apply_profile_regions(profs.get(pid) or {})
+    apply_voice_only(profs.get(pid) or {})
     core.in_menu = False
     bind(pid)
     try:
@@ -257,6 +258,39 @@ def activate(pid, announce=True, hold=False):
         core.log(f"🎮 Игра: {profs[pid].get('name', pid)} — " +
                  (f"области: {', '.join(regs)}" if regs else "области ещё не обведены (F9 — субтитры)"), "ok")
     core.events.put(("profile_changed", pid))
+
+
+def apply_voice_only(p):
+    """«Только озвучка» — своя у каждой игры (русская игра — читать вслух, английская — переводить).
+    У игры не задано — общая настройка."""
+    from . import config
+    s = core.SETTINGS
+    config.VOICE_ONLY = bool(p.get("voice_only", s.get("voice_only", False)))
+    config.VOICE_ONLY_LANG = "en" if p.get("voice_only_lang", s.get("voice_only_lang")) == "en" else "ru"
+    config.VOICE_ONLY_SUBS = bool(p.get("voice_only_subs", s.get("voice_only_subs", False)))
+
+
+def set_voice_only(on=None, lang=None, subs=None):
+    """Сохранить «Только озвучку» для текущей игры (и как общую — для игр без своей настройки)."""
+    from . import config
+    if on is not None:
+        config.VOICE_ONLY = bool(on)
+    if lang in ("ru", "en"):
+        config.VOICE_ONLY_LANG = lang
+    if subs is not None:
+        config.VOICE_ONLY_SUBS = bool(subs)
+    vals = {"voice_only": config.VOICE_ONLY, "voice_only_lang": config.VOICE_ONLY_LANG,
+            "voice_only_subs": config.VOICE_ONLY_SUBS}
+    profs = all_profiles()
+    pid = core.active_profile
+    if pid in profs:
+        profs[pid].update(vals)
+        core.save_settings(profiles=profs, **vals)
+    else:
+        core.save_settings(**vals)
+    core.log("Только озвучка: " + (f"включена — реплики читаются вслух как есть, без перевода "
+                                    f"({'русский' if config.VOICE_ONLY_LANG == 'ru' else 'английский'} текст игры)"
+                                    if config.VOICE_ONLY else "выключена — снова перевожу"), "ok")
 
 
 def adapt(prompt):

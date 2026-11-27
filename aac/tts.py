@@ -598,7 +598,7 @@ def engine_ready():
     if config.TTS_ENGINE == "gemini":
         if not tts_gemini.ready() and not _silero_warned.get("gemini"):
             _silero_warned["gemini"] = True
-            core.log("Gemini TTS: нет ключа Gemini (Перевод → Gemini → «добавить ключ»). Пока читаю нейроголосом "
+            core.log("Gemini TTS: нет ключа Gemini (Переводчики → Gemini → «добавить ключ»). Пока читаю нейроголосом "
                      "Microsoft.", "warn")
         return tts_gemini.ready() or neural_available()
     if config.TTS_ENGINE == "silero":

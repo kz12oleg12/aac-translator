@@ -56,7 +56,7 @@ def translate_subs_once():
         img = capture.mask_out(capture.grab(core.region), core.region,
                                [core.answers_region, core.region2] + list(core.own_rects))
         with tcache.fresh():
-            text, err = translate.safe_translate(img, config.PROMPT)
+            text, err = translate.subs_text(img, config.PROMPT)
         core.events.put(("busy", ("Субтитры", False)))
         if err == "rate":
             err = "лимит запросов — подождите несколько секунд и нажмите ещё раз"
@@ -226,6 +226,12 @@ class Watcher:
             if not game.game_active.is_set() or core.in_menu or game.no_game():
                 time.sleep(0.5)   # вы не в игре — ничего не переводим
                 continue
+            if config.VOICE_ONLY and self.show_event != "text":
+                if shown is not None:
+                    self.hide()
+                    shown = None
+                time.sleep(0.5)   # «Только озвучка»: ответы и прочее не переводим — только реплики вслух
+                continue
             reg = self.get_region()
             if reg != getattr(self, "_last_reg", reg):      # область удалили / обвели заново / другая игра
                 prev = sent = shown = None                   # — начинаем с чистого листа
@@ -323,7 +329,8 @@ class Watcher:
                 prompt = self.make_prompt()
                 core.events.put(("busy", (self.name, True)))
                 self.working.set()
-                text, err = translate.safe_translate(img, prompt)
+                text, err = (translate.subs_text(img, prompt) if self.show_event == "text"
+                             else translate.safe_translate(img, prompt))
                 self.working.clear()
                 core.events.put(("busy", (self.name, False)))
                 if err == "rate":

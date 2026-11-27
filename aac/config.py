@@ -4,7 +4,7 @@
 import os
 
 
-VERSION = "16.01"
+VERSION = "16.02"
 import sys as _sys
 FROZEN = bool(getattr(_sys, "frozen", False))      # собранная программа (AAC Translator.exe), без Python
 # папка программы (настройки, словарь, история, иконки): рядом с .exe или с aac_translator.py
@@ -35,6 +35,9 @@ FALLBACK_PROVIDERS = ["google"]
 
 # --- распознавание текста и машинный перевод (режимы "google" и "deepl") ---
 OCR_LANGUAGE = "en-US"        # язык текста в игре для распознавания
+VOICE_ONLY = False            # «Только озвучка»: реплики читаются вслух как есть, без перевода
+VOICE_ONLY_LANG = "ru"        # на каком языке текст игры в этом режиме: "ru" или "en"
+VOICE_ONLY_SUBS = False       # в этом режиме ещё и показывать субтитры программы (обычно не нужно: текст уже в игре)
 SOURCE_LANG = "en"            # с какого языка переводить
 TARGET_LANG_CODE = "ru"       # на какой
 DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY", "ВСТАВЬТЕ_СЮДА_КЛЮЧ_DEEPL")

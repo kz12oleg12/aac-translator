@@ -970,8 +970,8 @@ class App:
                     sc = getattr(self, "_scene", None)
                     if sc is not None:          # «Тестовая сцена»: перевод — прямо в её окне
                         sc.on_translation(payload[0] if isinstance(payload, tuple) else payload)
-                    else:
-                        self.subs.push(payload)
+                    elif not config.VOICE_ONLY or config.VOICE_ONLY_SUBS:
+                        self.subs.push(payload)         # «Только озвучка»: текст уже в игре — окно не нужно
                 elif kind == "text_improve":
                     # ИИ-редактор ответил позже — тихо подменяем ещё показанный черновик
                     draft, better = payload

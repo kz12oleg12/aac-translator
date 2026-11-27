@@ -17,23 +17,34 @@ _ocr_kind = None        # "windows" или "rapid"
 _rapid = None
 
 
+_ocr_lang = None
+
+
+def lang_code():
+    """Язык распознавания: «Только озвучка» русской игры — русский, иначе язык из настроек."""
+    if config.VOICE_ONLY and config.VOICE_ONLY_LANG == "ru":
+        return "ru-RU"
+    return config.OCR_LANGUAGE
+
+
 def _init_ocr():
     """Встроенный OCR Windows; если не установлен — RapidOCR (если есть)."""
-    global _ocr_engine, _ocr_kind, _rapid
-    if _ocr_kind:
+    global _ocr_engine, _ocr_kind, _rapid, _ocr_lang
+    want = lang_code()
+    if _ocr_kind and (_ocr_kind != "windows" or _ocr_lang == want):
         return
     try:
         from winrt.windows.media.ocr import OcrEngine
         from winrt.windows.globalization import Language
-        lang = Language(config.OCR_LANGUAGE)
+        lang = Language(want)
         if not OcrEngine.is_language_supported(lang):
             raise core.ApiError(
-                f"В Windows не установлено распознавание языка {config.OCR_LANGUAGE}. Откройте PowerShell от имени "
+                f"В Windows не установлено распознавание языка {want}. Откройте PowerShell от имени "
                 f"администратора и выполните: Add-WindowsCapability -Online -Name "
-                f"\"Language.OCR~~~{config.OCR_LANGUAGE}~0.0.1.0\" — затем перезапустите переводчик.")
+                f"\"Language.OCR~~~{want}~0.0.1.0\" — затем перезапустите переводчик.")
         _ocr_engine = OcrEngine.try_create_from_language(lang)
-        _ocr_kind = "windows"
-        core.log(f"Распознавание текста: встроенный OCR Windows ({config.OCR_LANGUAGE})", "ok")
+        _ocr_kind, _ocr_lang = "windows", want
+        core.log(f"Распознавание текста: встроенный OCR Windows ({want})", "ok")
         return
     except ImportError:
         pass
@@ -183,7 +194,7 @@ def _clean_line(ln, clean):
         return None  # «Il II», «rn .» — узор мостовой/травы, прочитанный как буквы
     if any(w in low for w in config.WATERMARK_WORDS) or "windows" in low:
         return None  # водяной знак Windows (в т.ч. русский, прочитанный как латиница)
-    if config.SOURCE_LANG == "en" and _looks_like_garbage(ln):
+    if config.SOURCE_LANG == "en" and lang_code().startswith("en") and _looks_like_garbage(ln):
         return None  # не английский текст (наш же перевод, водяной знак, мусор с фона)
     if is_key_hints(ln):
         return None  # подсказки клавиш внизу экрана (карта, инвентарь, «F Talk»)

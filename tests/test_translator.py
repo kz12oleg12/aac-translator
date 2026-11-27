@@ -3112,6 +3112,40 @@ def test_gemini_tts(monkey):
     assert p.endswith(".mp3") and got["voice"] in voices.NEURAL_POOL["f"] + [voices.default_voice("neural", "f")]
 
 
+def test_voice_only(monkey):
+    """«Только озвучка»: текст с экрана читается как есть, без перевода; своё у каждой игры; русский OCR."""
+    from aac import translate, ocr, profiles, editor
+    if not hasattr(translate, "subs_text"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    monkey(translate.config, "VOICE_ONLY", True)
+    monkey(translate.config, "VOICE_ONLY_LANG", "ru")
+    assert ocr.lang_code() == "ru-RU"
+    monkey(ocr, "ocr_lines", lambda img: ["Тим / Лира, там что-то огромное!"])
+    monkey(editor, "improve", lambda src, draft, kind="subs", **k: None)
+    called = []
+    monkey(translate, "safe_translate", lambda *a, **k: called.append(1) or ("ПЕРЕВОД", None))
+    monkey(translate, "provider_chain", lambda: [])          # переводчики не нужны вовсе
+    text, err = translate.subs_text(None, translate.config.PROMPT)
+    assert (text, err) == ("Тим\nЛира, там что-то огромное!", None) and not called
+    assert translate.chain_ready_in() == 0
+    monkey(translate.config, "VOICE_ONLY_LANG", "en")
+    assert ocr.lang_code() == translate.config.OCR_LANGUAGE
+    monkey(translate.config, "VOICE_ONLY", False)
+    assert translate.subs_text(None, translate.config.PROMPT) == ("ПЕРЕВОД", None)
+    # своё у каждой игры
+    monkey(profiles.core, "SETTINGS", {"profiles": {"ru": {"name": "R"}, "en": {"name": "E"}}})
+    monkey(profiles.core, "save_settings", lambda **k: profiles.core.SETTINGS.update(k))
+    monkey(profiles.core, "active_profile", "ru")
+    monkey(profiles, "all_profiles", lambda: profiles.core.SETTINGS["profiles"])
+    profiles.set_voice_only(on=True, lang="ru")
+    assert profiles.core.SETTINGS["profiles"]["ru"]["voice_only"] is True
+    profiles.apply_voice_only({"voice_only": False})
+    assert translate.config.VOICE_ONLY is False
+    profiles.apply_voice_only(profiles.core.SETTINGS["profiles"]["ru"])
+    assert translate.config.VOICE_ONLY is True and translate.config.VOICE_ONLY_LANG == "ru"
+
+
 def test_netfix(monkey):
     """Рабочий VPN: Python доверяет сертификатам Windows (truststore), проверка сертификатов не отключается."""
     import ssl

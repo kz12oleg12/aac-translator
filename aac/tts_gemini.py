@@ -76,7 +76,8 @@ def style_for(gender, kind, mood="", narrator=False):
         g = gender if gender in ("m", "f") else "m"
         who = (_WHO.get(kind or "") or _WHO[""])[g]
     m = _MOOD.get(mood or "", mood or "")
-    return f"Say in Russian, like a voice actor in a fantasy RPG, as {who}" + (f", {m}" if m else "")
+    lang = "English" if config.VOICE_ONLY and config.VOICE_ONLY_LANG == "en" else "Russian"
+    return f"Say in {lang}, like a voice actor in a fantasy RPG, as {who}" + (f", {m}" if m else "")
 
 
 def _wav(pcm, path):

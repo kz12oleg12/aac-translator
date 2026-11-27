@@ -235,6 +235,7 @@ def _s_voice():
             "type_voices": _type_voices(),
             "ed_stress": config.EDITOR_STRESS,
             "gemini_key": bool(_safe(tts.tts_gemini.ready)),
+            "voice_only": {"on": config.VOICE_ONLY, "lang": config.VOICE_ONLY_LANG, "subs": config.VOICE_ONLY_SUBS},
             "stress": [{"k": k, "v": v} for k, v in reversed(list(core.SETTINGS.get("stress", {}).items()))][:300], "game": _clean(_safe(lambda: __import__("aac.profiles",
                                                                                          fromlist=["x"]).name()))}
 
@@ -601,6 +602,13 @@ def do(name, arg, app):
         if not config.TTS_ENABLED:
             tts.stop()
         _save_tts()
+    elif name == "voice_only":
+        from . import profiles as _p
+        _p.set_voice_only(on=a.get("v") if "v" in a else None, lang=a.get("lang"),
+                          subs=a.get("subs") if "subs" in a else None)
+        if a.get("v") and not config.TTS_ENABLED:
+            config.TTS_ENABLED = True              # без озвучки этот режим бессмыслен
+            _save_tts()
     elif name == "tts_engine" and a.get("v") in ("neural", "silero", "gemini", "windows"):
         from . import tts
         tts.stop()

@@ -52,6 +52,8 @@ def provider_ready_in(name):
 
 def chain_ready_in():
     """Через сколько секунд хоть один переводчик из цепочки освободится."""
+    if config.VOICE_ONLY:
+        return 0                          # «Только озвучка» переводчики не нужны
     chain = provider_chain()
     return min((provider_ready_in(p) for p in chain), default=0)
 
@@ -234,6 +236,42 @@ def clean_translation(text, strict=True):
         if cyr + lat > 10 and cyr < 0.5 * (cyr + lat):
             raise core.ApiError("модель не перевела текст (ответ не на русском)")
     return text
+
+
+def subs_text(img, prompt=None):
+    """Субтитры: перевод — или, в режиме «Только озвучка», текст с экрана как есть."""
+    if config.VOICE_ONLY:
+        try:
+            return voice_only_text(img)
+        except core.ApiError as e:
+            return None, str(e)
+    return safe_translate(img, prompt)
+
+
+def voice_only_text(img):
+    """«Только озвучка»: текст субтитров с экрана как есть, без перевода."""
+    from . import ocr
+    history._last_src.pop(threading.get_ident(), None)
+    t0 = time.time()
+    lines = ocr.ocr_lines(img)
+    if not lines:
+        return None, None
+    text = re.sub(r"[ \t]+/[ \t]+", "\n", "\n".join(lines))
+    history._last_src[threading.get_ident()] = text
+    core.stats["last"] = f"{time.strftime('%H:%M:%S')} · OCR {time.time() - t0:.2f} с · только озвучка, без перевода"
+    core.events.put(("panel", None))
+    if config.SHOW_OCR_IN_LOG:
+        core.log(f"OCR прочитал: {text.replace(chr(10), ' / ')[:150]}")
+    if config.VOICE_ONLY_LANG == "ru":
+        # русский текст: ИИ-редактор (если включён) готовит озвучку — кто говорит, пол, ударения, настроение
+        try:
+            from . import editor
+            better = editor.improve(text, text, "subs")
+            if better:
+                text = better
+        except Exception:
+            pass
+    return text, None
 
 
 def safe_translate(img, prompt=None):
