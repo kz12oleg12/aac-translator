@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
       - name: Библиотеки
         run: >
-          python -m pip install --disable-pip-version-check pyinstaller mss pillow keyboard requests pynput pystray pywebview pycaw ctranslate2 sentencepiece
+          python -m pip install --disable-pip-version-check pyinstaller mss pillow keyboard requests pynput pystray pywebview pycaw ctranslate2 sentencepiece truststore
           edge-tts numpy scipy winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Globalization
           winrt-Windows.Foundation winrt-Windows.Storage.Streams
       - name: Адрес для отчётов о проблемах (из секрета репозитория, в открытый код не попадает)

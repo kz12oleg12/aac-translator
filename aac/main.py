@@ -306,6 +306,8 @@ def _watchdog():
 
 def main():
     import sys
+    from . import netfix
+    netfix.enable()                   # сертификаты из Windows — чтобы работало через рабочий VPN
     if "--webpanel" in sys.argv:      # окно новой панели (отдельный процесс, см. web_api.py)
         from . import web_window
         a = sys.argv

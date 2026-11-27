@@ -2889,6 +2889,26 @@ def test_web_panel(monkey):
     assert any(e["msg"] == "проверка журнала панели" for e in _json.loads(urllib.request.urlopen(req, timeout=5).read()))
 
 
+def test_netfix(monkey):
+    """Рабочий VPN: Python доверяет сертификатам Windows (truststore), проверка сертификатов не отключается."""
+    import ssl
+    from aac import netfix
+    try:
+        import truststore
+    except ImportError:
+        print("   (нет truststore — пропуск)")
+        return
+    monkey(netfix, "active", False)
+    try:
+        assert netfix.enable() is True and netfix.active
+        ctx = ssl.create_default_context()
+        assert type(ctx).__module__.startswith("truststore")
+        assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname
+        assert netfix.enable() is True                  # повторный вызов — ничего не ломает
+    finally:
+        truststore.extract_from_ssl()
+
+
 def test_game_presets(monkey):
     """Пресеты игр: у каждой игры свои области, словарь, персонажи; переключение — по окну на экране."""
     try:
