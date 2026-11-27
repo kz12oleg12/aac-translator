@@ -2927,6 +2927,44 @@ def test_bing_retry_401(monkey):
     assert calls["get"] == 2 and calls["post"] == ["https://www.bing.com/translator"] * 2
 
 
+def test_character_understanding(monkey):
+    """Характер персонажа программа понимает сама: по имени, по описанию игры, по ответу любой доступной нейросети."""
+    from aac import voices, translate, editor
+    if not hasattr(voices, "about_hint"):
+        print("   (в этой версии нет — пропуск)")
+        return
+    about = ("Fantasy RPG. A small medieval village: a young woman Lyra (the heroine), an old librarian woman Rotild, "
+             "old Elder Bram, Baron Alderich, a little boy Tim, a stone golem monster, merchant Gorran who sells potions.")
+    h = lambda en, ru="": voices.about_hint(en, ru, about)
+    assert h("Tim") == ("m", "child")
+    assert h("Lyra") == ("f", "young")
+    assert h("Old Rotild") == ("f", "old")
+    assert h("Elder Bram")[1] == "old"
+    assert h("Merchant Gorran") == ("", "")
+    assert h("Timothy") == ("", "")                       # не путает похожие имена
+    assert voices.about_hint("Tim", "", "") == ("", "")
+    # заметка в характере: откуда взят
+    d = tempfile.mkdtemp(dir=TMP)
+    monkey(voices, "FILE", os.path.join(d, "characters.json"))
+    monkey(voices, "_data", {"loaded": True, "chars": {}})
+    monkey(voices, "ask_ai", None)
+    from aac import gamefacts
+    monkey(gamefacts, "about", lambda: about)
+    k = voices.note_line("Тим\nЯ видел его!", "Tim\nI saw it!")
+    c = voices._data["chars"][k]
+    assert c["type"] == "child" and c["type_src"] == "описание игры" and voices.gender(c) == "m", c
+    k = voices.note_line("Лира\nСпокойно.", "Lyra\nEasy.")
+    assert voices.gender(voices._data["chars"][k]) == "f"
+    # переводит офлайн-переводчик, редактор выключен — про персонажа спрашиваем нейросеть с ключом
+    asked = []
+    monkey(translate, "provider_chain", lambda: ["offline"])
+    monkey(editor, "_usable", lambda e: e == "groq")
+    monkey(editor, "_ask_one", lambda e, p: asked.append(e) or "m child")
+    monkey(translate.config, "EDITOR_ON", False)
+    assert translate.ask_character("q") == "m child" and asked == ["groq"]
+    assert translate.ask_text("q") is None, "перевод надписей нейросеть сам не берёт"
+
+
 def test_netfix(monkey):
     """Рабочий VPN: Python доверяет сертификатам Windows (truststore), проверка сертификатов не отключается."""
     import ssl

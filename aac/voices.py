@@ -197,8 +197,9 @@ def known_gender(c):
     return None
 
 
-AI_PROMPT = ("In the fantasy MMORPG ArcheAge Chronicles an NPC named \"{name}\" says: \"{line}\"\n"
-             "Is this character male or female, and what kind of voice suits them? Judge by the name, title and line.\n"
+AI_PROMPT = ("In the game {game} an NPC named \"{name}\" says: \"{line}\"\n{about}"
+             "Is this character male or female, and what kind of voice suits them? Judge by the game description, "
+             "the name, title and line.\n"
              "Answer with exactly two words: m, f or u (cannot tell) — then one of: adult, young, old, child, noble, "
              "monster. Example: f old")
 
@@ -215,6 +216,42 @@ TYPE_WORDS = {
               "граф", "император"),
     "young": ("young", "apprentice", "recruit", "squire", "novice", "юн", "молод", "ученик", "новобран", "оруженос"),
 }
+
+
+_ABOUT_SEX = {"m": ("man", "boy", "guy", "father", "son", "brother", "husband", "king", "lord", "prince", "monk",
+                     "мужчин", "мальчик", "парен", "отец", "сын", "брат", "муж"),
+              "f": ("woman", "girl", "lady", "mother", "daughter", "sister", "wife", "queen", "princess", "witch",
+                    "nun", "женщин", "девушк", "девочк", "мать", "дочь", "сестр", "жена", "ведьм")}
+
+
+def about_hint(en, ru, about=None):
+    """Пол и характер персонажа по описанию игры: «a little boy Tim» → ("m", "child"). ("", "") — не сказано."""
+    if about is None:
+        try:
+            from . import gamefacts
+            about = gamefacts.about()
+        except Exception:
+            about = ""
+    text = " " + re.sub(r"[^\w\s,.;:()!?-]", " ", (about or "").lower()) + " "
+    for nm in (en, ru):
+        nm = (nm or "").strip().lower()
+        if not nm:
+            continue
+        for probe in dict.fromkeys((nm, nm.split()[-1])):
+            if len(probe) < 3:
+                continue
+            m = re.search(r"(?<!\w)" + re.escape(probe) + r"(?!\w)", text)
+            if not m:
+                continue
+            before = re.split(r"[,.;:()!?]", text[:m.start()])[-1].split()[-5:]
+            after = re.split(r"[,.;:()!?]", text[m.end():])[0].split()[:3]
+            words = before + after
+            kind = guess_type(" ".join(words), "")
+            g = next((s for s, keys in _ABOUT_SEX.items() for w in words for k in keys
+                      if ((w == k or w == k + "s") if k.isascii() else w.startswith(k))), "")
+            if g or kind:
+                return g, kind
+    return "", ""
 
 
 def guess_type(en, ru):
@@ -237,8 +274,17 @@ def _ai_gender(key, en, line):
     if ask_ai is None or not en:
         return
     try:
-        ans = (ask_ai(AI_PROMPT.format(name=en, line=(line or "")[:200])) or "").strip().lower()
+        from . import gamefacts, profiles
+        game = profiles.name() or "a fantasy RPG"
+        about = gamefacts.about()
     except Exception:
+        game, about = "a fantasy RPG", ""
+    try:
+        ans = (ask_ai(AI_PROMPT.format(name=en, line=(line or "")[:200], game=game,
+                                       about=f"About the game: {about[:600]}\n" if about else "")) or "").strip().lower()
+    except Exception:
+        return
+    if not ans:
         return
     g = ans[:1] if ans[:1] in ("m", "f") else "u"
     kind = next((k for k in ("young", "old", "child", "noble", "monster") if k in ans.split()[1:2]), "")
@@ -246,8 +292,8 @@ def _ai_gender(key, en, line):
         c = _data["chars"].get(key)
         if c is not None:
             c["ai"] = g
-            if kind and not c.get("type") and not c.get("type_manual"):
-                c["type"] = kind
+            if kind and not c.get("type_manual") and c.get("type_src") != "имя":
+                c["type"], c["type_src"] = kind, "ИИ"
             _save()
 
 
@@ -301,9 +347,15 @@ def note_line(translation, orig=None):
                     break
         c = _data["chars"].setdefault(key, {"en": en, "ru": ru, "guess": guess_by_name(en, ru), "f": 0, "m": 0})
         if not c.get("type") and not c.get("type_manual"):
-            t = guess_type(en, ru)
+            t, src = guess_type(en, ru), "имя"
+            ag, at = about_hint(en, ru) if not c.get("about_checked") else ("", "")
+            c["about_checked"] = True
+            if not t and at:
+                t, src = at, "описание игры"
             if t:
-                c["type"] = t
+                c["type"], c["type_src"] = t, src
+            if ag and c.get("ai") not in ("m", "f") and not c.get("gender_manual"):
+                c["guess"] = ag
         if en and not c.get("en"):
             c["en"] = en
         if ru and not c.get("ru"):
@@ -402,7 +454,7 @@ def set_traits(key, kind=None, address=None):
             return
         ch = False
         if kind and not c.get("type_manual") and c.get("type") != kind:
-            c["type"], ch = kind, True
+            c["type"], c["type_src"], ch = kind, "ИИ-редактор", True
             core.log(f"🎭 {c.get('ru') or c.get('en') or key}: {TYPE_NAMES.get(kind, kind)} — голос подстроен", "ok")
         if address and c.get("address") != address:
             c["address"], ch = address, True

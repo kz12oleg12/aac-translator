@@ -150,12 +150,12 @@ class Scene:
     def _make_profile(self):
         from . import profiles
         profs = profiles.all_profiles()
-        if PID not in profs:
-            profs[PID] = {"name": "Тестовая сцена", "exes": [], "test": True,
-                          "desc": "a fantasy role-playing game (built-in test scene)",
-                          "about": "Fantasy RPG. Town of Emberhold: a young woman Lyra, an old archivist woman Rotild, "
-                                   "old Elder Bram, Baron Alderich, a little boy Tim, a stone golem monster, "
-                                   "merchant Gorran."}
+        about = ("Fantasy RPG, chapter one «The Secret of the Old Quarry». A small medieval village: a young woman "
+                 "Lyra (the heroine), an old librarian woman Rotild, old Elder Bram, Baron Alderich, a little boy Tim, "
+                 "a stone golem monster guarding the old quarry, merchant Gorran who sells potions.")
+        if PID not in profs or profs[PID].get("about") != about:
+            profs.setdefault(PID, {"name": "Тестовая сцена", "exes": [], "test": True})
+            profs[PID].update(desc="a fantasy role-playing game (built-in test scene)", about=about)
             core.save_settings(profiles=profs)
         d = profiles.folder(PID)
         for f in ("characters.json", "translation_cache.json"):          # каждый раз — с нуля

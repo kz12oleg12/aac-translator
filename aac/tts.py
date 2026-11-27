@@ -318,7 +318,8 @@ def _note_voice(key, vp, info):
         shift = (vp[1] if vp else 0) or 0
         parts = [c.get("ru") or c.get("en") or "без имени",
                  {"m": "мужской", "f": "женский"}.get(g, "пол не понят"),
-                 voices.TYPE_NAMES.get(kind, "") if kind else "",
+                 (voices.TYPE_NAMES.get(kind, kind) + (f" ({c['type_src']})" if c.get("type_src") else "")) if kind
+                 else ("характер: обычный" if key else ""),
                  f"голос {vname}" + (" · ниже" if shift < 0 else " · выше" if shift > 0 else "")]
         last_voice = {"t": time.time(), "desc": " · ".join(p for p in parts if p)}
     except Exception as e:

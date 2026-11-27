@@ -122,7 +122,7 @@ def ask_ocr_ai(name, img, prompt):
     return out
 
 
-def ask_text(prompt):
+def ask_text(prompt, any_ai=False):
     """Короткий текстовый вопрос нейросети из вашей цепочки переводчиков (например, пол персонажа).
     None — в цепочке нет нейросетей (только Google/Microsoft) или все на паузе."""
     from . import editor
@@ -144,10 +144,25 @@ def ask_text(prompt):
             return llm.ask_gemini(None, prompt)
         except Exception:
             continue
+    if any_ai:
+        # переводит не нейросеть (офлайн, Google, Microsoft), редактор выключен — короткий вопрос (раз на персонажа)
+        # задаём нейросети, для которой у вас есть ключ: выбранной для редактора, потом бесплатным
+        for e in dict.fromkeys((config.EDITOR, config.EDITOR2, "groq", "gemini", "mistral")):
+            if not e or not editor._usable(e):
+                continue
+            try:
+                return editor._ask_one(e, prompt)
+            except Exception:
+                continue
     return None
 
 
-voices.ask_ai = ask_text
+def ask_character(prompt):
+    """Вопрос о персонаже (пол, характер голоса): любая доступная нейросеть, даже если переводит не она."""
+    return ask_text(prompt, any_ai=True)
+
+
+voices.ask_ai = ask_character
 
 
 def translate_short(src):
