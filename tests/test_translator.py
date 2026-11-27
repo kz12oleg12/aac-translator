@@ -2966,6 +2966,28 @@ def test_character_understanding(monkey):
     assert translate.ask_character("q") == "m child" and asked == ["editor"]
 
 
+def test_type_table_rules(monkey):
+    """Таблица «Характер → голос» главная: выбранный голос звучит как есть; характер не понят — голос «обычный»."""
+    from aac import voices
+    d = tempfile.mkdtemp(dir=TMP)
+    monkey(voices, "FILE", os.path.join(d, "characters.json"))
+    monkey(voices, "_data", {"loaded": True, "chars": {
+        "tim": {"en": "Tim", "ai": "m", "type": "child"}, "gorran": {"en": "Gorran", "ai": "m"},
+        "rob": {"en": "Rob", "ai": "m", "type": "adult"}, "bram": {"en": "Bram", "ai": "m", "type": "old"},
+        "ann": {"en": "Ann", "ai": "f", "type": "young"}}})
+    monkey(voices.config, "TTS_VARY_IN_GENDER", True)
+    monkey(voices.config, "TTS_TYPE_VOICES", {"neural": {}, "silero": {"m_child": "ru_vika", "m_old": ""}})
+    monkey(voices.config, "TTS_DEFAULT_VOICES", {"neural": {}, "silero": {"m": "eugene", "f": "xenia"}})
+    v = lambda k: voices.voice_for(k, "silero")
+    assert v("tim") == ("ru_vika", 0), v("tim")             # выбран в таблице — как есть
+    assert v("gorran") == ("eugene", 0), v("gorran")        # характер не понят — «обычный»
+    assert v("rob") == ("eugene", 0), v("rob")
+    assert v("bram")[0] == "eugene" and v("bram")[1] < 0     # «авто» — «обычный» ниже
+    assert v("ann")[0] == "xenia"
+    monkey(voices.config, "TTS_DEFAULT_VOICES", {"neural": {}, "silero": {}})
+    assert v("gorran")[0] in voices.SILERO_POOL.auto("m"), "«обычный» не выбран — у каждого свой"
+
+
 def test_netfix(monkey):
     """Рабочий VPN: Python доверяет сертификатам Windows (truststore), проверка сертификатов не отключается."""
     import ssl

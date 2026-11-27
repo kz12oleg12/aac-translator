@@ -8,6 +8,7 @@ import array
 import os
 import re
 import threading
+import time
 import wave
 from concurrent.futures import ThreadPoolExecutor
 from xml.sax.saxutils import escape
@@ -44,6 +45,13 @@ CIS_VOICES = {
 for _g, _items in CIS_VOICES.items():
     VOICES += [(v, f"{n} — {'мужской' if _g == 'm' else 'женский'} (доп.)") for v, n in _items]
 BASE_FOR = {"m": "aidar", "f": "xenia"}      # чем читать, если доп. голос не заработал
+fallback = None      # последний доп. голос, который не заработал: {"voice", "base", "t"}
+
+
+def voice_name(v):
+    return dict(VOICES).get(v, v).split(" — ")[0]
+
+
 _cis = {"m": None, "acc": None, "error": None, "speakers_logged": False}
 
 
@@ -444,8 +452,13 @@ def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
             return _synth_cis(text, path, voice, rate_level, pitch_level)
         except ValueError:
             raise
-        except Exception:
-            voice = BASE_FOR[cis_gender(voice)]      # доп. голос не вышел — основной того же пола
+        except Exception as e:
+            base = BASE_FOR[cis_gender(voice)]       # доп. голос не вышел — основной того же пола
+            global fallback
+            if not fallback:
+                core.log(f"Доп. голос {voice_name(voice)} не заработал ({e}) — читаю голосом {voice_name(base)}", "warn")
+            fallback = {"voice": voice, "base": base, "t": time.time()}
+            voice = base
     model = load()
     torch = _model["torch"]
     text = clean(text)

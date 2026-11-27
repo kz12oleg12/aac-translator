@@ -321,6 +321,9 @@ def _note_voice(key, vp, info):
                  (voices.TYPE_NAMES.get(kind, kind) + (f" ({c['type_src']})" if c.get("type_src") else "")) if kind
                  else ("характер: обычный" if key else ""),
                  f"голос {vname}" + (" · ниже" if shift < 0 else " · выше" if shift > 0 else "")]
+        fb = getattr(tts_silero, "fallback", None)
+        if eng == "silero" and vp and vp[0] and tts_silero.is_cis(vp[0]) and fb:
+            parts.append(f"доп. голос не работает — звучит {tts_silero.voice_name(fb['base'])}")
         last_voice = {"t": time.time(), "desc": " · ".join(p for p in parts if p)}
     except Exception as e:
         last_voice = {"t": time.time(), "desc": f"голос: {e}"}

@@ -411,7 +411,10 @@ def line_voice(g, kind, engine=None):
     if g not in ("m", "f"):
         return None if not shift else (None, shift)
     pool = NEURAL_POOL[g] if engine == "neural" else SILERO_POOL.auto(g)
-    return (type_voice(engine, g, kind) or default_voice(engine, g) or pool[0]), shift
+    tv = type_voice(engine, g, kind) if kind and kind != "adult" else ""
+    if tv:
+        return tv, 0                            # выбран в таблице — звучит как есть
+    return (default_voice(engine, g) or pool[0]), shift
 
 
 def set_type_manual(key, kind):
@@ -504,15 +507,23 @@ def voice_for(key, engine=None, auto_only=False):
     else:
         pool, pitches, main = SILERO_POOL.auto(g), SILERO_PITCH, config.TTS_SILERO_VOICE
     kind = c.get("type", "")
+    if kind == "adult":
+        kind = ""
     shift = TYPE_PITCH["neural" if engine == "neural" else "silero"].get(kind, 0)
     if manual and not auto_only:
         return manual, shift
+    # таблица «Характер → голос»: выбранный вами голос звучит как есть, без сдвигов высоты
     tv = type_voice(engine, g, kind) if kind else ""
     if tv:
-        return tv, shift
-    if not config.TTS_VARY_IN_GENDER:
+        return tv, 0
+    dv = default_voice(engine, g)              # строка «обычный»
+    if dv and not kind:
+        return dv, 0                           # характер не понят или обычный — голос строки «обычный»
+    if dv or not config.TTS_VARY_IN_GENDER:
+        # «авто» у характера — голос строки «обычный» со сдвигом высоты
         # «один голос на всех мужчин и один на всех женщин» — из настроек (или первый из списка)
-        return (default_voice(engine, g) or pool[0]), shift
+        return (dv or pool[0]), shift
+    # «обычный» не выбран и «у каждого свой голос» — подбираем персонажу голос из списка
     # основной голос (которым читается рассказчик) персонажам — пореже: ставим его в конец очереди
     pool = [v for v in pool if v != main] + [v for v in pool if v == main]
     if config.TTS_RUSSIAN_ONLY and engine == "neural":
