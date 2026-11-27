@@ -2189,6 +2189,13 @@ def test_test_scene(monkey):
         top = int(360 * testscene.SUB_TOP)
         assert L.has_glow and _IC.difference(f1, f2).getbbox() is not None
         assert _IC.difference(f1.crop((0, top, 640, 360)), f2.crop((0, top, 640, 360))).getbbox() is None
+        V = testscene.Living("king", 640, 360)              # у этого кадра есть ролик
+        assert V.video is not None and V.n > 20
+        v1, v2 = V.frame(100.0), V.frame(101.5)
+        assert v1.size == (640, 360) and _IC.difference(v1, v2).getbbox() is not None
+        assert _IC.difference(v1.crop((0, top, 640, 360)), v2.crop((0, top, 640, 360))).getbbox() is None
+        M = testscene.Living("mentor", 640, 360)            # ролика нет — оживление картинки
+        assert M.video is None
         sc.toggle_alive(); assert not sc.alive
         sc.toggle_alive(); assert sc.alive
         h0 = sc.stage.winfo_height()

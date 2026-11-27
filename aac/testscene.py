@@ -110,8 +110,9 @@ SUB_TOP, SUB_BOTTOM, SUB_SIDE = 0.775, 0.985, 0.11     # где на «экра�
 
 
 class Living:
-    """Оживление неподвижного кадра без нейросетей: огни (фонари, факелы, глаза голема) мерцают вразнобой,
-    кадр едва заметно плывёт. Низ кадра под субтитрами не меняется — программа читает их как обычно."""
+    """Живой кадр. Есть ролик <кадр>.webp — играет он по кругу; нет — оживление картинки без нейросетей:
+    огни мерцают вразнобой, кадр едва заметно плывёт. Низ кадра под субтитрами не меняется — программа
+    читает их как обычно."""
     MARGIN = 0.025                       # запас по краям для «плавания»
 
     def __init__(self, bg, W, H):
@@ -149,6 +150,20 @@ class Living:
             warm = Image.new("RGB", (BW, BH), (255, 170, 80))
             self.glow.append(Image.composite(warm, Image.new("RGB", (BW, BH), 0), g))
         self.has_glow = any(g.getbbox() for g in groups)
+        # ролик (aac/scene/<кадр>.webp — бесшовный цикл): тогда вместо мерцания и «плавания» играет он
+        self.video, self.n, self.fps = None, 0, 12
+        vpath = os.path.join(IMG_DIR, bg + ".webp")
+        if os.path.exists(vpath):
+            try:
+                v = Image.open(vpath)
+                if getattr(v, "n_frames", 1) > 1:
+                    self.video, self.n = v, v.n_frames
+                    self.fps = 1000 / max(20, v.info.get("duration", 83))
+                    k = max(W / v.width, H / v.height)
+                    self.vsize = (max(W, round(v.width * k)), max(H, round(v.height * k)))
+                    self.vcrop = ((self.vsize[0] - W) // 2, (self.vsize[1] - H) // 2)
+            except Exception:
+                self.video = None
         # затемнение под субтитры — неподвижное, по окну
         top = int(H * (SUB_TOP - 0.10))
         sh_ = Image.new("L", (1, H), 0)
@@ -164,9 +179,31 @@ class Living:
             ramp.putpixel((0, yy), min(255, int(255 * (yy - top) / span)))
         self.ramp = ramp.resize((W, H))
         self.still = im.crop((m, m, m + W, m + H))
+        if self.video is not None:
+            self.still = self._vframe(0)               # полоса субтитров — из первого кадра ролика
+
+    def _vframe(self, i):
+        from PIL import Image
+        v = self.video
+        v.seek(i % self.n)
+        fr = v.convert("RGB")
+        if fr.size != self.vsize:
+            fr = fr.resize(self.vsize, Image.BILINEAR)
+        x, y = self.vcrop
+        return fr.crop((x, y, x + self.W, y + self.H))
 
     def frame(self, t):
         import math
+        if self.video is not None:
+            from PIL import Image
+            try:
+                out = self._vframe(int(t * self.fps)) if t else self.still
+            except Exception:
+                self.video = None
+                return self.frame(t)
+            if t:
+                out = Image.composite(self.still, out, self.ramp)
+            return Image.composite(self.black, out, self.shade)
         from PIL import Image, ImageChops
         W, H, m = self.W, self.H, self.m
         if t:
@@ -349,7 +386,8 @@ class Scene:
                 self._ph.paste(self.live.frame(time.time()))
                 cost = time.perf_counter() - t0
                 self._anim_slow = cost > 0.07                 # слабый компьютер — реже
-            self.win.after(200 if getattr(self, "_anim_slow", False) else 100, self._animate)
+            fast = 80 if getattr(getattr(self, "live", None), "video", None) is not None else 100
+            self.win.after(200 if getattr(self, "_anim_slow", False) else fast, self._animate)
         except tk.TclError:
             pass
 
