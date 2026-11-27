@@ -391,7 +391,7 @@ def _apply(model, kw, **text_kw):
 _PITCHES = {-2: "x-low", -1: "low", 0: "medium", 1: "high", 2: "x-high"}
 
 
-PAUSES = [(r"…|\.\.\.", 450), (r"[.!?]", 330), (r"[;:]", 220), (r"\s[—–-]\s", 200), (r",", 160)]
+PAUSES = [(r"…|\.\.\.", 380), (r"[.!?]", 260), (r"[;:]", 180), (r"\s[—–-]\s", 160), (r",", 120)]
 
 
 def ssml_body(text):
@@ -458,7 +458,9 @@ def synth_to_wav(text, path, voice, rate_level=0, pitch_level=0):
     with torch.no_grad():
         audio = None
         attrs = (f' rate="{rate}"' if rate != "medium" else "") + (f' pitch="{pitch}"' if pitch != "medium" else "")
-        body = ssml_body(text)
+        # основные голоса Silero сами делают живые паузы и интонацию — разметку не трогаем (с ней речь
+        # становится ровнее); паузы на знаках — только доп. голосам, которые знаки «проглатывают»
+        body = ssml_body(text) if config.TTS_PUNCT_PAUSES == "all" else escape(text)
         if attrs or "<break" in body:
             try:
                 audio = _apply(model, kw, ssml_text=_ssml(attrs, body))
